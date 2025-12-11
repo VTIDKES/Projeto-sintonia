@@ -1096,52 +1096,11 @@ def main():
     # =====================================================
     if st.session_state.modo_editor == 'visual':
         st.subheader("🎨 Editor Visual de Diagrama de Blocos")
-        st.info("💡 **Modo Xcos ativado!** Use os botões abaixo para adicionar e gerenciar blocos.")
         
-        # Barra de ferramentas para adicionar blocos
-        st.markdown("### 🧱 Adicionar Blocos")
-        col_btn1, col_btn2, col_btn3, col_btn4 = st.columns(4)
-        
-        with col_btn1:
-            if st.button("➕ Função Transferência", use_container_width=True):
-                st.session_state.show_tf_form = True
-        
-        with col_btn2:
-            if st.button("⊕ Somador", use_container_width=True):
-                novo_bloco = {
-                    'id': st.session_state.bloco_contador,
-                    'tipo': 'Somador',
-                    'x': 100 + (st.session_state.bloco_contador * 30) % 400,
-                    'y': 100 + (st.session_state.bloco_contador * 30) % 300,
-                    'config': {'nome': f'Σ{st.session_state.bloco_contador}'}
-                }
-                st.session_state.diagrama_blocos['blocos'].append(novo_bloco)
-                st.session_state.bloco_contador += 1
-                st.success("Somador adicionado!")
-                st.rerun()
-        
-        with col_btn3:
-            if st.button("📊 Ganho", use_container_width=True):
-                st.session_state.show_gain_form = True
-        
-        with col_btn4:
-            if st.button("∫ Integrador", use_container_width=True):
-                novo_bloco = {
-                    'id': st.session_state.bloco_contador,
-                    'tipo': 'Integrador',
-                    'x': 100 + (st.session_state.bloco_contador * 30) % 400,
-                    'y': 100 + (st.session_state.bloco_contador * 30) % 300,
-                    'config': {'nome': '∫', 'tf': '1/s'}
-                }
-                st.session_state.diagrama_blocos['blocos'].append(novo_bloco)
-                st.session_state.bloco_contador += 1
-                st.success("Integrador adicionado!")
-                st.rerun()
-        
-        # Formulário para Função Transferência
+        # Formulário para Função Transferência (se ativado)
         if 'show_tf_form' in st.session_state and st.session_state.show_tf_form:
             with st.form("form_tf"):
-                st.markdown("**Nova Função de Transferência**")
+                st.markdown("**➕ Nova Função de Transferência**")
                 num_tf = st.text_input("Numerador:", "1")
                 den_tf = st.text_input("Denominador:", "s+1")
                 col_sub1, col_sub2 = st.columns(2)
@@ -1152,13 +1111,12 @@ def main():
                 
                 if submitted:
                     try:
-                        # Validar a função de transferência
                         tf, _ = converter_para_tf(num_tf, den_tf)
                         novo_bloco = {
                             'id': st.session_state.bloco_contador,
                             'tipo': 'Transferência',
-                            'x': 100 + (st.session_state.bloco_contador * 30) % 400,
-                            'y': 100 + (st.session_state.bloco_contador * 30) % 300,
+                            'x': 150 + (len(st.session_state.diagrama_blocos['blocos']) * 200) % 600,
+                            'y': 200 + (len(st.session_state.diagrama_blocos['blocos']) * 50) % 300,
                             'config': {
                                 'nome': f'G{st.session_state.bloco_contador}',
                                 'numerador': num_tf,
@@ -1169,19 +1127,20 @@ def main():
                         st.session_state.diagrama_blocos['blocos'].append(novo_bloco)
                         st.session_state.bloco_contador += 1
                         st.session_state.show_tf_form = False
-                        st.success("Função de Transferência adicionada!")
+                        st.success("✅ Função de Transferência adicionada!")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Erro na função: {str(e)}")
+                        st.error(f"❌ Erro: {str(e)}")
                 
                 if cancelled:
                     st.session_state.show_tf_form = False
                     st.rerun()
+            st.markdown("---")
         
-        # Formulário para Ganho
+        # Formulário para Ganho (se ativado)
         if 'show_gain_form' in st.session_state and st.session_state.show_gain_form:
             with st.form("form_ganho"):
-                st.markdown("**Novo Ganho**")
+                st.markdown("**📊 Novo Ganho**")
                 ganho_val = st.number_input("Valor do ganho K:", value=1.0, step=0.1)
                 col_sub1, col_sub2 = st.columns(2)
                 with col_sub1:
@@ -1193,8 +1152,8 @@ def main():
                     novo_bloco = {
                         'id': st.session_state.bloco_contador,
                         'tipo': 'Ganho',
-                        'x': 100 + (st.session_state.bloco_contador * 30) % 400,
-                        'y': 100 + (st.session_state.bloco_contador * 30) % 300,
+                        'x': 150 + (len(st.session_state.diagrama_blocos['blocos']) * 200) % 600,
+                        'y': 200 + (len(st.session_state.diagrama_blocos['blocos']) * 50) % 300,
                         'config': {
                             'nome': f'K={ganho_val}',
                             'valor': str(ganho_val),
@@ -1204,14 +1163,13 @@ def main():
                     st.session_state.diagrama_blocos['blocos'].append(novo_bloco)
                     st.session_state.bloco_contador += 1
                     st.session_state.show_gain_form = False
-                    st.success("Ganho adicionado!")
+                    st.success("✅ Ganho adicionado!")
                     st.rerun()
                 
                 if cancelled:
                     st.session_state.show_gain_form = False
                     st.rerun()
-        
-        st.markdown("---")
+            st.markdown("---")
         
         # Visualização do diagrama
         html_editor = criar_diagrama_blocos_html()
@@ -1219,92 +1177,136 @@ def main():
         
         st.markdown("---")
         
-        # Gerenciamento de blocos
-        st.markdown("### 🗂️ Blocos no Diagrama")
-        if st.session_state.diagrama_blocos['blocos']:
-            for bloco in st.session_state.diagrama_blocos['blocos']:
-                col_info, col_del = st.columns([4, 1])
-                with col_info:
-                    st.text(f"🔹 {bloco['tipo']}: {bloco['config']['nome']} (ID: {bloco['id']})")
-                with col_del:
-                    if st.button("🗑️", key=f"del_{bloco['id']}"):
-                        st.session_state.diagrama_blocos['blocos'] = [
-                            b for b in st.session_state.diagrama_blocos['blocos'] if b['id'] != bloco['id']
-                        ]
-                        st.session_state.diagrama_blocos['conexoes'] = [
-                            c for c in st.session_state.diagrama_blocos['conexoes'] 
-                            if c['origem'] != bloco['id'] and c['destino'] != bloco['id']
-                        ]
-                        st.success(f"Bloco {bloco['id']} removido!")
-                        st.rerun()
-        else:
-            st.info("Nenhum bloco adicionado ainda. Use os botões acima para adicionar.")
+        # Painel de controle unificado
+        col_add, col_list, col_action = st.columns([1, 2, 1])
         
-        st.markdown("---")
+        with col_add:
+            st.markdown("### 🧱 Adicionar")
+            if st.button("➕ Função Transferência", use_container_width=True, key="btn_add_tf"):
+                st.session_state.show_tf_form = True
+                st.rerun()
+            
+            if st.button("⊕ Somador", use_container_width=True, key="btn_add_sum"):
+                novo_bloco = {
+                    'id': st.session_state.bloco_contador,
+                    'tipo': 'Somador',
+                    'x': 150 + (len(st.session_state.diagrama_blocos['blocos']) * 200) % 600,
+                    'y': 200 + (len(st.session_state.diagrama_blocos['blocos']) * 50) % 300,
+                    'config': {'nome': f'Σ{st.session_state.bloco_contador}'}
+                }
+                st.session_state.diagrama_blocos['blocos'].append(novo_bloco)
+                st.session_state.bloco_contador += 1
+                st.success("✅ Somador adicionado!")
+                st.rerun()
+            
+            if st.button("📊 Ganho", use_container_width=True, key="btn_add_gain"):
+                st.session_state.show_gain_form = True
+                st.rerun()
+            
+            if st.button("∫ Integrador", use_container_width=True, key="btn_add_int"):
+                novo_bloco = {
+                    'id': st.session_state.bloco_contador,
+                    'tipo': 'Integrador',
+                    'x': 150 + (len(st.session_state.diagrama_blocos['blocos']) * 200) % 600,
+                    'y': 200 + (len(st.session_state.diagrama_blocos['blocos']) * 50) % 300,
+                    'config': {'nome': '∫', 'tf': '1/s'}
+                }
+                st.session_state.diagrama_blocos['blocos'].append(novo_bloco)
+                st.session_state.bloco_contador += 1
+                st.success("✅ Integrador adicionado!")
+                st.rerun()
         
-        # Botões de ação
-        col1, col2, col3 = st.columns(3)
+        with col_list:
+            st.markdown("### 🗂️ Blocos no Diagrama")
+            if st.session_state.diagrama_blocos['blocos']:
+                for bloco in st.session_state.diagrama_blocos['blocos']:
+                    col_info, col_del = st.columns([5, 1])
+                    with col_info:
+                        tf_info = f" - {bloco['config'].get('tf', '')}" if bloco['config'].get('tf') else ""
+                        st.text(f"🔹 {bloco['tipo']}: {bloco['config']['nome']}{tf_info}")
+                    with col_del:
+                        if st.button("🗑️", key=f"del_{bloco['id']}"):
+                            st.session_state.diagrama_blocos['blocos'] = [
+                                b for b in st.session_state.diagrama_blocos['blocos'] if b['id'] != bloco['id']
+                            ]
+                            st.session_state.diagrama_blocos['conexoes'] = [
+                                c for c in st.session_state.diagrama_blocos['conexoes'] 
+                                if c['origem'] != bloco['id'] and c['destino'] != bloco['id']
+                            ]
+                            st.success(f"✅ Bloco removido!")
+                            st.rerun()
+            else:
+                st.info("➕ Nenhum bloco adicionado. Use os botões ao lado.")
         
-        with col1:
-            if st.button("⚡ Processar Diagrama", type="primary", use_container_width=True):
+        with col_action:
+            st.markdown("### ⚙️ Ações")
+            
+            if st.button("⚡ Processar Sistema", type="primary", use_container_width=True):
                 sistema, msg = processar_diagrama_blocos()
                 if sistema:
                     st.success(msg)
-                    st.subheader("📊 Análise do Sistema")
                     
-                    desempenho = calcular_desempenho(sistema)
-                    st.markdown("**Métricas de Desempenho:**")
-                    for chave, valor in desempenho.items():
-                        st.markdown(f"- **{chave}:** {valor}")
-                    
-                    tab1, tab2, tab3 = st.tabs(["📈 Resposta Temporal", "📊 Bode", "🎯 Polos e Zeros"])
-                    
-                    with tab1:
-                        fig, t, y = plot_resposta_temporal(sistema, 'Degrau')
-                        st.plotly_chart(fig, use_container_width=True)
-                    
-                    with tab2:
-                        fig = plot_bode(sistema, 'both')
-                        st.plotly_chart(fig, use_container_width=True)
-                    
-                    with tab3:
-                        fig = plot_polos_zeros(sistema)
-                        st.plotly_chart(fig, use_container_width=True)
+                    # Mostrar análise em expander
+                    with st.expander("📊 Ver Análise Completa", expanded=True):
+                        desempenho = calcular_desempenho(sistema)
+                        st.markdown("**Métricas:**")
+                        for chave, valor in desempenho.items():
+                            st.markdown(f"- **{chave}:** {valor}")
+                        
+                        tab1, tab2, tab3 = st.tabs(["📈 Temporal", "📊 Bode", "🎯 Polos/Zeros"])
+                        
+                        with tab1:
+                            fig, t, y = plot_resposta_temporal(sistema, 'Degrau')
+                            st.plotly_chart(fig, use_container_width=True)
+                        
+                        with tab2:
+                            fig = plot_bode(sistema, 'both')
+                            st.plotly_chart(fig, use_container_width=True)
+                        
+                        with tab3:
+                            fig = plot_polos_zeros(sistema)
+                            st.plotly_chart(fig, use_container_width=True)
                 else:
                     st.error(msg)
-        
-        with col2:
+            
             if st.button("🔄 Limpar Tudo", use_container_width=True):
-                st.session_state.diagrama_blocos = {'blocos': [], 'conexoes': []}
-                st.session_state.bloco_contador = 1
-                st.success("Diagrama limpo!")
-                st.rerun()
+                if st.session_state.diagrama_blocos['blocos']:
+                    st.session_state.diagrama_blocos = {'blocos': [], 'conexoes': []}
+                    st.session_state.bloco_contador = 1
+                    st.success("✅ Diagrama limpo!")
+                    st.rerun()
+                else:
+                    st.warning("Diagrama já está vazio!")
+            
+            if st.button("💾 Exportar JSON", use_container_width=True):
+                if st.session_state.diagrama_blocos['blocos']:
+                    diagrama_json = json.dumps(st.session_state.diagrama_blocos, indent=2)
+                    st.download_button(
+                        label="📥 Baixar",
+                        data=diagrama_json,
+                        file_name="diagrama_blocos.json",
+                        mime="application/json",
+                        use_container_width=True
+                    )
+                else:
+                    st.warning("Nenhum bloco para exportar!")
         
-        with col3:
-            if st.button("💾 Exportar", use_container_width=True):
-                diagrama_json = json.dumps(st.session_state.diagrama_blocos, indent=2)
-                st.download_button(
-                    label="📥 Baixar JSON",
-                    data=diagrama_json,
-                    file_name="diagrama_blocos.json",
-                    mime="application/json",
-                    use_container_width=True
-                )
-        
+        # Estatísticas na sidebar
         st.sidebar.markdown("---")
-        st.sidebar.markdown("### 📊 Estatísticas")
-        st.sidebar.metric("Blocos", len(st.session_state.diagrama_blocos['blocos']))
+        st.sidebar.markdown("### 📊 Estatísticas do Diagrama")
+        st.sidebar.metric("Total de Blocos", len(st.session_state.diagrama_blocos['blocos']))
         st.sidebar.metric("Conexões", len(st.session_state.diagrama_blocos['conexoes']))
         
         st.sidebar.markdown("---")
-        st.sidebar.markdown("### 📖 Ajuda")
+        st.sidebar.markdown("### 📖 Instruções")
         st.sidebar.info("""
-        **Como usar:**
+        **Modo Editor Visual:**
         
-        1. Use os botões coloridos para adicionar blocos
-        2. Arraste os blocos no diagrama para organizar
-        3. Clique nas portas verdes para conectar
-        4. Use "Processar Diagrama" para análise
+        1. ➕ Use os botões para adicionar blocos
+        2. 🖱️ Arraste blocos no canvas
+        3. 🔗 Clique nas portas verdes para conectar
+        4. ⚡ Processe para analisar o sistema
+        5. 🗑️ Remova blocos individualmente
         """)
         
         return
