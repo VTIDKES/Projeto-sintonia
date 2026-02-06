@@ -445,18 +445,125 @@ def montar_serie_pela_ordem(df: pd.DataFrame, ordem_nomes: list):
 # TAB: EDITOR VISUAL (drag&drop)
 # =====================================================
 
+
+def _plot_diagrama_serie(ordem_nomes, df):
+    """Gera um diagrama simples de blocos em série usando Plotly (sem dependências extras)."""
+    if not ordem_nomes:
+        fig = go.Figure()
+        fig.update_layout(
+            title="Diagrama (vazio)",
+            xaxis=dict(visible=False),
+            yaxis=dict(visible=False),
+            height=260,
+            margin=dict(l=10, r=10, t=40, b=10),
+        )
+        return fig
+
+    fig = go.Figure()
+    fig.update_layout(
+        title="Diagrama de Blocos (Série)",
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False),
+        height=260,
+        margin=dict(l=10, r=10, t=40, b=10),
+    )
+
+    # Mapas rápidos
+    row_by_nome = {str(r["nome"]): r for _, r in df.iterrows()}
+
+    # Geometria
+    start_x = 0.05
+    y = 0.5
+    box_w = 0.16
+    box_h = 0.22
+    gap = 0.06
+
+    # Entrada e saída
+    fig.add_annotation(x=0.01, y=y, text="R(s)", showarrow=False, font=dict(size=14))
+    fig.add_annotation(x=0.99, y=y, text="Y(s)", showarrow=False, font=dict(size=14))
+
+    # Setas
+    def arrow(x0, x1):
+        fig.add_annotation(
+            x=x1, y=y, ax=x0, ay=y,
+            xref="paper", yref="paper", axref="paper", ayref="paper",
+            showarrow=True, arrowhead=3, arrowsize=1, arrowwidth=2
+        )
+
+    x = start_x
+    # seta de entrada para o primeiro bloco
+    arrow(0.02, x)
+
+    for i, nome in enumerate(ordem_nomes):
+        r = row_by_nome.get(nome)
+        label = nome if r is None else f"{nome}\n{r['tipo']}"
+        # caixa
+        fig.add_shape(
+            type="rect",
+            xref="paper", yref="paper",
+            x0=x, y0=y - box_h/2,
+            x1=x + box_w, y1=y + box_h/2,
+            line=dict(width=2),
+            fillcolor="rgba(240,240,240,0.9)",
+        )
+        fig.add_annotation(
+            x=x + box_w/2, y=y,
+            xref="paper", yref="paper",
+            text=label.replace("\n", "<br>"),
+            showarrow=False,
+            font=dict(size=12),
+        )
+
+        # seta para o próximo
+        next_x = x + box_w + gap
+        if i < len(ordem_nomes) - 1:
+            arrow(x + box_w, next_x)
+        else:
+            # seta do último bloco para a saída
+            arrow(x + box_w, 0.98)
+
+        x = next_x
+
+    return fig
+
+def editar_bloco_inline(nome_bloco: str):
+    """Editor rápido inline do bloco (mantém bloco original, só altera num/den)."""
+    df = st.session_state.blocos
+    if df.empty or nome_bloco not in df["nome"].astype(str).tolist():
+        return
+
+    idx = df.index[df["nome"].astype(str) == str(nome_bloco)][0]
+    row = df.loc[idx]
+
+    with st.form(f"form_edit_{nome_bloco}", clear_on_submit=False):
+        st.write(f"✏️ Editando **{nome_bloco}** ({row['tipo']})")
+        c1, c2 = st.columns(2)
+        with c1:
+            num = st.text_input("Numerador", value=str(row["numerador"]))
+        with c2:
+            den = st.text_input("Denominador", value=str(row["denominador"]))
+        ok = st.form_submit_button("Salvar alteração")
+        if ok:
+            try:
+                tf, tf_symb = converter_para_tf(num, den)
+                st.session_state.blocos.loc[idx, "numerador"] = num
+                st.session_state.blocos.loc[idx, "denominador"] = den
+                st.session_state.blocos.loc[idx, "tf"] = tf
+                st.session_state.blocos.loc[idx, "tf_simbolico"] = tf_symb
+                st.success("✅ Bloco atualizado.")
+            except Exception as e:
+                st.error(f"Erro ao atualizar TF: {e}")
+
 def render_tab_editor_visual():
-    st.subheader("🧩 Editor Visual (drag & drop) — Série em Malha Aberta")
+    st.subheader("🧩 Editor Visual (mais dinâmico) — Montagem em Série")
 
     df = st.session_state.blocos
     if df.empty:
         st.info("Adicione blocos na barra lateral para aparecerem aqui.")
         return
 
-    st.caption("Arraste os itens para definir a ordem da SÉRIE. Essa ordem será usada na Malha Aberta ao executar a simulação.")
-
-    nomes = [row['nome'] for _, row in df.iterrows()]
-
+    # Inicializa ordem (se necessário) e mantém sincronizado
+    nomes = [str(row['nome']) for _, row in df.iterrows()]
     if not st.session_state.serie_order:
         st.session_state.serie_order = nomes.copy()
     else:
@@ -466,39 +573,87 @@ def render_tab_editor_visual():
                 atual.append(n)
         st.session_state.serie_order = atual
 
-    if not SORTABLES_AVAILABLE:
-        st.error("O componente de drag&drop não carregou (streamlit-sortables).")
-        st.write("Coloque isto no requirements.txt:")
-        st.code("streamlit-sortables")
-        st.write("Detalhe do erro de import:")
-        st.code(SORTABLES_IMPORT_ERROR or "Sem detalhes.")
-        return
+    # Layout do editor: Paleta + Montagem + Preview
+    left, right = st.columns([1.05, 1.95], gap="large")
 
-    label_by_nome = {row['nome']: f"{row['nome']}  |  {row['tipo']}  |  {row['numerador']}/{row['denominador']}" for _, row in df.iterrows()}
-    ordered_labels = [label_by_nome[n] for n in st.session_state.serie_order if n in label_by_nome]
+    with left:
+        st.markdown("### 🎛️ Paleta de blocos")
+        st.caption("Clique para editar. Você também pode remover blocos aqui.")
 
-    new_labels = sort_items(ordered_labels, direction="vertical")
+        # Lista rápida
+        for _, row in df.iterrows():
+            nome = str(row["nome"])
+            tipo = str(row["tipo"])
+            with st.expander(f"🔹 {nome}  ·  {tipo}", expanded=False):
+                st.code(f"G(s) = ({row['numerador']}) / ({row['denominador']})")
+                b1, b2 = st.columns(2)
+                with b1:
+                    if st.button("✏️ Editar", key=f"btn_edit_{nome}"):
+                        st.session_state["_edit_target"] = nome
+                with b2:
+                    if st.button("🗑️ Remover", key=f"btn_rm_{nome}"):
+                        remover_bloco(nome)
+                        st.rerun()
 
-    new_order = []
-    for lab in new_labels:
-        nome = lab.split("|")[0].strip()
-        if nome in nomes and nome not in new_order:
-            new_order.append(nome)
+        if st.session_state.get("_edit_target"):
+            st.markdown("---")
+            editar_bloco_inline(st.session_state["_edit_target"])
 
-    st.session_state.serie_order = new_order
+    with right:
+        st.markdown("### 🧱 Montagem (drag & drop)")
+        st.caption("Arraste para definir a ordem da série. A **Malha Aberta** usará essa ordem automaticamente.")
 
-    c1, c2 = st.columns([1, 2])
-    with c1:
-        if st.button("🔁 Resetar ordem"):
-            st.session_state.serie_order = nomes.copy()
-            st.rerun()
-    with c2:
-        st.write("**Ordem atual da série:**")
-        st.write(" → ".join(st.session_state.serie_order) if st.session_state.serie_order else "(vazia)")
+        if not SORTABLES_AVAILABLE:
+            st.error("O componente de drag&drop não carregou (streamlit-sortables).")
+            st.write("Coloque isto no requirements.txt:")
+            st.code("streamlit-sortables")
+            st.write("Detalhe do erro de import:")
+            st.code(SORTABLES_IMPORT_ERROR or "Sem detalhes.")
+            return
 
-# =====================================================
-# APLICAÇÃO PRINCIPAL
-# =====================================================
+        label_by_nome = {
+            str(row['nome']): f"{row['nome']}  |  {row['tipo']}  |  {row['numerador']}/{row['denominador']}"
+            for _, row in df.iterrows()
+        }
+        ordered_labels = [label_by_nome[n] for n in st.session_state.serie_order if n in label_by_nome]
+
+        new_labels = sort_items(ordered_labels, direction="vertical")
+
+        new_order = []
+        for lab in new_labels:
+            nome = lab.split("|")[0].strip()
+            if nome in nomes and nome not in new_order:
+                new_order.append(nome)
+
+        st.session_state.serie_order = new_order
+
+        c1, c2, c3 = st.columns([1, 1, 2])
+        with c1:
+            if st.button("🔁 Resetar ordem"):
+                st.session_state.serie_order = nomes.copy()
+                st.rerun()
+        with c2:
+            st.metric("Blocos na série", len(st.session_state.serie_order))
+        with c3:
+            st.write("**Ordem atual:**")
+            st.write(" → ".join(st.session_state.serie_order) if st.session_state.serie_order else "(vazia)")
+
+        st.markdown("### 👀 Preview do diagrama")
+        fig_diag = _plot_diagrama_serie(st.session_state.serie_order, df)
+        st.plotly_chart(fig_diag, use_container_width=True)
+
+        st.markdown("### 🧮 Função equivalente (série)")
+        serie = montar_serie_pela_ordem(df, st.session_state.serie_order)
+        if serie is None:
+            st.info("Defina a ordem (ou adicione blocos) para gerar a função equivalente.")
+        else:
+            try:
+                # Mostra como TF e resumo
+                st.code(f"{serie}")
+                st.caption("Obs.: essa composição é aplicada automaticamente quando você escolhe **Malha Aberta** na aba Simulação.")
+            except Exception:
+                st.write(serie)
+
 
 def main():
     st.set_page_config(page_title="Modelagem de Sistemas", layout="wide")
