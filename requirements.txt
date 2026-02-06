@@ -8,3 +8,4 @@ scipy
 plotly
 pyngrok
 streamlit-flow-component
+streamlit-sortables
