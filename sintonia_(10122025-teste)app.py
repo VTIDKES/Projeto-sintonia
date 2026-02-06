@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Sistema de Modelagem e Análise de Sistemas de Controle
-Com Editor Visual de Diagrama de Blocos (estilo Xcos)
+Com Editor Visual de Diagrama de Blocos (estilo Xcos) - VERSÃO MELHORADA
 """
 
 import streamlit as st
@@ -14,8 +14,8 @@ from control import TransferFunction, margin, step_response, forced_response, ro
 from scipy import signal
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import streamlit.components.v1 as components
 import json
+import base64
 
 # =====================================================
 # CONFIGURAÇÕES E CONSTANTES
@@ -533,170 +533,314 @@ def plot_nyquist(sistema):
     return fig, polos_spd, voltas, Z
 
 # =====================================================
-# GERENCIAMENTO DE BLOCOS
+# PROCESSAMENTO DO DIAGRAMA DE BLOCOS
 # =====================================================
 
-def inicializar_blocos():
-    """Inicializa o estado dos blocos se não existir"""
-    if 'blocos' not in st.session_state:
-        st.session_state.blocos = pd.DataFrame(columns=['nome', 'tipo', 'numerador', 'denominador', 'tf', 'tf_simbolico'])
-    if 'diagrama_blocos' not in st.session_state:
-        st.session_state.diagrama_blocos = {
-            'blocos': [],
-            'conexoes': []
-        }
-    if 'bloco_contador' not in st.session_state:
-        st.session_state.bloco_contador = 1
-
-def adicionar_bloco(nome, tipo, numerador, denominador):
-    """Adiciona um novo bloco ao sistema"""
+def processar_diagrama_blocos_xcos(blocos_json):
+    """
+    Processa o diagrama de blocos do editor Xcos e calcula o sistema equivalente
+    """
     try:
-        tf, tf_symb = converter_para_tf(numerador, denominador)
-        novo = pd.DataFrame([{
-            'nome': nome,
-            'tipo': tipo,
-            'numerador': numerador,
-            'denominador': denominador,
-            'tf': tf,
-            'tf_simbolico': tf_symb
-        }])
-        st.session_state.blocos = pd.concat([st.session_state.blocos, novo], ignore_index=True)
-        return True, f"Bloco {nome} adicionado."
+        # Decodificar JSON dos blocos
+        diagrama = json.loads(blocos_json)
+        blocos = diagrama.get('blocos', [])
+        conexoes = diagrama.get('conexoes', [])
+        
+        if not blocos:
+            return None, "❌ Nenhum bloco no diagrama"
+        
+        # Criar dicionário de funções de transferência
+        tfs = {}
+        blocos_info = {}
+        
+        for bloco in blocos:
+            bloco_id = bloco['id']
+            tipo = bloco['tipo']
+            config = bloco['config']
+            
+            blocos_info[bloco_id] = {'tipo': tipo, 'nome': config.get('nome', f'Bloco{bloco_id}')}
+            
+            if tipo == 'Transferência':
+                try:
+                    tf, _ = converter_para_tf(config['numerador'], config['denominador'])
+                    tfs[bloco_id] = tf
+                except Exception as e:
+                    return None, f"❌ Erro no bloco {config.get('nome')}: {str(e)}"
+                    
+            elif tipo == 'Ganho':
+                try:
+                    K = float(config['valor'])
+                    tfs[bloco_id] = TransferFunction([K], [1])
+                except:
+                    tfs[bloco_id] = TransferFunction([1], [1])
+                    
+            elif tipo == 'Integrador':
+                tfs[bloco_id] = TransferFunction([1], [1, 0])
+                
+            elif tipo == 'Somador':
+                tfs[bloco_id] = TransferFunction([1], [1])
+        
+        # Se não há conexões, criar sistema em série simples
+        if not conexoes:
+            if len(blocos) == 1:
+                return tfs[blocos[0]['id']], f"✅ Sistema com 1 bloco: {blocos_info[blocos[0]['id']]['nome']}"
+            
+            # Sistema em série
+            sistema_final = tfs[blocos[0]['id']]
+            for i in range(1, len(blocos)):
+                sistema_final = sistema_final * tfs[blocos[i]['id']]
+            
+            return sistema_final, f"✅ Sistema com {len(blocos)} blocos em série"
+        
+        # Processar conexões para criar o sistema
+        # Criar grafo de conexões
+        grafo = {}
+        for conexao in conexoes:
+            origem = conexao['origem']
+            destino = conexao['destino']
+            if origem not in grafo:
+                grafo[origem] = []
+            grafo[origem].append(destino)
+        
+        # Encontrar bloco inicial (sem entrada) e final (sem saída)
+        todos_ids = set(b['id'] for b in blocos)
+        destinos = set(c['destino'] for c in conexoes)
+        origens = set(c['origem'] for c in conexoes)
+        
+        blocos_iniciais = todos_ids - destinos
+        blocos_finais = todos_ids - origens
+        
+        # Calcular sistema em cadeia direta
+        if blocos_iniciais and blocos_finais:
+            # Simplificação: assumir cadeia linear simples
+            # Ordenar blocos pela conexão
+            ordem_blocos = []
+            visitados = set()
+            
+            def dfs(bloco_id):
+                if bloco_id in visitados:
+                    return
+                visitados.add(bloco_id)
+                ordem_blocos.append(bloco_id)
+                if bloco_id in grafo:
+                    for proximo in grafo[bloco_id]:
+                        dfs(proximo)
+            
+            for inicial in blocos_iniciais:
+                dfs(inicial)
+            
+            # Multiplicar todas as TFs em série
+            if ordem_blocos:
+                sistema_final = tfs[ordem_blocos[0]]
+                for bloco_id in ordem_blocos[1:]:
+                    sistema_final = sistema_final * tfs[bloco_id]
+                
+                return sistema_final, f"✅ Sistema processado com {len(ordem_blocos)} blocos conectados"
+        
+        # Fallback: multiplicar todos
+        sistema_final = tfs[blocos[0]['id']]
+        for i in range(1, len(blocos)):
+            sistema_final = sistema_final * tfs[blocos[i]['id']]
+        
+        return sistema_final, f"✅ Sistema com {len(blocos)} blocos"
+        
     except Exception as e:
-        return False, f"Erro na conversão: {e}"
-
-def remover_bloco(nome):
-    """Remove um bloco pelo nome"""
-    st.session_state.blocos = st.session_state.blocos[st.session_state.blocos['nome'] != nome]
-    return f"Bloco {nome} excluído."
-
-def obter_bloco_por_tipo(tipo):
-    """Obtém o primeiro bloco de um tipo específico"""
-    df = st.session_state.blocos
-    if any(df['tipo'] == tipo):
-        return df[df['tipo'] == tipo].iloc[0]['tf']
-    return None
+        return None, f"❌ Erro ao processar diagrama: {str(e)}"
 
 # =====================================================
-# EDITOR DE DIAGRAMA DE BLOCOS
+# GERENCIAMENTO DE ESTADO
 # =====================================================
 
-def criar_diagrama_blocos_html():
-    """Cria o editor visual de diagrama de blocos"""
-    blocos_data = json.dumps(st.session_state.diagrama_blocos['blocos'])
-    conexoes_data = json.dumps(st.session_state.diagrama_blocos['conexoes'])
+def inicializar_estado():
+    """Inicializa todas as variáveis de estado"""
+    if 'blocos_xcos' not in st.session_state:
+        st.session_state.blocos_xcos = []
+    if 'conexoes_xcos' not in st.session_state:
+        st.session_state.conexoes_xcos = []
+    if 'contador_xcos' not in st.session_state:
+        st.session_state.contador_xcos = 1
+    if 'sistema_atual' not in st.session_state:
+        st.session_state.sistema_atual = None
+    if 'ultimo_diagrama' not in st.session_state:
+        st.session_state.ultimo_diagrama = ""
+
+# =====================================================
+# EDITOR VISUAL XCOS
+# =====================================================
+
+def criar_editor_xcos():
+    """Cria o editor visual de diagrama de blocos estilo Xcos"""
+    
+    # Criar chave única para forçar atualização
+    chave_diagrama = st.text_input(
+        "📋 Dados do Diagrama (JSON)",
+        value=st.session_state.get('ultimo_diagrama', '{"blocos":[],"conexoes":[]}'),
+        key='diagrama_json_input',
+        label_visibility='collapsed'
+    )
     
     html_code = f"""
     <!DOCTYPE html>
     <html>
     <head>
+        <meta charset="UTF-8">
         <style>
-            body {{
+            * {{
+                box-sizing: border-box;
                 margin: 0;
                 padding: 0;
+            }}
+            
+            body {{
                 font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
                 overflow: hidden;
+                background: #1a1a2e;
             }}
+            
+            .toolbar {{
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 15px;
+                display: flex;
+                gap: 10px;
+                flex-wrap: wrap;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            }}
+            
+            .btn {{
+                background: rgba(255,255,255,0.2);
+                color: white;
+                border: 2px solid rgba(255,255,255,0.3);
+                padding: 10px 20px;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: bold;
+                transition: all 0.3s;
+                backdrop-filter: blur(10px);
+            }}
+            
+            .btn:hover {{
+                background: rgba(255,255,255,0.3);
+                border-color: rgba(255,255,255,0.5);
+                transform: translateY(-2px);
+                box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            }}
+            
+            .btn-danger {{
+                background: rgba(231, 76, 60, 0.8);
+                border-color: rgba(231, 76, 60, 1);
+            }}
+            
+            .btn-danger:hover {{
+                background: rgba(192, 57, 43, 0.9);
+            }}
+            
+            .btn-success {{
+                background: rgba(46, 204, 113, 0.8);
+                border-color: rgba(46, 204, 113, 1);
+                font-size: 16px;
+                padding: 12px 30px;
+            }}
+            
+            .btn-success:hover {{
+                background: rgba(39, 174, 96, 0.9);
+                transform: scale(1.05);
+            }}
+            
             #canvas-container {{
                 width: 100%;
-                height: 600px;
-                background: linear-gradient(#f0f0f0 1px, transparent 1px),
-                            linear-gradient(90deg, #f0f0f0 1px, transparent 1px);
+                height: 550px;
+                background: 
+                    linear-gradient(#2a2a3e 1px, transparent 1px),
+                    linear-gradient(90deg, #2a2a3e 1px, transparent 1px);
                 background-size: 20px 20px;
                 position: relative;
-                border: 2px solid #ddd;
+                overflow: hidden;
                 cursor: crosshair;
             }}
+            
             .bloco {{
                 position: absolute;
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                 color: white;
-                padding: 15px;
-                border-radius: 8px;
+                padding: 15px 20px;
+                border-radius: 12px;
                 cursor: move;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-                min-width: 120px;
+                box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+                min-width: 140px;
                 text-align: center;
                 user-select: none;
-                transition: transform 0.1s, box-shadow 0.1s;
+                transition: all 0.2s;
+                border: 2px solid rgba(255,255,255,0.1);
             }}
+            
             .bloco:hover {{
-                transform: scale(1.05);
-                box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+                transform: scale(1.08);
+                box-shadow: 0 12px 24px rgba(102, 126, 234, 0.4);
+                border-color: rgba(255,255,255,0.3);
             }}
+            
             .bloco.selecionado {{
                 border: 3px solid #ffd700;
-                box-shadow: 0 0 20px rgba(255,215,0,0.5);
+                box-shadow: 0 0 30px rgba(255, 215, 0, 0.6);
+                transform: scale(1.05);
             }}
+            
             .bloco-tipo {{
                 font-size: 10px;
-                opacity: 0.8;
-                margin-bottom: 5px;
+                opacity: 0.9;
+                margin-bottom: 6px;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                font-weight: 600;
             }}
+            
             .bloco-nome {{
                 font-weight: bold;
-                font-size: 14px;
-                margin-bottom: 5px;
+                font-size: 16px;
+                margin-bottom: 6px;
             }}
+            
             .bloco-tf {{
-                font-size: 11px;
+                font-size: 12px;
                 font-family: 'Courier New', monospace;
-                background: rgba(0,0,0,0.2);
-                padding: 5px;
-                border-radius: 4px;
-                margin-top: 5px;
+                background: rgba(0,0,0,0.3);
+                padding: 6px 8px;
+                border-radius: 6px;
+                margin-top: 6px;
             }}
+            
             .porta {{
-                width: 12px;
-                height: 12px;
-                background: #4CAF50;
-                border: 2px solid white;
+                width: 14px;
+                height: 14px;
+                background: #2ecc71;
+                border: 3px solid white;
                 border-radius: 50%;
                 position: absolute;
                 cursor: pointer;
                 transition: all 0.2s;
+                z-index: 10;
             }}
+            
             .porta:hover {{
-                background: #45a049;
-                transform: scale(1.3);
+                background: #27ae60;
+                transform: scale(1.4);
+                box-shadow: 0 0 15px rgba(46, 204, 113, 0.8);
             }}
+            
             .porta-entrada {{
-                left: -6px;
+                left: -7px;
                 top: 50%;
                 transform: translateY(-50%);
             }}
+            
             .porta-saida {{
-                right: -6px;
+                right: -7px;
                 top: 50%;
                 transform: translateY(-50%);
             }}
-            .toolbar {{
-                background: #333;
-                color: white;
-                padding: 10px;
-                display: flex;
-                gap: 10px;
-                flex-wrap: wrap;
-            }}
-            .btn {{
-                background: #667eea;
-                color: white;
-                border: none;
-                padding: 8px 15px;
-                border-radius: 5px;
-                cursor: pointer;
-                font-size: 13px;
-                transition: background 0.3s;
-            }}
-            .btn:hover {{
-                background: #5568d3;
-            }}
-            .btn-danger {{
-                background: #e74c3c;
-            }}
-            .btn-danger:hover {{
-                background: #c0392b;
-            }}
+            
             svg {{
                 position: absolute;
                 top: 0;
@@ -704,17 +848,58 @@ def criar_diagrama_blocos_html():
                 width: 100%;
                 height: 100%;
                 pointer-events: none;
+                z-index: 1;
             }}
+            
             #info-panel {{
                 position: absolute;
-                top: 10px;
-                right: 10px;
-                background: rgba(255,255,255,0.95);
-                padding: 15px;
-                border-radius: 8px;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-                max-width: 250px;
+                top: 15px;
+                right: 15px;
+                background: rgba(26, 26, 46, 0.95);
+                color: white;
+                padding: 20px;
+                border-radius: 12px;
+                box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+                max-width: 280px;
+                font-size: 13px;
+                border: 2px solid rgba(102, 126, 234, 0.3);
+                z-index: 100;
+            }}
+            
+            #info-panel strong {{
+                color: #667eea;
+                font-size: 16px;
+                display: block;
+                margin-bottom: 12px;
+            }}
+            
+            #info-panel div {{
+                margin: 8px 0;
+                padding-left: 10px;
+                border-left: 3px solid #667eea;
+            }}
+            
+            .status-bar {{
+                background: #16213e;
+                color: white;
+                padding: 10px 20px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
                 font-size: 12px;
+            }}
+            
+            .status-item {{
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }}
+            
+            .status-badge {{
+                background: #667eea;
+                padding: 4px 12px;
+                border-radius: 12px;
+                font-weight: bold;
             }}
         </style>
     </head>
@@ -724,29 +909,57 @@ def criar_diagrama_blocos_html():
             <button class="btn" onclick="adicionarBlocoSomador()">⊕ Somador</button>
             <button class="btn" onclick="adicionarBlocoGanho()">📊 Ganho</button>
             <button class="btn" onclick="adicionarBlocoIntegrador()">∫ Integrador</button>
-            <button class="btn btn-danger" onclick="removerSelecionado()">🗑️ Remover</button>
-            <button class="btn btn-danger" onclick="limparDiagrama()">🔄 Limpar</button>
+            <button class="btn btn-danger" onclick="removerSelecionado()">🗑️ Remover Selecionado</button>
+            <button class="btn btn-danger" onclick="limparDiagrama()">🔄 Limpar Tudo</button>
+            <button class="btn btn-success" onclick="exportarDiagrama()">⚡ PROCESSAR SISTEMA</button>
         </div>
         
         <div id="canvas-container">
             <svg id="conexoes-svg"></svg>
             <div id="info-panel">
-                <strong>📊 Instruções:</strong>
-                <div>• Clique nos botões para adicionar</div>
-                <div>• Arraste blocos para mover</div>
-                <div>• Clique nas portas verdes para conectar</div>
-                <div>• Clique no bloco para selecionar</div>
+                <strong>📊 Instruções</strong>
+                <div>✏️ Clique nos botões para adicionar blocos</div>
+                <div>🖱️ Arraste blocos para posicionar</div>
+                <div>🔗 Clique nas portas verdes para conectar</div>
+                <div>🎯 Clique no bloco para selecionar</div>
+                <div>⚡ Clique em PROCESSAR quando pronto</div>
+            </div>
+        </div>
+        
+        <div class="status-bar">
+            <div class="status-item">
+                <span>Blocos:</span>
+                <span class="status-badge" id="status-blocos">0</span>
+            </div>
+            <div class="status-item">
+                <span>Conexões:</span>
+                <span class="status-badge" id="status-conexoes">0</span>
+            </div>
+            <div class="status-item" id="status-mensagem">
+                <span>✅ Pronto para começar</span>
             </div>
         </div>
 
         <script>
-            let blocos = {blocos_data};
-            let conexoes = {conexoes_data};
-            let blocoIdCounter = {st.session_state.bloco_contador};
+            let blocos = [];
+            let conexoes = [];
+            let blocoIdCounter = 1;
             let blocoSelecionado = null;
             let portaSelecionada = null;
             let arrastandoBloco = null;
             let offsetX = 0, offsetY = 0;
+
+            // Atualizar status
+            function atualizarStatus() {{
+                document.getElementById('status-blocos').textContent = blocos.length;
+                document.getElementById('status-conexoes').textContent = conexoes.length;
+                
+                let msg = '✅ Pronto';
+                if (blocos.length > 0) {{
+                    msg = `✅ ${{blocos.length}} bloco(s) - Pronto para processar`;
+                }}
+                document.getElementById('status-mensagem').innerHTML = `<span>${{msg}}</span>`;
+            }}
 
             function adicionarBloco(tipo, config) {{
                 const container = document.getElementById('canvas-container');
@@ -757,8 +970,8 @@ def criar_diagrama_blocos_html():
                 const blocoData = {{
                     id: blocoIdCounter,
                     tipo: tipo,
-                    x: 100 + Math.random() * 200,
-                    y: 100 + Math.random() * 200,
+                    x: 150 + (blocos.length * 200) % 600,
+                    y: 150 + Math.floor(blocos.length / 3) * 150,
                     config: config
                 }};
                 
@@ -789,19 +1002,21 @@ def criar_diagrama_blocos_html():
                 }});
                 
                 blocoIdCounter++;
-                salvarEstado();
+                atualizarStatus();
             }}
 
             function adicionarBlocoTransferencia() {{
-                const num = prompt('Numerador (ex: 1, s+1):', '1');
-                if (num === null) return;
-                const den = prompt('Denominador (ex: s+1, s^2+2*s+1):', 's+1');
-                if (den === null) return;
+                const num = prompt('Digite o NUMERADOR da função de transferência:\\n\\nExemplos: 1, 10, s, 2*s+1, s^2+3*s+2', '1');
+                if (num === null || num.trim() === '') return;
+                
+                const den = prompt('Digite o DENOMINADOR da função de transferência:\\n\\nExemplos: s, s+1, s^2+2*s+1, s^2+5*s+6', 's+1');
+                if (den === null || den.trim() === '') return;
+                
                 adicionarBloco('Transferência', {{
                     nome: 'G' + blocoIdCounter,
-                    numerador: num,
-                    denominador: den,
-                    tf: num + ' / ' + den
+                    numerador: num.trim(),
+                    denominador: den.trim(),
+                    tf: num.trim() + ' / (' + den.trim() + ')'
                 }});
             }}
 
@@ -810,13 +1025,17 @@ def criar_diagrama_blocos_html():
             }}
 
             function adicionarBlocoGanho() {{
-                const ganho = prompt('Valor do ganho K:', '1');
-                if (ganho === null) return;
-                adicionarBloco('Ganho', {{nome: 'K=' + ganho, valor: ganho, tf: ganho}});
+                const ganho = prompt('Digite o valor do GANHO K:\\n\\nExemplos: 1, 5, 10, 0.5', '1');
+                if (ganho === null || ganho.trim() === '') return;
+                adicionarBloco('Ganho', {{
+                    nome: 'K=' + ganho.trim(),
+                    valor: ganho.trim(),
+                    tf: ganho.trim()
+                }});
             }}
 
             function adicionarBlocoIntegrador() {{
-                adicionarBloco('Integrador', {{nome: '∫', tf: '1/s'}});
+                adicionarBloco('Integrador', {{nome: '∫' + blocoIdCounter, tf: '1/s'}});
             }}
 
             function iniciarArrastar(e) {{
@@ -859,7 +1078,6 @@ def criar_diagrama_blocos_html():
                 arrastandoBloco = null;
                 document.removeEventListener('mousemove', arrastar);
                 document.removeEventListener('mouseup', pararArrastar);
-                salvarEstado();
             }}
 
             function selecionarBloco(e) {{
@@ -878,7 +1096,8 @@ def criar_diagrama_blocos_html():
                 
                 if (!portaSelecionada) {{
                     portaSelecionada = {{blocoId, tipo: tipoPorta}};
-                    e.target.style.background = '#FFC107';
+                    e.target.style.background = '#f39c12';
+                    e.target.style.boxShadow = '0 0 20px rgba(243, 156, 18, 0.8)';
                 }} else {{
                     if (portaSelecionada.tipo === 'saida' && tipoPorta === 'entrada') {{
                         conexoes.push({{
@@ -886,25 +1105,45 @@ def criar_diagrama_blocos_html():
                             destino: blocoId
                         }});
                         redesenharConexoes();
+                        atualizarStatus();
                     }} else if (portaSelecionada.tipo === 'entrada' && tipoPorta === 'saida') {{
                         conexoes.push({{
                             origem: blocoId,
                             destino: portaSelecionada.blocoId
                         }});
                         redesenharConexoes();
+                        atualizarStatus();
                     }} else {{
-                        alert('Conecte saída → entrada');
+                        alert('❌ Conecte: SAÍDA → ENTRADA');
                     }}
                     
-                    document.querySelectorAll('.porta').forEach(p => p.style.background = '#4CAF50');
+                    document.querySelectorAll('.porta').forEach(p => {{
+                        p.style.background = '#2ecc71';
+                        p.style.boxShadow = '';
+                    }});
                     portaSelecionada = null;
-                    salvarEstado();
                 }}
             }}
 
             function redesenharConexoes() {{
                 const svg = document.getElementById('conexoes-svg');
                 svg.innerHTML = '';
+                
+                // Adicionar definições de marcadores
+                const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+                marker.setAttribute('id', 'arrowhead');
+                marker.setAttribute('markerWidth', '10');
+                marker.setAttribute('markerHeight', '10');
+                marker.setAttribute('refX', '9');
+                marker.setAttribute('refY', '3');
+                marker.setAttribute('orient', 'auto');
+                const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                polygon.setAttribute('points', '0 0, 10 3, 0 6');
+                polygon.setAttribute('fill', '#667eea');
+                marker.appendChild(polygon);
+                defs.appendChild(marker);
+                svg.appendChild(defs);
                 
                 conexoes.forEach(conexao => {{
                     const blocoOrigem = document.getElementById('bloco-' + conexao.origem);
@@ -927,28 +1166,14 @@ def criar_diagrama_blocos_html():
                         
                         path.setAttribute('d', d);
                         path.setAttribute('stroke', '#667eea');
-                        path.setAttribute('stroke-width', '3');
+                        path.setAttribute('stroke-width', '4');
                         path.setAttribute('fill', 'none');
                         path.setAttribute('marker-end', 'url(#arrowhead)');
+                        path.setAttribute('filter', 'drop-shadow(0 0 8px rgba(102, 126, 234, 0.6))');
                         
                         svg.appendChild(path);
                     }}
                 }});
-                
-                const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-                const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
-                marker.setAttribute('id', 'arrowhead');
-                marker.setAttribute('markerWidth', '10');
-                marker.setAttribute('markerHeight', '10');
-                marker.setAttribute('refX', '9');
-                marker.setAttribute('refY', '3');
-                marker.setAttribute('orient', 'auto');
-                const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-                polygon.setAttribute('points', '0 0, 10 3, 0 6');
-                polygon.setAttribute('fill', '#667eea');
-                marker.appendChild(polygon);
-                defs.appendChild(marker);
-                svg.appendChild(defs);
             }}
 
             function removerSelecionado() {{
@@ -960,370 +1185,282 @@ def criar_diagrama_blocos_html():
                         conexoes = conexoes.filter(c => c.origem !== blocoSelecionado && c.destino !== blocoSelecionado);
                         redesenharConexoes();
                         blocoSelecionado = null;
-                        salvarEstado();
+                        atualizarStatus();
                     }}
                 }} else {{
-                    alert('Selecione um bloco primeiro!');
+                    alert('⚠️ Selecione um bloco primeiro clicando nele!');
                 }}
             }}
 
             function limparDiagrama() {{
-                if (confirm('Deseja limpar todo o diagrama?')) {{
+                if (confirm('🗑️ Deseja realmente limpar todo o diagrama?\\n\\nTodos os blocos e conexões serão removidos.')) {{
                     blocos = [];
                     conexoes = [];
                     blocoSelecionado = null;
-                    document.getElementById('canvas-container').innerHTML = '<svg id="conexoes-svg"></svg><div id="info-panel"><strong>📊 Instruções:</strong><div>• Clique nos botões para adicionar</div><div>• Arraste blocos para mover</div><div>• Clique nas portas verdes para conectar</div><div>• Clique no bloco para selecionar</div></div>';
-                    salvarEstado();
+                    document.getElementById('canvas-container').innerHTML = `
+                        <svg id="conexoes-svg"></svg>
+                        <div id="info-panel">
+                            <strong>📊 Instruções</strong>
+                            <div>✏️ Clique nos botões para adicionar blocos</div>
+                            <div>🖱️ Arraste blocos para posicionar</div>
+                            <div>🔗 Clique nas portas verdes para conectar</div>
+                            <div>🎯 Clique no bloco para selecionar</div>
+                            <div>⚡ Clique em PROCESSAR quando pronto</div>
+                        </div>
+                    `;
+                    atualizarStatus();
                 }}
             }}
 
-            function salvarEstado() {{
-                window.parent.postMessage({{
-                    type: 'salvar_diagrama',
+            function exportarDiagrama() {{
+                if (blocos.length === 0) {{
+                    alert('⚠️ Adicione pelo menos um bloco antes de processar!');
+                    return;
+                }}
+                
+                const diagrama = {{
                     blocos: blocos,
-                    conexoes: conexoes,
-                    contador: blocoIdCounter
-                }}, '*');
+                    conexoes: conexoes
+                }};
+                
+                const json = JSON.stringify(diagrama);
+                
+                // Tentar enviar para o Streamlit
+                try {{
+                    // Método 1: Atualizar campo de texto
+                    const inputField = window.parent.document.querySelector('input[aria-label="📋 Dados do Diagrama (JSON)"]');
+                    if (inputField) {{
+                        inputField.value = json;
+                        inputField.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                        inputField.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                    }}
+                    
+                    alert('✅ Diagrama exportado!\\n\\n' +
+                          `📊 Blocos: ${{blocos.length}}\\n` +
+                          `🔗 Conexões: ${{conexoes.length}}\\n\\n` +
+                          '⚡ Agora clique no botão "PROCESSAR SISTEMA" abaixo do editor!');
+                }} catch(e) {{
+                    console.error('Erro ao exportar:', e);
+                    alert('❌ Erro ao exportar. Tente novamente.');
+                }}
             }}
 
-            // Inicializar blocos existentes
-            blocos.forEach(blocoData => {{
-                const container = document.getElementById('canvas-container');
-                const bloco = document.createElement('div');
-                bloco.className = 'bloco';
-                bloco.id = 'bloco-' + blocoData.id;
-                bloco.style.left = blocoData.x + 'px';
-                bloco.style.top = blocoData.y + 'px';
-                
-                let nomeDisplay = blocoData.config.nome || blocoData.tipo;
-                let tfDisplay = blocoData.config.tf || '';
-                
-                bloco.innerHTML = `
-                    <div class="bloco-tipo">${{blocoData.tipo}}</div>
-                    <div class="bloco-nome">${{nomeDisplay}}</div>
-                    ${{tfDisplay ? '<div class="bloco-tf">' + tfDisplay + '</div>' : ''}}
-                    <div class="porta porta-entrada" data-bloco="${{blocoData.id}}" data-tipo="entrada"></div>
-                    <div class="porta porta-saida" data-bloco="${{blocoData.id}}" data-tipo="saida"></div>
-                `;
-                
-                container.appendChild(bloco);
-                bloco.addEventListener('mousedown', iniciarArrastar);
-                bloco.addEventListener('click', selecionarBloco);
-                
-                const portas = bloco.querySelectorAll('.porta');
-                portas.forEach(porta => {{
-                    porta.addEventListener('click', clickPorta);
-                }});
-            }});
-
-            redesenharConexoes();
+            // Inicializar
+            atualizarStatus();
         </script>
     </body>
     </html>
     """
+    
     return html_code
-
-def processar_diagrama_blocos():
-    """Processa o diagrama de blocos e calcula o sistema equivalente"""
-    blocos_diagrama = st.session_state.diagrama_blocos['blocos']
-    
-    if not blocos_diagrama:
-        return None, "Nenhum bloco no diagrama"
-    
-    try:
-        tfs = {}
-        for bloco in blocos_diagrama:
-            bloco_id = bloco['id']
-            config = bloco['config']
-            
-            if bloco['tipo'] == 'Transferência':
-                tf, _ = converter_para_tf(config['numerador'], config['denominador'])
-                tfs[bloco_id] = tf
-            elif bloco['tipo'] == 'Ganho':
-                tfs[bloco_id] = TransferFunction([float(config['valor'])], [1])
-            elif bloco['tipo'] == 'Integrador':
-                tfs[bloco_id] = TransferFunction([1], [1, 0])
-            elif bloco['tipo'] == 'Somador':
-                tfs[bloco_id] = TransferFunction([1], [1])
-        
-        if len(blocos_diagrama) == 1:
-            return tfs[blocos_diagrama[0]['id']], "Sistema de bloco único"
-        
-        sistema_final = tfs[blocos_diagrama[0]['id']]
-        for i in range(1, len(blocos_diagrama)):
-            sistema_final = sistema_final * tfs[blocos_diagrama[i]['id']]
-        
-        return sistema_final, f"Sistema com {len(blocos_diagrama)} blocos em série"
-    
-    except Exception as e:
-        return None, f"Erro ao processar diagrama: {str(e)}"
 
 # =====================================================
 # APLICAÇÃO PRINCIPAL
 # =====================================================
 
 def main():
-    st.set_page_config(page_title="Modelagem de Sistemas", layout="wide")
-    st.title("📉 Modelagem e Análise de Sistemas de Controle")
+    st.set_page_config(page_title="Sistema de Controle - Editor Xcos", layout="wide", initial_sidebar_state="collapsed")
     
-    inicializar_blocos()
+    # CSS customizado
+    st.markdown("""
+        <style>
+        .main > div {
+            padding-top: 2rem;
+        }
+        .stButton > button {
+            width: 100%;
+        }
+        </style>
+    """, unsafe_allow_html=True)
     
-    if 'calculo_erro_habilitado' not in st.session_state:
-        st.session_state.calculo_erro_habilitado = False
+    st.title("🎨 Editor Visual de Sistemas de Controle (Xcos Style)")
     
-    if 'mostrar_ajuda' not in st.session_state:
-        st.session_state.mostrar_ajuda = False
+    inicializar_estado()
     
-    if 'modo_editor' not in st.session_state:
-        st.session_state.modo_editor = 'classico'
+    # Tabs principais
+    tab1, tab2 = st.tabs(["🎨 Editor Visual Xcos", "📊 Análise Clássica"])
     
-    # Seletor de modo
-    st.sidebar.header("🎛️ Modo de Trabalho")
-    modo = st.sidebar.radio(
-        "Escolha o modo:",
-        ['Clássico (Lista)', 'Editor Visual (Xcos)'],
-        index=0 if st.session_state.modo_editor == 'classico' else 1,
-        help="Clássico: adicionar blocos por formulário\nEditor Visual: arrastar e conectar blocos graficamente"
-    )
-    
-    if modo == 'Editor Visual (Xcos)':
-        st.session_state.modo_editor = 'visual'
-    else:
-        st.session_state.modo_editor = 'classico'
-    
-    # =====================================================
-    # MODO EDITOR VISUAL
-    # =====================================================
-    if st.session_state.modo_editor == 'visual':
-        st.subheader("🎨 Editor Visual de Diagrama de Blocos")
-        st.info("💡 **Modo Xcos ativado!** Arraste blocos, conecte portas e construa seu sistema visualmente.")
+    with tab1:
+        st.markdown("### 🎯 Construa seu Sistema Visualmente")
+        st.info("💡 **Como usar:** Adicione blocos, conecte-os arrastando entre as portas verdes, e clique em 'PROCESSAR SISTEMA' no editor.")
         
-        html_editor = criar_diagrama_blocos_html()
-        components.html(html_editor, height=700, scrolling=False)
+        # Editor HTML
+        html_editor = criar_editor_xcos()
+        st.components.v1.html(html_editor, height=700, scrolling=False)
         
-        col1, col2, col3 = st.columns(3)
+        # Área de processamento
+        st.markdown("---")
+        col1, col2, col3 = st.columns([2, 1, 1])
+        
         with col1:
-            if st.button("⚡ Processar Diagrama", type="primary", use_container_width=True):
-                sistema, msg = processar_diagrama_blocos()
-                if sistema:
-                    st.success(msg)
-                    st.subheader("📊 Análise do Sistema")
+            if st.button("⚡ PROCESSAR SISTEMA COMPLETO", type="primary", use_container_width=True):
+                diagrama_json = st.session_state.get('diagrama_json_input', '{"blocos":[],"conexoes":[]}')
+                
+                if diagrama_json and diagrama_json != '{"blocos":[],"conexoes":[]}':
+                    st.session_state.ultimo_diagrama = diagrama_json
                     
-                    desempenho = calcular_desempenho(sistema)
-                    st.markdown("**Métricas de Desempenho:**")
-                    for chave, valor in desempenho.items():
-                        st.markdown(f"- **{chave}:** {valor}")
+                    sistema, msg = processar_diagrama_blocos_xcos(diagrama_json)
                     
-                    tab1, tab2, tab3 = st.tabs(["📈 Resposta Temporal", "📊 Bode", "🎯 Polos e Zeros"])
-                    
-                    with tab1:
-                        fig, t, y = plot_resposta_temporal(sistema, 'Degrau')
-                        st.plotly_chart(fig, use_container_width=True)
-                    
-                    with tab2:
-                        fig = plot_bode(sistema, 'both')
-                        st.plotly_chart(fig, use_container_width=True)
-                    
-                    with tab3:
-                        fig = plot_polos_zeros(sistema)
-                        st.plotly_chart(fig, use_container_width=True)
+                    if sistema:
+                        st.success(msg)
+                        st.session_state.sistema_atual = sistema
+                        
+                        # Mostrar função de transferência
+                        st.markdown("#### 📐 Função de Transferência Resultante")
+                        st.code(f"G(s) = {sistema}", language="text")
+                        
+                        # Análises automáticas
+                        st.markdown("---")
+                        st.markdown("### 📊 Análises Automáticas")
+                        
+                        # Desempenho
+                        with st.expander("📈 Métricas de Desempenho", expanded=True):
+                            desempenho = calcular_desempenho(sistema)
+                            col_a, col_b = st.columns(2)
+                            items = list(desempenho.items())
+                            mid = len(items) // 2
+                            
+                            with col_a:
+                                for chave, valor in items[:mid]:
+                                    st.metric(chave, valor)
+                            with col_b:
+                                for chave, valor in items[mid:]:
+                                    st.metric(chave, valor)
+                        
+                        # Gráficos
+                        tab_resp, tab_bode, tab_pz, tab_lgr = st.tabs([
+                            "📈 Resposta ao Degrau",
+                            "📊 Bode",
+                            "🎯 Polos e Zeros",
+                            "🔄 LGR"
+                        ])
+                        
+                        with tab_resp:
+                            fig, t, y = plot_resposta_temporal(sistema, 'Degrau')
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                            # Estatísticas da resposta
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric("Valor Final", f"{y[-1]:.3f}")
+                            with col2:
+                                st.metric("Máximo", f"{np.max(y):.3f}")
+                            with col3:
+                                overshoot = ((np.max(y) - y[-1]) / y[-1] * 100) if y[-1] != 0 else 0
+                                st.metric("Overshoot", f"{overshoot:.1f}%")
+                        
+                        with tab_bode:
+                            fig = plot_bode(sistema, 'both')
+                            st.plotly_chart(fig, use_container_width=True)
+                        
+                        with tab_pz:
+                            fig = plot_polos_zeros(sistema)
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                            # Info sobre estabilidade
+                            polos = ctrl.poles(sistema)
+                            estavel = all(np.real(p) < 0 for p in polos)
+                            if estavel:
+                                st.success("✅ Sistema ESTÁVEL (todos os polos no semiplano esquerdo)")
+                            else:
+                                st.error("❌ Sistema INSTÁVEL (polos no semiplano direito)")
+                        
+                        with tab_lgr:
+                            fig = plot_lgr(sistema)
+                            st.plotly_chart(fig, use_container_width=True)
+                        
+                    else:
+                        st.error(msg)
                 else:
-                    st.error(msg)
+                    st.warning("⚠️ Nenhum diagrama foi criado ainda. Use o editor acima para adicionar blocos!")
         
         with col2:
-            if st.button("💾 Exportar Diagrama", use_container_width=True):
-                diagrama_json = json.dumps(st.session_state.diagrama_blocos, indent=2)
-                st.download_button(
-                    label="📥 Baixar JSON",
-                    data=diagrama_json,
-                    file_name="diagrama_blocos.json",
-                    mime="application/json"
-                )
-        
-        with col3:
-            if st.button("📖 Ajuda", use_container_width=True):
-                st.info("""
-                **Como usar o Editor Visual:**
-                
-                1. **Adicionar Blocos:** Clique nos botões da barra superior
-                2. **Mover Blocos:** Arraste os blocos pela área
-                3. **Conectar:** Clique na porta de saída (⚫), depois na entrada
-                4. **Selecionar:** Clique no bloco
-                5. **Remover:** Selecione e clique em "🗑️ Remover"
-                
-                **Tipos de Blocos:**
-                - ➕ **Função Transferência:** G(s) = num/den
-                - ⊕ **Somador:** Soma/subtrai sinais
-                - 📊 **Ganho:** Multiplicador K
-                - ∫ **Integrador:** 1/s
-                """)
-        
-        st.sidebar.markdown("---")
-        st.sidebar.markdown("### 📊 Estatísticas")
-        st.sidebar.metric("Blocos", len(st.session_state.diagrama_blocos['blocos']))
-        st.sidebar.metric("Conexões", len(st.session_state.diagrama_blocos['conexoes']))
-        
-        return
-    
-    # =====================================================
-    # MODO CLÁSSICO (código original)
-    # =====================================================
-    
-    with st.sidebar:
-        st.header("🧱 Adicionar Blocos")
-        nome = st.text_input("Nome", value="G1")
-        tipo = st.selectbox("Tipo", ['Planta', 'Controlador', 'Sensor', 'Outro'])
-        numerador = st.text_input("Numerador", placeholder="ex: 4*s")
-        denominador = st.text_input("Denominador", placeholder="ex: s^2 + 2*s + 3")
-        
-        if st.button("➕ Adicionar"):
-            sucesso, mensagem = adicionar_bloco(nome, tipo, numerador, denominador)
-            if sucesso:
-                st.success(mensagem)
-            else:
-                st.error(mensagem)
-        
-        if not st.session_state.blocos.empty:
-            st.header("🗑️ Excluir Blocos")
-            excluir = st.selectbox("Selecionar", st.session_state.blocos['nome'])
-            if st.button("❌ Excluir"):
-                mensagem = remover_bloco(excluir)
-                st.success(mensagem)
-        
-        st.header("⚙️ Configurações")
-        if st.button("🔢 Habilitar Cálculo de Erro" if not st.session_state.calculo_erro_habilitado else "❌ Desabilitar Cálculo de Erro"):
-            st.session_state.calculo_erro_habilitado = not st.session_state.calculo_erro_habilitado
-            st.rerun()
-    
-    if st.session_state.calculo_erro_habilitado:
-        st.subheader("📊 Cálculo de Erro Estacionário")
-        col1, col2 = st.columns(2)
-        with col1:
-            num_erro = st.text_input("Numerador", value="", key="num_erro")
-        with col2:
-            den_erro = st.text_input("Denominador", value="", key="den_erro")
-        
-        btn_col1, btn_col2 = st.columns(2)
-        with btn_col1:
-            if st.button("🔍 Calcular Erro Estacionário"):
-                try:
-                    G, _ = converter_para_tf(num_erro, den_erro)
-                    tipo, Kp, Kv, Ka = constantes_de_erro(G)
-                    
-                    df = pd.DataFrame([{"Tipo": tipo, "Kp": Kp, "Kv": Kv, "Ka": Ka}])
-                    st.subheader("📊 Resultado")
-                    st.dataframe(
-                        df.style.format({
-                            "Kp": lambda x: formatar_numero(x),
-                            "Kv": lambda x: formatar_numero(x),
-                            "Ka": lambda x: formatar_numero(x)
-                        }),
-                        height=120,
+            if st.button("💾 Exportar JSON", use_container_width=True):
+                diagrama_json = st.session_state.get('diagrama_json_input', '{"blocos":[],"conexoes":[]}')
+                if diagrama_json != '{"blocos":[],"conexoes":[]}':
+                    st.download_button(
+                        label="📥 Download",
+                        data=diagrama_json,
+                        file_name="sistema_controle.json",
+                        mime="application/json",
                         use_container_width=True
                     )
-                except Exception as e:
-                    st.error(f"Erro: {str(e)}")
-        
-        with btn_col2:
-            if st.button("🗑️ Remover Planta", key="remover_planta"):
-                if not st.session_state.blocos.empty:
-                    st.session_state.blocos = st.session_state.blocos[st.session_state.blocos['tipo'] != 'Planta']
-                    st.success("Plantas removidas!")
                 else:
-                    st.warning("Nenhuma planta para remover")
-    else:
-        st.info("💡 Use o botão 'Habilitar Cálculo de Erro' na barra lateral")
-    
-    col1, col2 = st.columns([2, 1])
-    
-    with col2:
-        st.subheader("🔍 Tipo de Sistema")
-        tipo_malha = st.selectbox("Tipo:", ["Malha Aberta", "Malha Fechada"])
-        usar_ganho = st.checkbox("Adicionar ganho K ajustável", value=False)
+                    st.warning("Nada para exportar")
         
-        if usar_ganho:
-            K = st.slider("Ganho K", 0.1, 100.0, 1.0, 0.1)
-            st.info(f"✅ Ganho K: {K:.2f}")
-        else:
-            K = 1.0
-        
-        st.subheader("📊 Análises")
-        analise_opcoes = ANALYSIS_OPTIONS["malha_fechada" if tipo_malha == "Malha Fechada" else "malha_aberta"]
-        analises = st.multiselect("Escolha:", analise_opcoes, default=analise_opcoes[0])
-        entrada = st.selectbox("Sinal de Entrada", INPUT_SIGNALS)
+        with col3:
+            if st.button("📖 Ajuda Rápida", use_container_width=True):
+                st.info("""
+                **Passos:**
+                1. Adicione blocos clicando nos botões
+                2. Arraste para posicionar
+                3. Conecte: porta saída → porta entrada
+                4. Clique em "PROCESSAR SISTEMA"
+                5. Analise os resultados abaixo
+                """)
     
-    with col1:
-        st.subheader("📈 Resultados")
+    with tab2:
+        st.markdown("### 📐 Modo Clássico - Entrada Manual")
         
-        if st.button("▶️ Executar Simulação", use_container_width=True):
-            try:
-                df = st.session_state.blocos
-                if df.empty:
-                    st.warning("Adicione blocos primeiro.")
-                    st.stop()
-                
-                planta = obter_bloco_por_tipo('Planta')
-                controlador = obter_bloco_por_tipo('Controlador')
-                sensor = obter_bloco_por_tipo('Sensor')
-                
-                if planta is None:
-                    st.error("Adicione pelo menos uma Planta.")
-                    st.stop()
-                
-                ganho_tf = TransferFunction([K], [1])
-                
-                if tipo_malha == "Malha Aberta":
-                    sistema = ganho_tf * planta
-                    st.info(f"🔧 Sistema em Malha Aberta com K = {K:.2f}")
-                else:
-                    planta_com_ganho = ganho_tf * planta
-                    sistema = calcular_malha_fechada(planta_com_ganho, controlador, sensor)
-                    st.info(f"🔧 Sistema em Malha Fechada com K = {K:.2f}")
-                
-                for analise in analises:
-                    st.markdown(f"### 🔎 {analise}")
-                    
-                    if analise == 'Resposta no tempo':
-                        fig, t_out, y = plot_resposta_temporal(sistema, entrada)
-                        st.plotly_chart(fig, use_container_width=True)
-                    
-                    elif analise == 'Desempenho':
-                        desempenho = calcular_desempenho(sistema)
-                        for chave, valor in desempenho.items():
-                            st.markdown(f"**{chave}:** {valor}")
-                    
-                    elif analise == 'Diagrama De Bode Magnitude':
-                        fig = plot_bode(sistema, 'magnitude')
-                        st.plotly_chart(fig, use_container_width=True)
-                    
-                    elif analise == 'Diagrama De Bode Fase':
-                        fig = plot_bode(sistema, 'fase')
-                        st.plotly_chart(fig, use_container_width=True)
-                    
-                    elif analise == 'Diagrama de Polos e Zeros':
-                        fig = plot_polos_zeros(sistema)
-                        st.plotly_chart(fig, use_container_width=True)
-                    
-                    elif analise == 'LGR':
-                        fig = plot_lgr(sistema)
-                        st.plotly_chart(fig, use_container_width=True)
-                    
-                    elif analise == 'Nyquist':
-                        fig, polos_spd, voltas, Z = plot_nyquist(sistema)
-                        st.markdown(f"**Polos SPD (P):** {polos_spd}")
-                        st.markdown(f"**Voltas (N):** {voltas}")
-                        st.markdown(f"**Z = {Z} → {'✅ Estável' if Z == 0 else '❌ Instável'}**")
-                        st.plotly_chart(fig, use_container_width=True)
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            st.markdown("#### 🔢 Função de Transferência")
+            num_input = st.text_input("Numerador", placeholder="Ex: 10", key="num_classico")
+            den_input = st.text_input("Denominador", placeholder="Ex: s^2 + 2*s + 1", key="den_classico")
             
-            except Exception as e:
-                st.error(f"Erro durante a simulação: {e}")
-    
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### 💡 Dica")
-    st.sidebar.info("""
-    Experimente o **Editor Visual**
-    para construir sistemas graficamente!
-    """)
+            if st.button("🔍 Analisar", type="primary", use_container_width=True):
+                if num_input and den_input:
+                    try:
+                        tf, _ = converter_para_tf(num_input, den_input)
+                        st.session_state.sistema_atual = tf
+                        st.success(f"✅ Sistema carregado: G(s) = {tf}")
+                    except Exception as e:
+                        st.error(f"❌ Erro: {str(e)}")
+                else:
+                    st.warning("⚠️ Preencha numerador e denominador")
+        
+        with col2:
+            if st.session_state.sistema_atual:
+                st.markdown("#### 📊 Sistema Atual")
+                st.code(f"G(s) = {st.session_state.sistema_atual}", language="text")
+                
+                # Análise rápida
+                desempenho = calcular_desempenho(st.session_state.sistema_atual)
+                st.markdown("**Tipo:** " + desempenho.get('Tipo', 'N/A'))
+                
+                polos = ctrl.poles(st.session_state.sistema_atual)
+                estavel = all(np.real(p) < 0 for p in polos)
+                st.markdown("**Estabilidade:** " + ("✅ Estável" if estavel else "❌ Instável"))
+        
+        # Gráficos do sistema atual
+        if st.session_state.sistema_atual:
+            st.markdown("---")
+            st.markdown("### 📈 Visualizações")
+            
+            tabs = st.tabs(["📈 Resposta", "📊 Bode", "🎯 Polos/Zeros", "🔄 LGR", "⭕ Nyquist"])
+            
+            with tabs[0]:
+                entrada = st.selectbox("Sinal de Entrada", INPUT_SIGNALS)
+                fig, t, y = plot_resposta_temporal(st.session_state.sistema_atual, entrada)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with tabs[1]:
+                fig = plot_bode(st.session_state.sistema_atual, 'both')
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with tabs[2]:
+                fig = plot_polos_zeros(st.session_state.sistema_atual)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with tabs[3]:
+                fig = plot_lgr(st.session_state.sistema_atual)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with tabs[4]:
+                fig, p, n, z = plot_nyquist(st.session_state.sistema_atual)
+                st.plotly_chart(fig, use_container_width=True)
+                st.info(f"Polos SPD: {p} | Voltas: {n} | Z: {z} → {'Estável' if z == 0 else 'Instável'}")
 
 if __name__ == "__main__":
     main()
