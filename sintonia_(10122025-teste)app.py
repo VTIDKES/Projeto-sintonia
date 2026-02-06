@@ -3,13 +3,16 @@
 Sistema de Modelagem e Análise de Sistemas de Controle
 Otimizado para Streamlit Cloud
 
-✅ Alteração solicitada:
-- Mantém o código original (lógica/estrutura) e adiciona uma NOVA ABA (tab)
-  exclusiva para um Editor Visual tipo Xcos/Simulink (drag & drop + conexões),
-  usando os mesmos blocos já existentes em st.session_state.blocos.
+✅ Reformulação para funcionar no Streamlit Cloud SEM depender de streamlit-flow-component.
+Motivo: em alguns deploys o streamlit-flow-component não instala/importa no Cloud.
+
+✅ O que foi adicionado:
+- Uma NOVA ABA "🧩 Editor Visual" com drag & drop usando streamlit-sortables.
+- O usuário arrasta os blocos para definir a ORDEM da SÉRIE (estilo "cadeia" Simulink).
+- A Simulação em "Malha Aberta" usa automaticamente essa ordem se estiver definida.
 
 Dependência extra (Streamlit Cloud):
-- streamlit-flow-component
+- streamlit-sortables  (pip install streamlit-sortables)
 """
 
 import streamlit as st
@@ -24,23 +27,22 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 # =====================================================
-# EDITOR VISUAL (Simulink/Xcos) - Streamlit Flow
+# EDITOR VISUAL (drag & drop) - streamlit-sortables
 # =====================================================
-# Requer no requirements.txt: streamlit-flow-component
-try:
-    from streamlit_flow import streamlit_flow
-    from streamlit_flow.interfaces import StreamlitFlowNode
-except Exception:
-    streamlit_flow = None
-    StreamlitFlowNode = None
+SORTABLES_AVAILABLE = True
+SORTABLES_IMPORT_ERROR = None
 
-import uuid
+try:
+    from streamlit_sortables import sort_items
+except Exception as e:
+    SORTABLES_AVAILABLE = False
+    SORTABLES_IMPORT_ERROR = str(e)
+    sort_items = None
 
 # =====================================================
 # CONFIGURAÇÕES E CONSTANTES
 # =====================================================
 
-# Opções de análise
 ANALYSIS_OPTIONS = {
     "malha_aberta": ["Resposta no tempo", "Desempenho", "Diagrama de Polos e Zeros",
                     "Diagrama De Bode Magnitude", "Diagrama De Bode Fase", "Nyquist"],
@@ -48,7 +50,6 @@ ANALYSIS_OPTIONS = {
                      "Diagrama De Bode Magnitude", "Diagrama De Bode Fase", "LGR"]
 }
 
-# Sinais de entrada
 INPUT_SIGNALS = ['Degrau', 'Rampa', 'Senoidal', 'Impulso', 'Parabólica']
 
 # =====================================================
@@ -56,7 +57,6 @@ INPUT_SIGNALS = ['Degrau', 'Rampa', 'Senoidal', 'Impulso', 'Parabólica']
 # =====================================================
 
 def formatar_numero(valor):
-    """Formata números para exibição amigável"""
     if np.isinf(valor):
         return '∞'
     elif np.isnan(valor):
@@ -69,7 +69,6 @@ def formatar_numero(valor):
 # =====================================================
 
 def converter_para_tf(numerador_str, denominador_str):
-    """Converte strings de numerador e denominador em uma função de transferência"""
     s = sp.Symbol('s')
     num = parse_expr(numerador_str.replace('^', '**'), local_dict={'s': s})
     den = parse_expr(denominador_str.replace('^', '**'), local_dict={'s': s})
@@ -86,14 +85,12 @@ def converter_para_tf(numerador_str, denominador_str):
     return TransferFunction(num_coeffs, den_coeffs), (num, den)
 
 def tipo_do_sistema(G):
-    """Determina o tipo do sistema (número de integradores)"""
     G_min = ctrl.minreal(G, verbose=False)
     polos = ctrl.poles(G_min)
     tipo = sum(1 for p in polos if np.isclose(np.real_if_close(p), 0.0, atol=1e-3))
     return tipo
 
 def constantes_de_erro(G):
-    """Calcula as constantes de erro (Kp, Kv, Ka)"""
     s = ctrl.tf('s')
     G_min = ctrl.minreal(G, verbose=False)
     tipo = tipo_do_sistema(G_min)
@@ -120,7 +117,6 @@ def constantes_de_erro(G):
     return tipo, Kp, Kv, Ka
 
 def calcular_malha_fechada(planta, controlador=None, sensor=None):
-    """Calcula a função de transferência de malha fechada"""
     if controlador is None:
         controlador = TransferFunction([1], [1])
     if sensor is None:
@@ -135,7 +131,6 @@ def calcular_malha_fechada(planta, controlador=None, sensor=None):
 # =====================================================
 
 def calcular_desempenho(tf):
-    """Calcula métricas de desempenho do sistema"""
     den = tf.den[0][0]
     ordem = len(den) - 1
     polos = ctrl.poles(tf)
@@ -157,7 +152,6 @@ def calcular_desempenho(tf):
         return _desempenho_ordem_superior(polos, ordem, resultado)
 
 def _desempenho_ordem1(polos, resultado):
-    """Calcula desempenho para sistemas de 1ª ordem"""
     tau = -1 / polos[0].real
     resultado.update({
         'Tipo': '1ª Ordem',
@@ -170,7 +164,6 @@ def _desempenho_ordem1(polos, resultado):
     return resultado
 
 def _desempenho_ordem2(polos, resultado):
-    """Calcula desempenho para sistemas de 2ª ordem"""
     wn = np.sqrt(np.prod(np.abs(polos))).real
     zeta = -np.real(polos[0]) / wn
     wd = wn * np.sqrt(1 - zeta**2) if zeta < 1 else 0
@@ -192,9 +185,7 @@ def _desempenho_ordem2(polos, resultado):
     return resultado
 
 def _desempenho_ordem_superior(polos, ordem, resultado):
-    """Calcula desempenho para sistemas de ordem superior"""
     polos_ordenados = sorted(polos, key=lambda p: np.real(p), reverse=True)
-    polo_dominante = None
     par_dominante = None
 
     for i in range(len(polos_ordenados) - 1):
@@ -233,7 +224,6 @@ def _desempenho_ordem_superior(polos, ordem, resultado):
     return resultado
 
 def estimar_tempo_final_simulacao(tf):
-    """Estima o tempo final para simulação baseado nos polos do sistema"""
     polos = ctrl.poles(tf)
     if len(polos) == 0:
         return 50.0
@@ -252,47 +242,31 @@ def estimar_tempo_final_simulacao(tf):
 # =====================================================
 
 def configurar_linhas_interativas(fig):
-    """Adiciona suporte para desenhar linhas horizontais e verticais em gráficos"""
     fig.update_layout(
         dragmode='zoom',
-        newshape=dict(
-            line=dict(color='green', width=2, dash='dash')
-        ),
-        modebar_add=[
-            'drawline',
-            'drawopenpath',
-            'drawclosedpath',
-            'drawcircle',
-            'drawrect',
-            'eraseshape'
-        ]
+        newshape=dict(line=dict(color='green', width=2, dash='dash')),
+        modebar_add=['drawline','drawopenpath','drawclosedpath','drawcircle','drawrect','eraseshape']
     )
     return fig
 
 def plot_polos_zeros(tf, fig=None):
-    """Diagrama de Polos e Zeros interativo"""
     zeros = ctrl.zeros(tf)
     polos = ctrl.poles(tf)
-
     if fig is None:
         fig = go.Figure()
 
     if len(zeros) > 0:
         fig.add_trace(go.Scatter(
-            x=np.real(zeros),
-            y=np.imag(zeros),
-            mode='markers',
-            marker=dict(symbol='circle', size=12, color='blue'),
+            x=np.real(zeros), y=np.imag(zeros),
+            mode='markers', marker=dict(symbol='circle', size=12, color='blue'),
             name='Zeros',
             hovertemplate='Zero<br>Real: %{x:.3f}<br>Imaginário: %{y:.3f}<extra></extra>'
         ))
 
     if len(polos) > 0:
         fig.add_trace(go.Scatter(
-            x=np.real(polos),
-            y=np.imag(polos),
-            mode='markers',
-            marker=dict(symbol='x', size=12, color='red'),
+            x=np.real(polos), y=np.imag(polos),
+            mode='markers', marker=dict(symbol='x', size=12, color='red'),
             name='Polos',
             hovertemplate='Polo<br>Real: %{x:.3f}<br>Imaginário: %{y:.3f}<extra></extra>'
         ))
@@ -302,17 +276,12 @@ def plot_polos_zeros(tf, fig=None):
 
     fig.update_layout(
         title='Diagrama de Polos e Zeros (Interativo)',
-        xaxis_title='Parte Real',
-        yaxis_title='Parte Imaginária',
-        showlegend=True,
-        hovermode='closest'
+        xaxis_title='Parte Real', yaxis_title='Parte Imaginária',
+        showlegend=True, hovermode='closest'
     )
-
-    fig = configurar_linhas_interativas(fig)
-    return fig
+    return configurar_linhas_interativas(fig)
 
 def _gerar_sinal_entrada(entrada, t):
-    """Gera sinais de entrada para simulação"""
     sinais = {
         'Degrau': np.ones_like(t),
         'Rampa': t,
@@ -323,7 +292,6 @@ def _gerar_sinal_entrada(entrada, t):
     return sinais[entrada]
 
 def plot_resposta_temporal(sistema, entrada):
-    """Resposta temporal interativa"""
     tempo_final = estimar_tempo_final_simulacao(sistema)
     t = np.linspace(0, tempo_final, 1000)
     u = _gerar_sinal_entrada(entrada, t)
@@ -334,38 +302,22 @@ def plot_resposta_temporal(sistema, entrada):
         t_out, y, _ = forced_response(sistema, t, u, return_x=True)
 
     fig = go.Figure()
-
-    fig.add_trace(go.Scatter(
-        x=t_out,
-        y=u[:len(t_out)],
-        mode='lines',
-        line=dict(dash='dash', color='blue'),
-        name='Entrada',
-        hovertemplate='Tempo: %{x:.2f}s<br>Entrada: %{y:.3f}<extra></extra>'
-    ))
-
-    fig.add_trace(go.Scatter(
-        x=t_out,
-        y=y,
-        mode='lines',
-        line=dict(color='red'),
-        name='Saída',
-        hovertemplate='Tempo: %{x:.2f}s<br>Saída: %{y:.3f}<extra></extra>'
-    ))
-
+    fig.add_trace(go.Scatter(x=t_out, y=u[:len(t_out)], mode='lines',
+                             line=dict(dash='dash', color='blue'),
+                             name='Entrada',
+                             hovertemplate='Tempo: %{x:.2f}s<br>Entrada: %{y:.3f}<extra></extra>'))
+    fig.add_trace(go.Scatter(x=t_out, y=y, mode='lines',
+                             line=dict(color='red'),
+                             name='Saída',
+                             hovertemplate='Tempo: %{x:.2f}s<br>Saída: %{y:.3f}<extra></extra>'))
     fig.update_layout(
         title=f'Resposta Temporal - Entrada: {entrada}',
-        xaxis_title='Tempo (s)',
-        yaxis_title='Amplitude',
-        showlegend=True,
-        hovermode='x unified'
+        xaxis_title='Tempo (s)', yaxis_title='Amplitude',
+        showlegend=True, hovermode='x unified'
     )
-
-    fig = configurar_linhas_interativas(fig)
-    return fig, t_out, y
+    return configurar_linhas_interativas(fig), t_out, y
 
 def plot_bode(sistema, tipo='both'):
-    """Diagrama de Bode interativo"""
     numerator = sistema.num[0][0]
     denominator = sistema.den[0][0]
     sys = signal.TransferFunction(numerator, denominator)
@@ -378,179 +330,66 @@ def plot_bode(sistema, tipo='both'):
             subplot_titles=('Diagrama de Bode - Magnitude', 'Diagrama de Bode - Fase'),
             vertical_spacing=0.1
         )
-
-        fig.add_trace(
-            go.Scatter(
-                x=w, y=mag,
-                mode='lines',
-                line=dict(color='blue', width=3),
-                name='Magnitude',
-                hovertemplate='Freq: %{x:.2f} rad/s<br>Magnitude: %{y:.2f} dB<extra></extra>',
-                showlegend=False
-            ),
-            row=1, col=1
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=w, y=phase,
-                mode='lines',
-                line=dict(color='red', width=3),
-                name='Fase',
-                hovertemplate='Freq: %{x:.2f} rad/s<br>Fase: %{y:.2f}°<extra></extra>',
-                showlegend=False
-            ),
-            row=2, col=1
-        )
-
+        fig.add_trace(go.Scatter(x=w, y=mag, mode='lines', name='Magnitude', showlegend=False), row=1, col=1)
+        fig.add_trace(go.Scatter(x=w, y=phase, mode='lines', name='Fase', showlegend=False), row=2, col=1)
         fig.update_xaxes(title_text="Frequência (rad/s)", type="log", row=1, col=1)
         fig.update_xaxes(title_text="Frequência (rad/s)", type="log", row=2, col=1)
         fig.update_yaxes(title_text="Magnitude (dB)", row=1, col=1)
         fig.update_yaxes(title_text="Fase (deg)", row=2, col=1)
-
         fig.update_layout(height=700, title_text="Diagrama de Bode")
+        return configurar_linhas_interativas(fig)
 
-    elif tipo == 'magnitude':
+    if tipo == 'magnitude':
         fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=w, y=mag,
-            mode='lines',
-            line=dict(color='blue', width=3),
-            name='Magnitude',
-            hovertemplate='Freq: %{x:.2f} rad/s<br>Magnitude: %{y:.2f} dB<extra></extra>'
-        ))
-        fig.update_layout(
-            title='Diagrama de Bode - Magnitude',
-            xaxis_title="Frequência (rad/s)",
-            yaxis_title="Magnitude (dB)",
-            xaxis_type='log'
-        )
-    else:
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=w, y=phase,
-            mode='lines',
-            line=dict(color='red', width=3),
-            name='Fase',
-            hovertemplate='Freq: %{x:.2f} rad/s<br>Fase: %{y:.2f}°<extra></extra>'
-        ))
-        fig.update_layout(
-            title='Diagrama de Bode - Fase',
-            xaxis_title="Frequência (rad/s)",
-            yaxis_title="Fase (deg)",
-            xaxis_type='log'
-        )
-
-    fig = configurar_linhas_interativas(fig)
-    return fig
-
-def plot_lgr(sistema):
-    """Lugar Geométrico das Raízes interativo"""
-    rlist, klist = root_locus(sistema, plot=False)
+        fig.add_trace(go.Scatter(x=w, y=mag, mode='lines', name='Magnitude'))
+        fig.update_layout(title='Diagrama de Bode - Magnitude', xaxis_title="Frequência (rad/s)",
+                          yaxis_title="Magnitude (dB)", xaxis_type='log')
+        return configurar_linhas_interativas(fig)
 
     fig = go.Figure()
+    fig.add_trace(go.Scatter(x=w, y=phase, mode='lines', name='Fase'))
+    fig.update_layout(title='Diagrama de Bode - Fase', xaxis_title="Frequência (rad/s)",
+                      yaxis_title="Fase (deg)", xaxis_type='log')
+    return configurar_linhas_interativas(fig)
 
-    for i, r in enumerate(rlist.T):
-        fig.add_trace(go.Scatter(
-            x=np.real(r),
-            y=np.imag(r),
-            mode='lines',
-            line=dict(color='blue', width=1),
-            name=f'Ramo {i+1}',
-            showlegend=False,
-            hovertemplate='Real: %{x:.3f}<br>Imaginário: %{y:.3f}<extra></extra>'
-        ))
-
+def plot_lgr(sistema):
+    rlist, klist = root_locus(sistema, plot=False)
+    fig = go.Figure()
+    for r in rlist.T:
+        fig.add_trace(go.Scatter(x=np.real(r), y=np.imag(r), mode='lines', showlegend=False))
     zeros = ctrl.zeros(sistema)
     polos = ctrl.poles(sistema)
-
     if len(zeros) > 0:
-        fig.add_trace(go.Scatter(
-            x=np.real(zeros),
-            y=np.imag(zeros),
-            mode='markers',
-            marker=dict(symbol='circle', size=10, color='green'),
-            name='Zeros',
-            hovertemplate='Zero<br>Real: %{x:.3f}<br>Imaginário: %{y:.3f}<extra></extra>'
-        ))
-
+        fig.add_trace(go.Scatter(x=np.real(zeros), y=np.imag(zeros), mode='markers',
+                                 marker=dict(symbol='circle', size=10, color='green'), name='Zeros'))
     if len(polos) > 0:
-        fig.add_trace(go.Scatter(
-            x=np.real(polos),
-            y=np.imag(polos),
-            mode='markers',
-            marker=dict(symbol='x', size=12, color='red'),
-            name='Polos',
-            hovertemplate='Polo<br>Real: %{x:.3f}<br>Imaginário: %{y:.3f}<extra></extra>'
-        ))
-
+        fig.add_trace(go.Scatter(x=np.real(polos), y=np.imag(polos), mode='markers',
+                                 marker=dict(symbol='x', size=12, color='red'), name='Polos'))
     fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.7)
     fig.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.7)
-
-    fig.update_layout(
-        title='Lugar Geométrico das Raízes (LGR)',
-        xaxis_title='Parte Real',
-        yaxis_title='Parte Imaginária',
-        showlegend=True,
-        hovermode='closest'
-    )
-
-    fig = configurar_linhas_interativas(fig)
-    return fig
+    fig.update_layout(title='Lugar Geométrico das Raízes (LGR)', xaxis_title='Parte Real',
+                      yaxis_title='Parte Imaginária', showlegend=True, hovermode='closest')
+    return configurar_linhas_interativas(fig)
 
 def plot_nyquist(sistema):
-    """Diagrama de Nyquist interativo"""
     sistema_scipy = signal.TransferFunction(sistema.num[0][0], sistema.den[0][0])
     w = np.logspace(-2, 2, 1000)
     _, H = signal.freqresp(sistema_scipy, w)
 
     fig = go.Figure()
-
-    fig.add_trace(go.Scatter(
-        x=H.real,
-        y=H.imag,
-        mode='lines',
-        line=dict(color='blue', width=2),
-        name='Nyquist',
-        hovertemplate='Real: %{x:.3f}<br>Imaginário: %{y:.3f}<extra></extra>'
-    ))
-
-    fig.add_trace(go.Scatter(
-        x=H.real,
-        y=-H.imag,
-        mode='lines',
-        line=dict(dash='dash', color='gray', width=1),
-        name='Reflexo simétrico',
-        hovertemplate='Real: %{x:.3f}<br>Imaginário: %{y:.3f}<extra></extra>'
-    ))
-
-    fig.add_trace(go.Scatter(
-        x=[-1],
-        y=[0],
-        mode='markers',
-        marker=dict(symbol='circle', size=12, color='red'),
-        name='Ponto crítico (-1,0)',
-        hovertemplate='Ponto Crítico<br>Real: -1<br>Imaginário: 0<extra></extra>'
-    ))
-
+    fig.add_trace(go.Scatter(x=H.real, y=H.imag, mode='lines', name='Nyquist'))
+    fig.add_trace(go.Scatter(x=H.real, y=-H.imag, mode='lines', name='Reflexo', line=dict(dash='dash')))
+    fig.add_trace(go.Scatter(x=[-1], y=[0], mode='markers', name='(-1,0)', marker=dict(size=12, color='red')))
     fig.add_hline(y=0, line_color="black", line_width=1)
     fig.add_vline(x=0, line_color="black", line_width=1)
-
-    fig.update_layout(
-        title='Diagrama de Nyquist',
-        xaxis_title='Parte Real',
-        yaxis_title='Parte Imaginária',
-        showlegend=True,
-        hovermode='closest'
-    )
-
+    fig.update_layout(title='Diagrama de Nyquist', xaxis_title='Parte Real', yaxis_title='Parte Imaginária',
+                      showlegend=True, hovermode='closest')
     fig = configurar_linhas_interativas(fig)
 
     polos = ctrl.poles(sistema)
     polos_spd = sum(1 for p in polos if np.real(p) > 0)
     voltas = 0
     Z = polos_spd + voltas
-
     return fig, polos_spd, voltas, Z
 
 # =====================================================
@@ -558,12 +397,12 @@ def plot_nyquist(sistema):
 # =====================================================
 
 def inicializar_blocos():
-    """Inicializa o estado dos blocos se não existir"""
     if 'blocos' not in st.session_state:
         st.session_state.blocos = pd.DataFrame(columns=['nome', 'tipo', 'numerador', 'denominador', 'tf', 'tf_simbolico'])
+    if 'serie_order' not in st.session_state:
+        st.session_state.serie_order = []
 
 def adicionar_bloco(nome, tipo, numerador, denominador):
-    """Adiciona um novo bloco ao sistema"""
     try:
         tf, tf_symb = converter_para_tf(numerador, denominador)
         novo = pd.DataFrame([{
@@ -580,179 +419,82 @@ def adicionar_bloco(nome, tipo, numerador, denominador):
         return False, f"Erro na conversão: {e}"
 
 def remover_bloco(nome):
-    """Remove um bloco pelo nome"""
     st.session_state.blocos = st.session_state.blocos[st.session_state.blocos['nome'] != nome]
+    st.session_state.serie_order = [x for x in st.session_state.serie_order if x != nome]
     return f"Bloco {nome} excluído."
 
 def obter_bloco_por_tipo(tipo):
-    """Obtém o primeiro bloco de um tipo específico"""
     df = st.session_state.blocos
     if any(df['tipo'] == tipo):
         return df[df['tipo'] == tipo].iloc[0]['tf']
     return None
 
-# =====================================================
-# EDITOR VISUAL - Funções (aba separada)
-# =====================================================
-
-def _ensure_flow_state():
-    if "flow_state" not in st.session_state:
-        st.session_state.flow_state = {"nodes": [], "edges": []}
-    if "flow_edges" not in st.session_state:
-        st.session_state.flow_edges = []
-    if "flow_nodes_by_name" not in st.session_state:
-        st.session_state.flow_nodes_by_name = {}  # nome_bloco -> node_id
-
-def blocos_para_flow(df: pd.DataFrame):
-    """Cria nós do editor visual a partir de st.session_state.blocos."""
-    _ensure_flow_state()
-
-    nodes = []
-    edges = st.session_state.flow_state.get("edges", [])
-
-    # cria/recupera ids por nome
-    for i, row in df.iterrows():
-        nome = str(row["nome"])
-        tipo = str(row["tipo"])
-
-        if nome not in st.session_state.flow_nodes_by_name:
-            st.session_state.flow_nodes_by_name[nome] = f"node-{uuid.uuid4().hex[:8]}"
-        node_id = st.session_state.flow_nodes_by_name[nome]
-
-        # reaproveitar posição anterior
-        prev_pos = None
-        for n in st.session_state.flow_state.get("nodes", []):
-            if isinstance(n, dict) and n.get("id") == node_id:
-                prev_pos = n.get("position")
-                break
-
-        x = prev_pos["x"] if prev_pos else 60 + i * 220
-        y = prev_pos["y"] if prev_pos else 100
-
-        label = f"{nome}\n[{tipo}]\n{row['numerador']}/{row['denominador']}"
-
-        nodes.append(
-            StreamlitFlowNode(
-                id=node_id,
-                pos=(x, y),
-                data={"label": label, "nome": nome},
-                node_type="default",
-                source_position="right",
-                target_position="left",
-            )
-        )
-
-    valid_ids = {n.id for n in nodes}
-
-    cleaned_edges = []
-    for e in edges:
-        if isinstance(e, dict):
-            if e.get("source") in valid_ids and e.get("target") in valid_ids:
-                cleaned_edges.append(e)
-
-    return nodes, cleaned_edges
-
-def flow_para_edges(flow_return):
-    """Salva edges simples em session_state.flow_edges"""
-    edges_out = []
-    for e in flow_return.get("edges", []):
-        edges_out.append({"source": e["source"], "target": e["target"]})
-    st.session_state.flow_edges = edges_out
-    return edges_out
-
-def montar_tf_em_serie_por_flow(df: pd.DataFrame, edges_simple: list):
-    """
-    Monta uma TF em série seguindo o 'tronco' principal do grafo:
-    - encontra um nó com in-degree 0 e segue as conexões.
-    """
-    if df.empty:
+def montar_serie_pela_ordem(df: pd.DataFrame, ordem_nomes: list):
+    if df.empty or not ordem_nomes:
         return None
-
-    nodeid_by_nome = st.session_state.get("flow_nodes_by_name", {}).copy()
-
-    tf_by_node = {}
-    for _, row in df.iterrows():
-        nome = str(row["nome"])
-        node_id = nodeid_by_nome.get(nome)
-        if node_id:
-            tf_by_node[node_id] = row["tf"]
-
-    if not tf_by_node:
-        return None
-
-    out_map = {}
-    in_deg = {nid: 0 for nid in tf_by_node.keys()}
-
-    for e in edges_simple:
-        s, t = e.get("source"), e.get("target")
-        if s in tf_by_node and t in tf_by_node:
-            out_map.setdefault(s, []).append(t)
-            in_deg[t] = in_deg.get(t, 0) + 1
-
-    starts = [nid for nid, deg in in_deg.items() if deg == 0]
-    cur = starts[0] if starts else next(iter(tf_by_node.keys()))
-
-    visited = set()
+    mapa = {row['nome']: row['tf'] for _, row in df.iterrows()}
     serie = None
-
-    while cur and cur in tf_by_node and cur not in visited:
-        visited.add(cur)
-        serie = tf_by_node[cur] if serie is None else (serie * tf_by_node[cur])
-        nxts = out_map.get(cur, [])
-        cur = nxts[0] if nxts else None
-
+    for nome in ordem_nomes:
+        tf = mapa.get(nome)
+        if tf is None:
+            continue
+        serie = tf if serie is None else (serie * tf)
     return serie
 
-def render_editor_visual_tab():
-    """Aba separada: Editor Visual (drag/drop + conexões)"""
-    st.subheader("🧩 Editor Visual de Blocos (tipo Xcos/Simulink)")
+# =====================================================
+# TAB: EDITOR VISUAL (drag&drop)
+# =====================================================
 
-    if streamlit_flow is None or StreamlitFlowNode is None:
-        st.warning("Editor Visual indisponível. No Streamlit Cloud, adicione `streamlit-flow-component` no requirements.txt.")
-        st.code("pip install streamlit-flow-component")
-        return
+def render_tab_editor_visual():
+    st.subheader("🧩 Editor Visual (drag & drop) — Série em Malha Aberta")
 
-    _ensure_flow_state()
     df = st.session_state.blocos
-
     if df.empty:
-        st.info("Adicione blocos na sidebar (Planta/Controlador/Sensor/Outro) para aparecerem aqui.")
+        st.info("Adicione blocos na barra lateral para aparecerem aqui.")
         return
 
-    st.caption("Arraste os blocos no canvas e conecte pelas alças (setas). As conexões ficam salvas para a simulação.")
+    st.caption("Arraste os itens para definir a ordem da SÉRIE. Essa ordem será usada na Malha Aberta ao executar a simulação.")
 
-    nodes, edges = blocos_para_flow(df)
+    nomes = [row['nome'] for _, row in df.iterrows()]
 
-    flow_ret = streamlit_flow(
-        "control_flow",
-        nodes=nodes,
-        edges=edges,
-        height=600,
-        fit_view=True,
-        allow_new_edges=True,
-        show_controls=True,
-        show_mini_map=True,
-        show_background=True,
-    )
+    if not st.session_state.serie_order:
+        st.session_state.serie_order = nomes.copy()
+    else:
+        atual = [n for n in st.session_state.serie_order if n in nomes]
+        for n in nomes:
+            if n not in atual:
+                atual.append(n)
+        st.session_state.serie_order = atual
 
-    if flow_ret is not None:
-        st.session_state.flow_state = flow_ret
-        flow_para_edges(flow_ret)
+    if not SORTABLES_AVAILABLE:
+        st.error("O componente de drag&drop não carregou (streamlit-sortables).")
+        st.write("Coloque isto no requirements.txt:")
+        st.code("streamlit-sortables")
+        st.write("Detalhe do erro de import:")
+        st.code(SORTABLES_IMPORT_ERROR or "Sem detalhes.")
+        return
 
-    c1, c2, c3 = st.columns([1, 1, 2])
+    label_by_nome = {row['nome']: f"{row['nome']}  |  {row['tipo']}  |  {row['numerador']}/{row['denominador']}" for _, row in df.iterrows()}
+    ordered_labels = [label_by_nome[n] for n in st.session_state.serie_order if n in label_by_nome]
+
+    new_labels = sort_items(ordered_labels, direction="vertical")
+
+    new_order = []
+    for lab in new_labels:
+        nome = lab.split("|")[0].strip()
+        if nome in nomes and nome not in new_order:
+            new_order.append(nome)
+
+    st.session_state.serie_order = new_order
+
+    c1, c2 = st.columns([1, 2])
     with c1:
-        if st.button("🔁 Resetar layout do canvas"):
-            st.session_state.flow_state = {"nodes": [], "edges": []}
-            st.session_state.flow_edges = []
-            st.session_state.flow_nodes_by_name = {}
+        if st.button("🔁 Resetar ordem"):
+            st.session_state.serie_order = nomes.copy()
             st.rerun()
     with c2:
-        st.metric("Conexões", len(st.session_state.get("flow_edges", [])))
-    with c3:
-        st.write("✅ O diagrama é usado automaticamente na **Malha Aberta** se existir ao menos 1 conexão (série).")
-
-    with st.expander("📌 Ver conexões (debug)"):
-        st.json(st.session_state.get("flow_edges", []))
+        st.write("**Ordem atual da série:**")
+        st.write(" → ".join(st.session_state.serie_order) if st.session_state.serie_order else "(vazia)")
 
 # =====================================================
 # APLICAÇÃO PRINCIPAL
@@ -770,7 +512,6 @@ def main():
     if 'mostrar_ajuda' not in st.session_state:
         st.session_state.mostrar_ajuda = False
 
-    # Sidebar (mantida original)
     with st.sidebar:
         st.header("🧱 Adicionar Blocos")
         nome = st.text_input("Nome", value="G1")
@@ -797,14 +538,12 @@ def main():
             st.session_state.calculo_erro_habilitado = not st.session_state.calculo_erro_habilitado
             st.rerun()
 
-    # ✅ NOVA ESTRUTURA: abas (a simulação fica como estava, editor em aba separada)
     tab_sim, tab_editor = st.tabs(["📈 Simulação", "🧩 Editor Visual"])
 
-    # =======================
-    # TAB: SIMULAÇÃO (original)
-    # =======================
+    with tab_editor:
+        render_tab_editor_visual()
+
     with tab_sim:
-        # Cálculo de Erro (mantido original)
         if st.session_state.calculo_erro_habilitado:
             st.subheader("📊 Cálculo de Erro Estacionário")
             col1, col2 = st.columns(2)
@@ -838,13 +577,13 @@ def main():
                 if st.button("🗑️ Remover Planta", key="remover_planta"):
                     if not st.session_state.blocos.empty:
                         st.session_state.blocos = st.session_state.blocos[st.session_state.blocos['tipo'] != 'Planta']
+                        st.session_state.serie_order = [n for n in st.session_state.serie_order if n in st.session_state.blocos['nome'].tolist()]
                         st.success("Plantas removidas com sucesso!")
                     else:
                         st.warning("Nenhuma planta para remover")
         else:
             st.info("💡 Use o botão 'Habilitar Cálculo de Erro' na barra lateral para ativar esta funcionalidade")
 
-        # Configuração da Simulação (mantida original)
         col1, col2 = st.columns([2, 1])
 
         with col2:
@@ -871,7 +610,6 @@ def main():
             analises = st.multiselect("Escolha:", analise_opcoes, default=analise_opcoes[0])
             entrada = st.selectbox("Sinal de Entrada", INPUT_SIGNALS)
 
-        # Simulação Principal (mantida original, com "gancho" opcional do editor só para malha aberta)
         with col1:
             st.subheader("📈 Resultados da Simulação")
 
@@ -895,16 +633,13 @@ def main():
 
                         ganho_tf = TransferFunction([K], [1])
 
-                        # ✅ Mantém lógica original; se existir diagrama (conexões), usa na Malha Aberta (série)
                         if tipo_malha == "Malha Aberta":
-                            sistema_base = planta
-                            if st.session_state.get("flow_edges"):
-                                serie = montar_tf_em_serie_por_flow(df, st.session_state.flow_edges)
-                                if serie is not None:
-                                    sistema_base = serie
-                                    st.info("🔗 Malha Aberta montada pelo Editor Visual (série).")
-
-                            sistema = ganho_tf * sistema_base
+                            serie = montar_serie_pela_ordem(df, st.session_state.get("serie_order", []))
+                            if serie is not None:
+                                sistema = ganho_tf * serie
+                                st.info("🧩 Usando ordem do Editor Visual (série) na Malha Aberta.")
+                            else:
+                                sistema = ganho_tf * planta
                             st.info(f"🔧 Sistema em Malha Aberta com K = {K:.2f}")
                         else:
                             planta_com_ganho = ganho_tf * planta
@@ -956,7 +691,6 @@ def main():
                 if st.button("❓ Ajuda", use_container_width=True):
                     st.session_state.mostrar_ajuda = True
 
-        # Modal de Ajuda (mantido original)
         if st.session_state.mostrar_ajuda:
             with st.container():
                 st.markdown("---")
@@ -972,28 +706,10 @@ def main():
                     3. **📊 Selecionar Análises**: Escolha quais gráficos e análises deseja ver
                     4. **🎛️ Ajustar Parâmetros**: Use o ganho K se necessário
                     5. **▶️ Executar**: Clique em "Executar Simulação" para ver os resultados
-                    6. **✏️ Desenhar**: Use as ferramentas de desenho nos gráficos
-                    """)
-
-                    st.markdown("### 🔍 Exemplos de Funções de Transferência")
-                    st.markdown("""
-                    - **1ª Ordem**: `1/(s+1)`
-                    - **2ª Ordem**: `1/(s^2 + 2*s + 1)`
-                    - **Integrador**: `1/s`
-                    - **Sistema com zero**: `(s+1)/(s^2 + 2*s + 2)`
+                    6. **🧩 Editor Visual**: Use a aba Editor Visual para arrastar a ordem da série (Malha Aberta)
                     """)
 
                 with col_guide2:
-                    st.markdown("### 🔍 Tipos de Análise")
-                    st.markdown("""
-                    - **Resposta no tempo**: Comportamento temporal do sistema
-                    - **Desempenho**: Métricas como sobressinal, tempo de acomodação
-                    - **Diagrama de Bode**: Resposta em frequência
-                    - **Polos e Zeros**: Estabilidade do sistema
-                    - **LGR**: Lugar Geométrico das Raízes
-                    - **Nyquist**: Análise de estabilidade
-                    """)
-
                     st.markdown("### ⚠️ Dicas Importantes")
                     st.markdown("""
                     - Sempre comece adicionando uma **Planta**
@@ -1006,21 +722,10 @@ def main():
                     st.session_state.mostrar_ajuda = False
                     st.rerun()
 
-    # =======================
-    # TAB: EDITOR VISUAL
-    # =======================
-    with tab_editor:
-        render_editor_visual_tab()
-
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### 💡 Dica Rápida")
     st.sidebar.info("""
-    Comece adicionando uma **Planta** e
-    execute a simulação para ver os
-    resultados básicos.
-
-    🧩 **Editor Visual**: Use a aba "Editor Visual"
-    para montar a série em Malha Aberta.
+    🧩 Use a aba **Editor Visual** para montar uma cadeia em série (Malha Aberta)
+    com **drag & drop**.
     """)
 
 if __name__ == "__main__":
