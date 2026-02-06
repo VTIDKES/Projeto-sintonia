@@ -1,610 +1,638 @@
-# -*- coding: utf-8 -*-
-"""
-Sistema de Modelagem e Análise de Sistemas de Controle
-Editor Visual Xcos - VERSÃO COMPLETAMENTE FUNCIONAL
-"""
-
 import streamlit as st
-import pandas as pd
 import numpy as np
-import sympy as sp
-from sympy.parsing.sympy_parser import parse_expr
-import control as ctrl
-from control import TransferFunction, margin, step_response, forced_response, root_locus
+import matplotlib.pyplot as plt
+from matplotlib.patches import Circle, FancyBboxPatch, FancyArrowPatch
+import control as ct
 from scipy import signal
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import json
-import time
 
-# =====================================================
-# CONFIGURAÇÃO
-# =====================================================
+# Configuração da página
+st.set_page_config(page_title="Editor de Blocos - Sistemas de Controle", layout="wide")
 
-st.set_page_config(page_title="Editor Xcos - Sistemas de Controle", layout="wide")
+# Título
+st.title("🔧 Editor de Blocos - Análise de Sistemas de Controle")
+st.markdown("*Similar ao Xcos do Scilab*")
 
-# CSS
-st.markdown("""
-<style>
-    .main > div {padding-top: 1rem;}
-    .stButton > button {width: 100%; font-weight: bold;}
-    h1 {color: #667eea;}
-</style>
-""", unsafe_allow_html=True)
+# Inicialização do estado da sessão
+if 'blocks' not in st.session_state:
+    st.session_state.blocks = []
+if 'connections' not in st.session_state:
+    st.session_state.connections = []
+if 'system_type' not in st.session_state:
+    st.session_state.system_type = "Malha Aberta"
 
-# =====================================================
-# FUNÇÕES AUXILIARES
-# =====================================================
+# Sidebar para construção do sistema
+st.sidebar.header("📐 Construtor de Sistema")
 
-def formatar_numero(valor):
-    if np.isinf(valor): return '∞'
-    elif np.isnan(valor): return '-'
-    else: return f"{valor:.3f}"
+# Seleção do tipo de sistema
+system_type = st.sidebar.radio(
+    "Tipo de Sistema:",
+    ["Malha Aberta", "Malha Fechada"]
+)
+st.session_state.system_type = system_type
 
-# =====================================================
-# FUNÇÕES DE TRANSFERÊNCIA
-# =====================================================
+st.sidebar.subheader("Adicionar Bloco")
 
-def converter_para_tf(numerador_str, denominador_str):
-    """Converte strings para função de transferência"""
-    try:
-        s = sp.Symbol('s')
-        num = parse_expr(numerador_str.replace('^', '**'), local_dict={'s': s})
-        den = parse_expr(denominador_str.replace('^', '**'), local_dict={'s': s})
-        
-        num, den = sp.fraction(sp.together(num / den))
-        num_coeffs = [float(c) for c in sp.Poly(num, s).all_coeffs()]
-        den_coeffs = [float(c) for c in sp.Poly(den, s).all_coeffs()]
-        
-        if den_coeffs and den_coeffs[0] != 1:
-            fator = den_coeffs[0]
-            num_coeffs = [c / fator for c in num_coeffs]
-            den_coeffs = [c / fator for c in den_coeffs]
-        
-        return TransferFunction(num_coeffs, den_coeffs)
-    except Exception as e:
-        raise Exception(f"Erro ao converter: {str(e)}")
+# Tipos de blocos disponíveis
+block_type = st.sidebar.selectbox(
+    "Tipo de Bloco:",
+    ["Função de Transferência", "Ganho", "Integrador", "Derivador", "Atraso"]
+)
 
-# =====================================================
-# ANÁLISE DE SISTEMAS
-# =====================================================
+# Parâmetros do bloco
+if block_type == "Função de Transferência":
+    st.sidebar.markdown("**Numerador (s)**")
+    num_str = st.sidebar.text_input("Coeficientes (separados por vírgula):", "1", key="num")
+    st.sidebar.markdown("**Denominador (s)**")
+    den_str = st.sidebar.text_input("Coeficientes (separados por vírgula):", "1,1", key="den")
+    
+elif block_type == "Ganho":
+    gain = st.sidebar.number_input("Valor do Ganho (K):", value=1.0, step=0.1)
+    
+elif block_type == "Integrador":
+    st.sidebar.info("G(s) = 1/s")
+    
+elif block_type == "Derivador":
+    st.sidebar.info("G(s) = s")
+    
+elif block_type == "Atraso":
+    tau = st.sidebar.number_input("Constante de Tempo (τ):", value=1.0, step=0.1)
 
-def calcular_desempenho(tf):
-    """Calcula métricas de desempenho"""
-    try:
-        polos = ctrl.poles(tf)
-        gm, pm, wg, wp = margin(tf)
-        gm_db = 20 * np.log10(gm) if gm != np.inf and gm > 0 else np.inf
-        
-        resultado = {
-            'Margem de ganho': f"{formatar_numero(gm)} ({'∞' if gm == np.inf else f'{formatar_numero(gm_db)} dB'})",
-            'Margem de fase': f"{formatar_numero(pm)}°",
-        }
-        
-        ordem = len(tf.den[0][0]) - 1
-        
-        if ordem == 1:
-            tau = -1 / polos[0].real if polos[0].real != 0 else float('inf')
-            resultado.update({
-                'Tipo': '1ª Ordem',
-                'Const. tempo (τ)': f"{formatar_numero(tau)} s",
-                'Temp. acomodação (Ts)': f"{formatar_numero(4 * tau)} s",
+# Botão para adicionar bloco
+if st.sidebar.button("➕ Adicionar Bloco"):
+    block_id = len(st.session_state.blocks)
+    
+    if block_type == "Função de Transferência":
+        try:
+            num = [float(x.strip()) for x in num_str.split(',')]
+            den = [float(x.strip()) for x in den_str.split(',')]
+            tf = ct.TransferFunction(num, den)
+            st.session_state.blocks.append({
+                'id': block_id,
+                'type': block_type,
+                'tf': tf,
+                'num': num,
+                'den': den,
+                'label': f"TF_{block_id}"
             })
-        elif ordem == 2:
-            wn = np.sqrt(np.prod(np.abs(polos))).real
-            zeta = -np.real(polos[0]) / wn if wn > 0 else 0
-            Mp = np.exp(-zeta * np.pi / np.sqrt(1 - zeta**2)) * 100 if 0 < zeta < 1 else 0
-            Ts = 4 / (zeta * wn) if zeta * wn > 0 else float('inf')
+            st.sidebar.success(f"Bloco {block_id} adicionado!")
+        except:
+            st.sidebar.error("Erro ao criar função de transferência")
             
-            resultado.update({
-                'Tipo': '2ª Ordem',
-                'Freq. natural (ωn)': f"{formatar_numero(wn)} rad/s",
-                'Fator amortec. (ζ)': f"{formatar_numero(zeta)}",
-                'Sobressinal (Mp)': f"{formatar_numero(Mp)}%",
-                'Temp. acomodação (Ts)': f"{formatar_numero(Ts)} s"
-            })
-        else:
-            resultado['Tipo'] = f'{ordem}ª Ordem'
+    elif block_type == "Ganho":
+        tf = ct.TransferFunction([gain], [1])
+        st.session_state.blocks.append({
+            'id': block_id,
+            'type': block_type,
+            'tf': tf,
+            'gain': gain,
+            'label': f"K_{block_id}"
+        })
+        st.sidebar.success(f"Bloco {block_id} adicionado!")
         
-        return resultado
-    except:
-        return {'Erro': 'Não foi possível calcular'}
+    elif block_type == "Integrador":
+        tf = ct.TransferFunction([1], [1, 0])
+        st.session_state.blocks.append({
+            'id': block_id,
+            'type': block_type,
+            'tf': tf,
+            'label': f"Int_{block_id}"
+        })
+        st.sidebar.success(f"Bloco {block_id} adicionado!")
+        
+    elif block_type == "Derivador":
+        tf = ct.TransferFunction([1, 0], [1])
+        st.session_state.blocks.append({
+            'id': block_id,
+            'type': block_type,
+            'tf': tf,
+            'label': f"Der_{block_id}"
+        })
+        st.sidebar.success(f"Bloco {block_id} adicionado!")
+        
+    elif block_type == "Atraso":
+        tf = ct.TransferFunction([1], [tau, 1])
+        st.session_state.blocks.append({
+            'id': block_id,
+            'type': block_type,
+            'tf': tf,
+            'tau': tau,
+            'label': f"Lag_{block_id}"
+        })
+        st.sidebar.success(f"Bloco {block_id} adicionado!")
 
-def estimar_tempo_final(tf):
-    """Estima tempo para simulação"""
-    try:
-        polos = ctrl.poles(tf)
-        if len(polos) == 0 or any(np.real(p) > 1e-6 for p in polos):
-            return 20.0
-        partes_reais = [np.real(p) for p in polos if np.real(p) < -1e-6]
-        if not partes_reais:
-            return 100.0
-        sigma = max(partes_reais)
-        return np.clip(6 / abs(sigma), 10, 500)
-    except:
-        return 50.0
+# Botão para limpar todos os blocos
+if st.sidebar.button("🗑️ Limpar Todos os Blocos"):
+    st.session_state.blocks = []
+    st.session_state.connections = []
+    st.sidebar.success("Todos os blocos removidos!")
 
-# =====================================================
-# FUNÇÕES DE PLOTAGEM
-# =====================================================
+# Mostrar blocos adicionados
+if st.session_state.blocks:
+    st.sidebar.subheader("Blocos Adicionados")
+    for block in st.session_state.blocks:
+        with st.sidebar.expander(f"Bloco {block['id']}: {block['type']}"):
+            st.write(f"**Label:** {block['label']}")
+            if block['type'] == "Função de Transferência":
+                st.write(f"Num: {block['num']}")
+                st.write(f"Den: {block['den']}")
+            elif block['type'] == "Ganho":
+                st.write(f"K = {block['gain']}")
+            elif block['type'] == "Atraso":
+                st.write(f"τ = {block['tau']}")
 
-def plot_resposta_temporal(sistema, entrada='Degrau'):
-    """Plota resposta temporal"""
-    tempo_final = estimar_tempo_final(sistema)
-    t = np.linspace(0, tempo_final, 1000)
-    
-    if entrada == 'Degrau':
-        u = np.ones_like(t)
-        t_out, y = step_response(sistema, t)
-    elif entrada == 'Rampa':
-        u = t
-        t_out, y, _ = forced_response(sistema, t, u, return_x=True)
-    elif entrada == 'Senoidal':
-        u = np.sin(2*np.pi*t)
-        t_out, y, _ = forced_response(sistema, t, u, return_x=True)
-    else:  # Impulso
-        u = np.concatenate([[1], np.zeros(len(t)-1)])
-        t_out, y, _ = forced_response(sistema, t, u, return_x=True)
-    
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=t_out, y=u[:len(t_out)], mode='lines', 
-                             line=dict(dash='dash', color='blue', width=2), name='Entrada'))
-    fig.add_trace(go.Scatter(x=t_out, y=y, mode='lines', 
-                             line=dict(color='red', width=3), name='Saída'))
-    
-    fig.update_layout(
-        title=f'Resposta ao {entrada}',
-        xaxis_title='Tempo (s)',
-        yaxis_title='Amplitude',
-        height=500,
-        hovermode='x unified'
-    )
-    
-    return fig
+# Área principal
+col1, col2 = st.columns([1, 2])
 
-def plot_bode(sistema):
-    """Diagrama de Bode"""
-    sys = signal.TransferFunction(sistema.num[0][0], sistema.den[0][0])
-    w = np.logspace(-3, 3, 1000)
-    w, mag, phase = signal.bode(sys, w)
+with col1:
+    st.subheader("⚙️ Configuração do Sistema")
     
-    fig = make_subplots(rows=2, cols=1, subplot_titles=('Magnitude', 'Fase'), vertical_spacing=0.15)
-    
-    fig.add_trace(go.Scatter(x=w, y=mag, mode='lines', line=dict(color='blue', width=3)), row=1, col=1)
-    fig.add_trace(go.Scatter(x=w, y=phase, mode='lines', line=dict(color='red', width=3)), row=2, col=1)
-    
-    fig.update_xaxes(title_text="Frequência (rad/s)", type="log", row=1, col=1)
-    fig.update_xaxes(title_text="Frequência (rad/s)", type="log", row=2, col=1)
-    fig.update_yaxes(title_text="Magnitude (dB)", row=1, col=1)
-    fig.update_yaxes(title_text="Fase (°)", row=2, col=1)
-    
-    fig.update_layout(height=700, showlegend=False)
-    return fig
-
-def plot_polos_zeros(tf):
-    """Diagrama de Polos e Zeros"""
-    zeros = ctrl.zeros(tf)
-    polos = ctrl.poles(tf)
-    
-    fig = go.Figure()
-    
-    if len(zeros) > 0:
-        fig.add_trace(go.Scatter(x=np.real(zeros), y=np.imag(zeros), mode='markers',
-                                marker=dict(symbol='circle', size=14, color='blue', 
-                                          line=dict(width=2, color='white')), name='Zeros'))
-    
-    if len(polos) > 0:
-        fig.add_trace(go.Scatter(x=np.real(polos), y=np.imag(polos), mode='markers',
-                                marker=dict(symbol='x', size=16, color='red', 
-                                          line=dict(width=3)), name='Polos'))
-    
-    fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
-    fig.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.5)
-    
-    fig.update_layout(
-        title='Diagrama de Polos e Zeros',
-        xaxis_title='Parte Real',
-        yaxis_title='Parte Imaginária',
-        height=500
-    )
-    
-    return fig
-
-def plot_lgr(sistema):
-    """Lugar Geométrico das Raízes"""
-    rlist, klist = root_locus(sistema, plot=False)
-    
-    fig = go.Figure()
-    
-    for r in rlist.T:
-        fig.add_trace(go.Scatter(x=np.real(r), y=np.imag(r), mode='lines',
-                                line=dict(color='blue', width=2), showlegend=False))
-    
-    zeros = ctrl.zeros(sistema)
-    polos = ctrl.poles(sistema)
-    
-    if len(zeros) > 0:
-        fig.add_trace(go.Scatter(x=np.real(zeros), y=np.imag(zeros), mode='markers',
-                                marker=dict(symbol='circle', size=12, color='green'), name='Zeros'))
-    
-    if len(polos) > 0:
-        fig.add_trace(go.Scatter(x=np.real(polos), y=np.imag(polos), mode='markers',
-                                marker=dict(symbol='x', size=14, color='red'), name='Polos'))
-    
-    fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
-    fig.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.5)
-    
-    fig.update_layout(title='Lugar Geométrico das Raízes (LGR)', 
-                     xaxis_title='Parte Real', yaxis_title='Parte Imaginária', height=500)
-    
-    return fig
-
-# =====================================================
-# PROCESSAMENTO DO DIAGRAMA
-# =====================================================
-
-def processar_diagrama(blocos_lista, conexoes_lista):
-    """Processa diagrama e retorna sistema equivalente"""
-    try:
-        if not blocos_lista:
-            return None, "❌ Nenhum bloco no diagrama"
+    if st.session_state.blocks:
+        # Configuração da conexão em série
+        st.markdown("**Conexão em Série**")
+        st.info("Os blocos serão conectados em série na ordem em que foram adicionados")
         
-        # Criar funções de transferência
-        tfs = {}
+        # Parâmetros adicionais para malha fechada
+        if system_type == "Malha Fechada":
+            st.markdown("**Configuração de Realimentação**")
+            feedback_sign = st.radio("Tipo de Realimentação:", ["Negativa", "Positiva"])
+            
+            use_h = st.checkbox("Usar bloco H(s) na realimentação")
+            if use_h:
+                st.markdown("**H(s) - Função de Transferência da Realimentação**")
+                h_num_str = st.text_input("Numerador H(s):", "1", key="h_num")
+                h_den_str = st.text_input("Denominador H(s):", "1", key="h_den")
         
-        for bloco in blocos_lista:
-            bloco_id = bloco['id']
-            tipo = bloco['tipo']
-            config = bloco['config']
-            
-            if tipo == 'Transferência':
-                tf = converter_para_tf(config['numerador'], config['denominador'])
-                tfs[bloco_id] = tf
+        # Botão para calcular sistema
+        if st.button("🔄 Calcular Sistema"):
+            try:
+                # Conectar blocos em série
+                G = st.session_state.blocks[0]['tf']
+                for block in st.session_state.blocks[1:]:
+                    G = ct.series(G, block['tf'])
                 
-            elif tipo == 'Ganho':
-                K = float(config.get('valor', 1))
-                tfs[bloco_id] = TransferFunction([K], [1])
+                st.session_state.G_open = G
                 
-            elif tipo == 'Integrador':
-                tfs[bloco_id] = TransferFunction([1], [1, 0])
-                
-            elif tipo == 'Somador':
-                tfs[bloco_id] = TransferFunction([1], [1])
-        
-        # Processar conexões (simplificado: multiplicação em série)
-        if len(blocos_lista) == 1:
-            sistema_final = tfs[blocos_lista[0]['id']]
-            msg = "✅ Sistema com 1 bloco"
-        else:
-            # Ordenar blocos pelas conexões
-            if conexoes_lista:
-                # Criar grafo
-                grafo = {}
-                for conn in conexoes_lista:
-                    origem = conn['origem']
-                    if origem not in grafo:
-                        grafo[origem] = []
-                    grafo[origem].append(conn['destino'])
-                
-                # Encontrar blocos iniciais
-                todos_ids = {b['id'] for b in blocos_lista}
-                destinos = {c['destino'] for c in conexoes_lista}
-                blocos_iniciais = todos_ids - destinos
-                
-                # DFS para ordenar
-                ordem = []
-                visitados = set()
-                
-                def dfs(bid):
-                    if bid in visitados:
-                        return
-                    visitados.add(bid)
-                    ordem.append(bid)
-                    if bid in grafo:
-                        for prox in grafo[bid]:
-                            dfs(prox)
-                
-                for inicial in blocos_iniciais:
-                    dfs(inicial)
-                
-                # Multiplicar em série
-                sistema_final = tfs[ordem[0]]
-                for bid in ordem[1:]:
-                    sistema_final = sistema_final * tfs[bid]
-                
-                msg = f"✅ Sistema com {len(ordem)} blocos conectados"
-            else:
-                # Sem conexões: multiplicar todos
-                sistema_final = tfs[blocos_lista[0]['id']]
-                for i in range(1, len(blocos_lista)):
-                    sistema_final = sistema_final * tfs[blocos_lista[i]['id']]
-                
-                msg = f"✅ Sistema com {len(blocos_lista)} blocos (série simples)"
-        
-        return sistema_final, msg
-        
-    except Exception as e:
-        return None, f"❌ Erro: {str(e)}"
-
-# =====================================================
-# INICIALIZAÇÃO
-# =====================================================
-
-def inicializar():
-    """Inicializa session state"""
-    if 'blocos_xcos' not in st.session_state:
-        st.session_state.blocos_xcos = []
-    if 'conexoes_xcos' not in st.session_state:
-        st.session_state.conexoes_xcos = []
-    if 'sistema_processado' not in st.session_state:
-        st.session_state.sistema_processado = None
-
-# =====================================================
-# INTERFACE DO EDITOR XCOS
-# =====================================================
-
-def interface_editor_xcos():
-    """Interface principal do editor Xcos"""
-    
-    st.title("🎨 Editor Visual Xcos - Sistemas de Controle")
-    
-    # Tabs
-    tab1, tab2 = st.tabs(["🎨 Editor de Blocos", "📊 Análise do Sistema"])
-    
-    with tab1:
-        st.markdown("### 🔧 Construa seu Diagrama de Blocos")
-        
-        # Painel de controle
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            if st.button("➕ Adicionar G(s)", use_container_width=True):
-                st.session_state.modo_adicao = 'transferencia'
-        
-        with col2:
-            if st.button("📊 Adicionar Ganho K", use_container_width=True):
-                st.session_state.modo_adicao = 'ganho'
-        
-        with col3:
-            if st.button("∫ Adicionar Integrador", use_container_width=True):
-                st.session_state.modo_adicao = 'integrador'
-        
-        with col4:
-            if st.button("🗑️ Limpar Tudo", use_container_width=True):
-                st.session_state.blocos_xcos = []
-                st.session_state.conexoes_xcos = []
-                st.session_state.sistema_processado = None
-                st.rerun()
-        
-        # Formulário de adição baseado no modo
-        if 'modo_adicao' in st.session_state:
-            st.markdown("---")
-            
-            if st.session_state.modo_adicao == 'transferencia':
-                st.markdown("#### ➕ Nova Função de Transferência G(s)")
-                col_a, col_b, col_c = st.columns([2, 2, 1])
-                
-                with col_a:
-                    num = st.text_input("Numerador", placeholder="Ex: 1, s, 2*s+1", key="num_input")
-                with col_b:
-                    den = st.text_input("Denominador", placeholder="Ex: s+1, s^2+2*s+1", key="den_input")
-                with col_c:
-                    st.markdown("##")
-                    if st.button("✅ Adicionar", type="primary", use_container_width=True):
-                        if num and den:
-                            bloco_id = len(st.session_state.blocos_xcos) + 1
-                            st.session_state.blocos_xcos.append({
-                                'id': bloco_id,
-                                'tipo': 'Transferência',
-                                'config': {
-                                    'nome': f'G{bloco_id}',
-                                    'numerador': num,
-                                    'denominador': den,
-                                    'tf': f"{num}/{den}"
-                                }
-                            })
-                            del st.session_state.modo_adicao
-                            st.rerun()
-            
-            elif st.session_state.modo_adicao == 'ganho':
-                st.markdown("#### 📊 Novo Ganho K")
-                col_a, col_b = st.columns([3, 1])
-                
-                with col_a:
-                    ganho = st.number_input("Valor do Ganho", value=1.0, step=0.1, key="ganho_input")
-                with col_b:
-                    st.markdown("##")
-                    if st.button("✅ Adicionar", type="primary", use_container_width=True):
-                        bloco_id = len(st.session_state.blocos_xcos) + 1
-                        st.session_state.blocos_xcos.append({
-                            'id': bloco_id,
-                            'tipo': 'Ganho',
-                            'config': {
-                                'nome': f'K{bloco_id}',
-                                'valor': str(ganho),
-                                'tf': str(ganho)
-                            }
-                        })
-                        del st.session_state.modo_adicao
-                        st.rerun()
-            
-            elif st.session_state.modo_adicao == 'integrador':
-                st.markdown("#### ∫ Novo Integrador (1/s)")
-                if st.button("✅ Adicionar Integrador", type="primary", use_container_width=True):
-                    bloco_id = len(st.session_state.blocos_xcos) + 1
-                    st.session_state.blocos_xcos.append({
-                        'id': bloco_id,
-                        'tipo': 'Integrador',
-                        'config': {
-                            'nome': f'Int{bloco_id}',
-                            'tf': '1/s'
-                        }
-                    })
-                    del st.session_state.modo_adicao
-                    st.rerun()
-        
-        # Mostrar blocos existentes
-        st.markdown("---")
-        st.markdown("### 📦 Blocos no Diagrama")
-        
-        if st.session_state.blocos_xcos:
-            for i, bloco in enumerate(st.session_state.blocos_xcos):
-                col1, col2, col3, col4 = st.columns([1, 2, 3, 1])
-                
-                with col1:
-                    st.markdown(f"**#{bloco['id']}**")
-                with col2:
-                    st.markdown(f"**{bloco['tipo']}**")
-                with col3:
-                    tf_display = bloco['config'].get('tf', '-')
-                    st.code(tf_display, language="text")
-                with col4:
-                    if st.button("🗑️", key=f"del_{i}"):
-                        st.session_state.blocos_xcos.pop(i)
-                        st.rerun()
-            
-            # Configurar conexões
-            st.markdown("---")
-            st.markdown("### 🔗 Conexões")
-            
-            st.info("💡 Os blocos serão conectados em SÉRIE na ordem em que foram adicionados")
-            
-            # Mostrar conexões atuais
-            if len(st.session_state.blocos_xcos) > 1:
-                st.markdown("**Conexões automáticas (série):**")
-                for i in range(len(st.session_state.blocos_xcos) - 1):
-                    bloco1 = st.session_state.blocos_xcos[i]
-                    bloco2 = st.session_state.blocos_xcos[i+1]
-                    st.markdown(f"• Bloco #{bloco1['id']} ({bloco1['config']['nome']}) → Bloco #{bloco2['id']} ({bloco2['config']['nome']})")
-        else:
-            st.info("👈 Nenhum bloco adicionado ainda. Use os botões acima para começar!")
-    
-    with tab2:
-        st.markdown("### 📊 Análise do Sistema")
-        
-        if st.button("⚡ PROCESSAR E ANALISAR SISTEMA", type="primary", use_container_width=True, key="processar"):
-            if st.session_state.blocos_xcos:
-                # Criar conexões automáticas em série
-                conexoes = []
-                for i in range(len(st.session_state.blocos_xcos) - 1):
-                    conexoes.append({
-                        'origem': st.session_state.blocos_xcos[i]['id'],
-                        'destino': st.session_state.blocos_xcos[i+1]['id']
-                    })
-                
-                st.session_state.conexoes_xcos = conexoes
-                
-                # Processar
-                sistema, msg = processar_diagrama(st.session_state.blocos_xcos, 
-                                                  st.session_state.conexoes_xcos)
-                
-                if sistema:
-                    st.session_state.sistema_processado = sistema
-                    st.success(msg)
-                else:
-                    st.error(msg)
-            else:
-                st.warning("⚠️ Adicione pelo menos um bloco antes de processar!")
-        
-        # Mostrar análises se o sistema foi processado
-        if st.session_state.sistema_processado:
-            sistema = st.session_state.sistema_processado
-            
-            st.markdown("---")
-            st.markdown("#### 📐 Função de Transferência Resultante")
-            st.code(f"G(s) = {sistema}", language="text")
-            
-            # Verificar estabilidade
-            polos = ctrl.poles(sistema)
-            estavel = all(np.real(p) < 0 for p in polos)
-            
-            if estavel:
-                st.success("✅ **Sistema ESTÁVEL** (todos os polos no semiplano esquerdo)")
-            else:
-                st.error("❌ **Sistema INSTÁVEL** (polos no semiplano direito)")
-            
-            # Métricas de desempenho
-            st.markdown("---")
-            st.markdown("#### 📈 Métricas de Desempenho")
-            
-            desempenho = calcular_desempenho(sistema)
-            
-            cols = st.columns(3)
-            items = list(desempenho.items())
-            for i, (chave, valor) in enumerate(items):
-                with cols[i % 3]:
-                    st.metric(chave, valor)
-            
-            # Gráficos
-            st.markdown("---")
-            st.markdown("#### 📊 Visualizações")
-            
-            tab_resp, tab_bode, tab_pz, tab_lgr = st.tabs([
-                "📈 Resposta Temporal",
-                "📊 Bode",
-                "🎯 Polos e Zeros",
-                "🔄 LGR"
-            ])
-            
-            with tab_resp:
-                entrada = st.selectbox("Sinal de Entrada", 
-                                      ['Degrau', 'Rampa', 'Senoidal', 'Impulso'])
-                fig = plot_resposta_temporal(sistema, entrada)
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # Estatísticas
-                if entrada == 'Degrau':
-                    t = np.linspace(0, estimar_tempo_final(sistema), 1000)
-                    _, y = step_response(sistema, t)
-                    
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Valor Final", f"{y[-1]:.3f}")
-                    with col2:
-                        st.metric("Máximo", f"{np.max(y):.3f}")
-                    with col3:
-                        overshoot = ((np.max(y) - y[-1]) / y[-1] * 100) if y[-1] != 0 else 0
-                        st.metric("Overshoot", f"{overshoot:.1f}%")
-            
-            with tab_bode:
-                fig = plot_bode(sistema)
-                st.plotly_chart(fig, use_container_width=True)
-            
-            with tab_pz:
-                fig = plot_polos_zeros(sistema)
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # Informações sobre polos e zeros
-                polos = ctrl.poles(sistema)
-                zeros = ctrl.zeros(sistema)
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.markdown("**Polos:**")
-                    for i, p in enumerate(polos, 1):
-                        st.text(f"p{i} = {p:.4f}")
-                
-                with col2:
-                    st.markdown("**Zeros:**")
-                    if len(zeros) > 0:
-                        for i, z in enumerate(zeros, 1):
-                            st.text(f"z{i} = {z:.4f}")
+                # Se for malha fechada, calcular sistema em malha fechada
+                if system_type == "Malha Fechada":
+                    if use_h:
+                        h_num = [float(x.strip()) for x in h_num_str.split(',')]
+                        h_den = [float(x.strip()) for x in h_den_str.split(',')]
+                        H = ct.TransferFunction(h_num, h_den)
                     else:
-                        st.text("Nenhum zero")
-            
-            with tab_lgr:
-                fig = plot_lgr(sistema)
-                st.plotly_chart(fig, use_container_width=True)
+                        H = ct.TransferFunction([1], [1])
+                    
+                    sign = -1 if feedback_sign == "Negativa" else 1
+                    st.session_state.G_closed = ct.feedback(G, H, sign=sign)
+                    st.session_state.H = H
                 
-                st.info("💡 O LGR mostra como os polos variam com o ganho K de 0 a ∞")
+                st.success("✅ Sistema calculado com sucesso!")
+                
+            except Exception as e:
+                st.error(f"Erro ao calcular sistema: {str(e)}")
+    else:
+        st.warning("⚠️ Adicione blocos para começar")
 
-# =====================================================
-# MAIN
-# =====================================================
+with col2:
+    st.subheader("📊 Diagrama de Blocos")
+    
+    if st.session_state.blocks:
+        # Criar figura para diagrama de blocos
+        fig, ax = plt.subplots(figsize=(12, 4))
+        ax.set_xlim(0, 10)
+        ax.set_ylim(0, 3)
+        ax.axis('off')
+        
+        num_blocks = len(st.session_state.blocks)
+        x_spacing = 8 / (num_blocks + 1)
+        
+        # Desenhar blocos
+        for i, block in enumerate(st.session_state.blocks):
+            x = 1 + i * x_spacing
+            y = 1.5
+            
+            # Caixa do bloco
+            box = FancyBboxPatch((x-0.3, y-0.2), 0.6, 0.4,
+                                boxstyle="round,pad=0.05", 
+                                edgecolor='blue', facecolor='lightblue',
+                                linewidth=2)
+            ax.add_patch(box)
+            
+            # Texto do bloco
+            if block['type'] == "Ganho":
+                text = f"K={block['gain']}"
+            elif block['type'] == "Integrador":
+                text = "1/s"
+            elif block['type'] == "Derivador":
+                text = "s"
+            elif block['type'] == "Atraso":
+                text = f"1/(τs+1)"
+            else:
+                text = f"G{block['id']}"
+            
+            ax.text(x, y, text, ha='center', va='center', fontsize=10, fontweight='bold')
+            
+            # Seta conectando blocos
+            if i < num_blocks - 1:
+                arrow = FancyArrowPatch((x+0.3, y), (x+x_spacing-0.3, y),
+                                      arrowstyle='->', mutation_scale=20,
+                                      color='black', linewidth=2)
+                ax.add_patch(arrow)
+        
+        # Seta de entrada
+        arrow_in = FancyArrowPatch((0.3, 1.5), (0.7, 1.5),
+                                  arrowstyle='->', mutation_scale=20,
+                                  color='green', linewidth=2)
+        ax.add_patch(arrow_in)
+        ax.text(0.2, 1.7, 'R(s)', fontsize=10, color='green')
+        
+        # Seta de saída
+        x_last = 1 + (num_blocks-1) * x_spacing
+        arrow_out = FancyArrowPatch((x_last+0.3, 1.5), (9.5, 1.5),
+                                   arrowstyle='->', mutation_scale=20,
+                                   color='red', linewidth=2)
+        ax.add_patch(arrow_out)
+        ax.text(9.6, 1.7, 'Y(s)', fontsize=10, color='red')
+        
+        # Se for malha fechada, desenhar realimentação
+        if system_type == "Malha Fechada":
+            # Linha de realimentação
+            x_end = 9.3
+            ax.plot([x_end, x_end, 0.5, 0.5], [1.5, 0.5, 0.5, 1.3],
+                   'b--', linewidth=2)
+            
+            # Círculo de soma
+            circle = Circle((0.5, 1.5), 0.15, edgecolor='black', 
+                          facecolor='white', linewidth=2)
+            ax.add_patch(circle)
+            ax.text(0.35, 1.5, '+', fontsize=12, fontweight='bold')
+            ax.text(0.5, 1.25, '-' if feedback_sign == "Negativa" else '+', 
+                   fontsize=12, fontweight='bold')
+            
+            # Bloco H(s) se houver
+            if 'H' in st.session_state:
+                h_box = FancyBboxPatch((4.5, 0.3), 0.6, 0.4,
+                                     boxstyle="round,pad=0.05",
+                                     edgecolor='purple', facecolor='lavender',
+                                     linewidth=2)
+                ax.add_patch(h_box)
+                ax.text(4.8, 0.5, 'H(s)', ha='center', va='center', 
+                       fontsize=10, fontweight='bold')
+        
+        st.pyplot(fig)
+        plt.close()
+    else:
+        st.info("Adicione blocos para visualizar o diagrama")
 
-def main():
-    inicializar()
-    interface_editor_xcos()
+# Análise do sistema
+if 'G_open' in st.session_state:
+    st.header("📈 Análise do Sistema")
+    
+    # Tabs para diferentes análises
+    if system_type == "Malha Aberta":
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            "Resposta no Tempo", 
+            "Diagrama de Bode", 
+            "Polos e Zeros",
+            "Diagrama de Nyquist",
+            "Lugar das Raízes"
+        ])
+    else:
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+            "Resposta no Tempo", 
+            "Diagrama de Bode", 
+            "Polos e Zeros",
+            "Diagrama de Nyquist",
+            "Lugar das Raízes",
+            "Desempenho"
+        ])
+    
+    # TAB 1: Resposta no Tempo
+    with tab1:
+        st.subheader("Resposta no Tempo")
+        
+        col_a, col_b = st.columns(2)
+        with col_a:
+            response_type = st.selectbox("Tipo de Resposta:", 
+                                        ["Degrau", "Impulso", "Rampa"])
+        with col_b:
+            t_final = st.number_input("Tempo Final (s):", value=10.0, step=1.0)
+        
+        if st.button("Calcular Resposta no Tempo"):
+            t = np.linspace(0, t_final, 1000)
+            
+            fig, axes = plt.subplots(1, 2 if system_type == "Malha Fechada" else 1, 
+                                    figsize=(14, 5))
+            
+            if system_type == "Malha Aberta":
+                axes = [axes]
+            
+            # Malha Aberta
+            if response_type == "Degrau":
+                t_out, y_out = ct.step_response(st.session_state.G_open, t)
+                title = "Resposta ao Degrau"
+            elif response_type == "Impulso":
+                t_out, y_out = ct.impulse_response(st.session_state.G_open, t)
+                title = "Resposta ao Impulso"
+            else:  # Rampa
+                t_out, y_out = ct.step_response(st.session_state.G_open/ct.TransferFunction([1], [1, 0]), t)
+                title = "Resposta à Rampa"
+            
+            axes[0].plot(t_out, y_out, 'b-', linewidth=2, label='Malha Aberta')
+            axes[0].grid(True, alpha=0.3)
+            axes[0].set_xlabel('Tempo (s)', fontsize=11)
+            axes[0].set_ylabel('Amplitude', fontsize=11)
+            axes[0].set_title(f'{title} - Malha Aberta', fontsize=12, fontweight='bold')
+            axes[0].legend()
+            
+            # Malha Fechada
+            if system_type == "Malha Fechada" and 'G_closed' in st.session_state:
+                if response_type == "Degrau":
+                    t_out, y_out = ct.step_response(st.session_state.G_closed, t)
+                elif response_type == "Impulso":
+                    t_out, y_out = ct.impulse_response(st.session_state.G_closed, t)
+                else:  # Rampa
+                    t_out, y_out = ct.step_response(st.session_state.G_closed/ct.TransferFunction([1], [1, 0]), t)
+                
+                axes[1].plot(t_out, y_out, 'r-', linewidth=2, label='Malha Fechada')
+                axes[1].grid(True, alpha=0.3)
+                axes[1].set_xlabel('Tempo (s)', fontsize=11)
+                axes[1].set_ylabel('Amplitude', fontsize=11)
+                axes[1].set_title(f'{title} - Malha Fechada', fontsize=12, fontweight='bold')
+                axes[1].legend()
+            
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close()
+    
+    # TAB 2: Diagrama de Bode
+    with tab2:
+        st.subheader("Diagrama de Bode")
+        
+        col_a, col_b = st.columns(2)
+        with col_a:
+            w_min = st.number_input("Frequência Mínima (rad/s):", value=0.01, format="%.3f")
+        with col_b:
+            w_max = st.number_input("Frequência Máxima (rad/s):", value=100.0, format="%.1f")
+        
+        if st.button("Gerar Diagrama de Bode"):
+            w = np.logspace(np.log10(w_min), np.log10(w_max), 1000)
+            
+            fig, axes = plt.subplots(2, 2 if system_type == "Malha Fechada" else 1,
+                                    figsize=(14, 8))
+            
+            if system_type == "Malha Aberta":
+                axes = axes.reshape(-1, 1)
+            
+            # Malha Aberta
+            mag, phase, omega = ct.bode(st.session_state.G_open, w, plot=False)
+            mag_db = 20 * np.log10(mag)
+            phase_deg = np.rad2deg(phase)
+            
+            axes[0, 0].semilogx(omega, mag_db, 'b-', linewidth=2)
+            axes[0, 0].grid(True, which='both', alpha=0.3)
+            axes[0, 0].set_ylabel('Magnitude (dB)', fontsize=11)
+            axes[0, 0].set_title('Diagrama de Bode - Malha Aberta', fontsize=12, fontweight='bold')
+            
+            axes[1, 0].semilogx(omega, phase_deg, 'b-', linewidth=2)
+            axes[1, 0].grid(True, which='both', alpha=0.3)
+            axes[1, 0].set_xlabel('Frequência (rad/s)', fontsize=11)
+            axes[1, 0].set_ylabel('Fase (graus)', fontsize=11)
+            
+            # Malha Fechada
+            if system_type == "Malha Fechada" and 'G_closed' in st.session_state:
+                mag, phase, omega = ct.bode(st.session_state.G_closed, w, plot=False)
+                mag_db = 20 * np.log10(mag)
+                phase_deg = np.rad2deg(phase)
+                
+                axes[0, 1].semilogx(omega, mag_db, 'r-', linewidth=2)
+                axes[0, 1].grid(True, which='both', alpha=0.3)
+                axes[0, 1].set_ylabel('Magnitude (dB)', fontsize=11)
+                axes[0, 1].set_title('Diagrama de Bode - Malha Fechada', fontsize=12, fontweight='bold')
+                
+                axes[1, 1].semilogx(omega, phase_deg, 'r-', linewidth=2)
+                axes[1, 1].grid(True, which='both', alpha=0.3)
+                axes[1, 1].set_xlabel('Frequência (rad/s)', fontsize=11)
+                axes[1, 1].set_ylabel('Fase (graus)', fontsize=11)
+            
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close()
+            
+            # Informações de margem de ganho e fase
+            if system_type == "Malha Aberta":
+                gm, pm, wpc, wgc = ct.margin(st.session_state.G_open)
+                st.info(f"""
+                **Margens de Estabilidade (Malha Aberta):**
+                - Margem de Ganho: {20*np.log10(gm):.2f} dB
+                - Margem de Fase: {pm:.2f}°
+                - Frequência de Cruzamento de Ganho: {wgc:.3f} rad/s
+                - Frequência de Cruzamento de Fase: {wpc:.3f} rad/s
+                """)
+    
+    # TAB 3: Polos e Zeros
+    with tab3:
+        st.subheader("Diagrama de Polos e Zeros")
+        
+        if st.button("Gerar Diagrama de Polos e Zeros"):
+            fig, axes = plt.subplots(1, 2 if system_type == "Malha Fechada" else 1,
+                                    figsize=(14, 6))
+            
+            if system_type == "Malha Aberta":
+                axes = [axes]
+            
+            # Malha Aberta
+            poles_open = ct.pole(st.session_state.G_open)
+            zeros_open = ct.zero(st.session_state.G_open)
+            
+            axes[0].axhline(y=0, color='k', linewidth=0.5)
+            axes[0].axvline(x=0, color='k', linewidth=0.5)
+            axes[0].plot(np.real(poles_open), np.imag(poles_open), 'rx', 
+                        markersize=12, markeredgewidth=2, label='Polos')
+            axes[0].plot(np.real(zeros_open), np.imag(zeros_open), 'bo', 
+                        markersize=10, markeredgewidth=2, label='Zeros')
+            axes[0].grid(True, alpha=0.3)
+            axes[0].set_xlabel('Parte Real', fontsize=11)
+            axes[0].set_ylabel('Parte Imaginária', fontsize=11)
+            axes[0].set_title('Polos e Zeros - Malha Aberta', fontsize=12, fontweight='bold')
+            axes[0].legend()
+            axes[0].axis('equal')
+            
+            # Malha Fechada
+            if system_type == "Malha Fechada" and 'G_closed' in st.session_state:
+                poles_closed = ct.pole(st.session_state.G_closed)
+                zeros_closed = ct.zero(st.session_state.G_closed)
+                
+                axes[1].axhline(y=0, color='k', linewidth=0.5)
+                axes[1].axvline(x=0, color='k', linewidth=0.5)
+                axes[1].plot(np.real(poles_closed), np.imag(poles_closed), 'rx',
+                           markersize=12, markeredgewidth=2, label='Polos')
+                axes[1].plot(np.real(zeros_closed), np.imag(zeros_closed), 'bo',
+                           markersize=10, markeredgewidth=2, label='Zeros')
+                axes[1].grid(True, alpha=0.3)
+                axes[1].set_xlabel('Parte Real', fontsize=11)
+                axes[1].set_ylabel('Parte Imaginária', fontsize=11)
+                axes[1].set_title('Polos e Zeros - Malha Fechada', fontsize=12, fontweight='bold')
+                axes[1].legend()
+                axes[1].axis('equal')
+            
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close()
+            
+            # Informações numéricas
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.write("**Malha Aberta:**")
+                st.write(f"Polos: {poles_open}")
+                st.write(f"Zeros: {zeros_open}")
+                
+            if system_type == "Malha Fechada":
+                with col2:
+                    st.write("**Malha Fechada:**")
+                    st.write(f"Polos: {poles_closed}")
+                    st.write(f"Zeros: {zeros_closed}")
+    
+    # TAB 4: Diagrama de Nyquist
+    with tab4:
+        st.subheader("Diagrama de Nyquist")
+        
+        if st.button("Gerar Diagrama de Nyquist"):
+            fig, axes = plt.subplots(1, 2 if system_type == "Malha Fechada" else 1,
+                                    figsize=(14, 6))
+            
+            if system_type == "Malha Aberta":
+                axes = [axes]
+            
+            w = np.logspace(-2, 3, 1000)
+            
+            # Malha Aberta
+            count, contour = ct.nyquist_plot(st.session_state.G_open, w, 
+                                            plot=True, ax=axes[0])
+            axes[0].set_title('Diagrama de Nyquist - Malha Aberta', 
+                            fontsize=12, fontweight='bold')
+            axes[0].grid(True, alpha=0.3)
+            
+            # Adicionar ponto crítico
+            axes[0].plot(-1, 0, 'ro', markersize=10, label='Ponto Crítico (-1, 0)')
+            axes[0].legend()
+            
+            # Malha Fechada
+            if system_type == "Malha Fechada" and 'G_closed' in st.session_state:
+                count, contour = ct.nyquist_plot(st.session_state.G_closed, w,
+                                                plot=True, ax=axes[1])
+                axes[1].set_title('Diagrama de Nyquist - Malha Fechada',
+                                fontsize=12, fontweight='bold')
+                axes[1].grid(True, alpha=0.3)
+                axes[1].plot(-1, 0, 'ro', markersize=10, label='Ponto Crítico (-1, 0)')
+                axes[1].legend()
+            
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close()
+    
+    # TAB 5: Lugar das Raízes
+    with tab5:
+        st.subheader("Lugar Geométrico das Raízes (Root Locus)")
+        
+        if st.button("Gerar Lugar das Raízes"):
+            fig, axes = plt.subplots(1, 2 if system_type == "Malha Fechada" else 1,
+                                    figsize=(14, 6))
+            
+            if system_type == "Malha Aberta":
+                axes = [axes]
+            
+            # Malha Aberta
+            ct.root_locus(st.session_state.G_open, ax=axes[0], grid=True)
+            axes[0].set_title('Lugar das Raízes - Malha Aberta',
+                            fontsize=12, fontweight='bold')
+            
+            # Malha Fechada
+            if system_type == "Malha Fechada" and 'G_closed' in st.session_state:
+                ct.root_locus(st.session_state.G_closed, ax=axes[1], grid=True)
+                axes[1].set_title('Lugar das Raízes - Malha Fechada',
+                                fontsize=12, fontweight='bold')
+            
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close()
+    
+    # TAB 6: Desempenho (apenas para malha fechada)
+    if system_type == "Malha Fechada":
+        with tab6:
+            st.subheader("Análise de Desempenho - Malha Fechada")
+            
+            if st.button("Calcular Métricas de Desempenho"):
+                try:
+                    # Resposta ao degrau
+                    t = np.linspace(0, 20, 2000)
+                    t_out, y_out = ct.step_response(st.session_state.G_closed, t)
+                    
+                    # Calcular métricas
+                    info = ct.step_info(st.session_state.G_closed)
+                    
+                    # Plotar resposta ao degrau com métricas
+                    fig, ax = plt.subplots(figsize=(12, 6))
+                    ax.plot(t_out, y_out, 'b-', linewidth=2, label='Resposta ao Degrau')
+                    
+                    # Valor final
+                    y_final = y_out[-1]
+                    ax.axhline(y=y_final, color='g', linestyle='--', 
+                              label=f'Valor Final = {y_final:.3f}')
+                    
+                    # Banda de 2%
+                    ax.axhline(y=y_final*1.02, color='r', linestyle=':', alpha=0.5)
+                    ax.axhline(y=y_final*0.98, color='r', linestyle=':', alpha=0.5,
+                              label='Banda ±2%')
+                    
+                    ax.grid(True, alpha=0.3)
+                    ax.set_xlabel('Tempo (s)', fontsize=11)
+                    ax.set_ylabel('Amplitude', fontsize=11)
+                    ax.set_title('Resposta ao Degrau com Métricas de Desempenho',
+                               fontsize=12, fontweight='bold')
+                    ax.legend()
+                    
+                    st.pyplot(fig)
+                    plt.close()
+                    
+                    # Exibir métricas
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.metric("Tempo de Subida (Rise Time)", 
+                                f"{info['RiseTime']:.3f} s")
+                        st.metric("Tempo de Pico (Peak Time)", 
+                                f"{info['PeakTime']:.3f} s")
+                    
+                    with col2:
+                        st.metric("Tempo de Acomodação (Settling Time)", 
+                                f"{info['SettlingTime']:.3f} s")
+                        st.metric("Overshoot (%)", 
+                                f"{info['Overshoot']:.2f} %")
+                    
+                    with col3:
+                        st.metric("Undershoot (%)", 
+                                f"{info['Undershoot']:.2f} %")
+                        st.metric("Valor Final", 
+                                f"{info['SteadyStateValue']:.3f}")
+                    
+                    # Informações adicionais
+                    st.info(f"""
+                    **Análise de Estabilidade:**
+                    - Sistema é {'**ESTÁVEL**' if np.all(np.real(ct.pole(st.session_state.G_closed)) < 0) else '**INSTÁVEL**'}
+                    - Todos os polos estão no semiplano esquerdo: {np.all(np.real(ct.pole(st.session_state.G_closed)) < 0)}
+                    """)
+                    
+                except Exception as e:
+                    st.error(f"Erro ao calcular métricas: {str(e)}")
 
-if __name__ == "__main__":
-    main()
+# Footer
+st.markdown("---")
+st.markdown("""
+**Instruções:**
+1. Adicione blocos usando o painel lateral
+2. Configure o tipo de sistema (Malha Aberta/Fechada)
+3. Clique em 'Calcular Sistema' para conectar os blocos
+4. Analise o sistema usando as abas de análise
+""")
