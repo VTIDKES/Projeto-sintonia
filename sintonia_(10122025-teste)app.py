@@ -1,692 +1,606 @@
 import streamlit as st
 import numpy as np
-import plotly.graph_objects as go
-import plotly.express as px
+import matplotlib.pyplot as plt
+from matplotlib.patches import FancyBboxPatch, Circle, FancyArrowPatch, Wedge
+from matplotlib.collections import PatchCollection
+import control as ct
 from scipy import signal
-from scipy.integrate import odeint
 import json
-from dataclasses import dataclass, asdict
-from typing import List, Tuple, Optional
-import pandas as pd
 
-# ==================== CONFIGURAÇÃO ====================
+# Configuração da página
+st.set_page_config(page_title="Sistema de Controle Interativo", layout="wide", initial_sidebar_state="expanded")
 
-st.set_page_config(
-    page_title="XCOS Simulador Profissional",
-    page_icon="⚙️",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
-# CSS Personalizado
+# CSS customizado para melhorar a interface
 st.markdown("""
 <style>
-    [data-testid="stSidebar"] {
-        background-color: #0f172a;
-        border-right: 2px solid #334155;
+    .main-header {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #1E88E5;
+        text-align: center;
+        margin-bottom: 1rem;
     }
-    
-    .block-item {
-        padding: 12px;
-        margin: 8px 0;
-        border-radius: 8px;
-        border-left: 4px solid;
-        background-color: rgba(51, 65, 85, 0.5);
-        cursor: move;
-        transition: all 0.3s ease;
+    .sub-header {
+        font-size: 1.2rem;
+        color: #424242;
+        text-align: center;
+        margin-bottom: 2rem;
     }
-    
-    .block-item:hover {
-        background-color: rgba(51, 65, 85, 0.8);
-        transform: translateX(4px);
+    .stButton>button {
+        width: 100%;
+        background-color: #1E88E5;
+        color: white;
+        font-weight: bold;
     }
-    
-    .canvas-container {
-        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-        border: 2px solid #334155;
-        border-radius: 12px;
-        padding: 20px;
-        min-height: 600px;
-    }
-    
-    .block-card {
-        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-        border: 2px solid #475569;
-        border-radius: 8px;
-        padding: 12px;
-        margin: 8px;
-        cursor: grab;
-        transition: all 0.3s ease;
-    }
-    
-    .block-card:hover {
-        border-color: #60a5fa;
-        box-shadow: 0 0 10px rgba(96, 165, 250, 0.3);
-    }
-    
-    .block-card.selected {
-        border-color: #fbbf24;
-        box-shadow: 0 0 15px rgba(251, 191, 36, 0.5);
+    .block-info {
+        background-color: #E3F2FD;
+        padding: 10px;
+        border-radius: 5px;
+        margin: 5px 0;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ==================== CLASSES E ESTRUTURAS ====================
+# Inicializar session state
+if 'blocks' not in st.session_state:
+    st.session_state.blocks = []
+if 'connections' not in st.session_state:
+    st.session_state.connections = []
+if 'block_counter' not in st.session_state:
+    st.session_state.block_counter = 0
+if 'selected_block' not in st.session_state:
+    st.session_state.selected_block = None
 
-@dataclass
-class BlockDefinition:
-    """Definição de um bloco"""
-    id: int
-    type: str  # controller_p, controller_pid, plant_1st, plant_2nd, feedback, input, output, sum
-    name: str
-    x: float
-    y: float
-    width: float = 120
-    height: float = 80
-    params: dict = None
-    
-    def __post_init__(self):
-        if self.params is None:
-            self.params = {
-                'kp': 1.0,
-                'ki': 0.5,
-                'kd': 0.5,
-                'tau': 1.0,
-                'gain': 1.0,
-                'wn': 2.0,
-                'zeta': 0.7,
-            }
+# Funções auxiliares
+def add_block(block_type, x, y, label="", tf_num=[1], tf_den=[1, 1]):
+    """Adiciona um bloco ao diagrama"""
+    block = {
+        'id': st.session_state.block_counter,
+        'type': block_type,
+        'x': x,
+        'y': y,
+        'label': label if label else f"{block_type}_{st.session_state.block_counter}",
+        'tf_num': tf_num,
+        'tf_den': tf_den,
+        'width': 1.5 if block_type == 'transfer' else 0.8,
+        'height': 1.0 if block_type == 'transfer' else 0.8
+    }
+    st.session_state.blocks.append(block)
+    st.session_state.block_counter += 1
+    return block
 
-@dataclass
-class Connection:
-    """Conexão entre blocos"""
-    id: int
-    from_block_id: int
-    to_block_id: int
-    from_port: str = "output"
-    to_port: str = "input"
+def add_connection(from_block_id, to_block_id):
+    """Adiciona uma conexão entre blocos"""
+    connection = {
+        'from': from_block_id,
+        'to': to_block_id
+    }
+    if connection not in st.session_state.connections:
+        st.session_state.connections.append(connection)
 
-class TransferFunction:
-    """Classe para representar funções de transferência"""
-    
-    def __init__(self, num, den, name=""):
-        self.num = np.array(num, dtype=float)
-        self.den = np.array(den, dtype=float)
-        self.name = name
-        try:
-            self.tf = signal.TransferFunction(self.num, self.den)
-            self.polos = self.tf.poles
-            self.zeros = self.tf.zeros
-        except:
-            self.tf = None
-            self.polos = np.array([])
-            self.zeros = np.array([])
-    
-    def __mul__(self, other):
-        """Multiplicação em série"""
-        num = np.convolve(self.num, other.num)
-        den = np.convolve(self.den, other.den)
-        return TransferFunction(num, den, f"({self.name})×({other.name})")
-    
-    def ganho_dc(self):
-        """Ganho em DC"""
-        if len(self.den) == 0 or self.den[0] == 0:
-            return 0
-        return self.num[0] / self.den[0]
-    
-    def resposta_degrau(self, t):
-        """Resposta ao degrau"""
-        try:
-            t_sim, y = signal.step(self.tf, T=t)
-            return t_sim, y
-        except:
-            return t, np.zeros_like(t)
-    
-    def diagrama_bode(self, w=None):
-        """Diagrama de Bode"""
-        if w is None:
-            w = np.logspace(-2, 2, 500)
-        try:
-            w_real, mag, fase = signal.bode(self.tf, w)
-            return w_real, mag, fase
-        except:
-            return [], [], []
-    
-    def is_stable(self):
-        """Verifica estabilidade"""
-        if len(self.polos) == 0:
-            return True
-        return np.all(np.real(self.polos) < 0)
+def delete_block(block_id):
+    """Remove um bloco e suas conexões"""
+    st.session_state.blocks = [b for b in st.session_state.blocks if b['id'] != block_id]
+    st.session_state.connections = [c for c in st.session_state.connections 
+                                   if c['from'] != block_id and c['to'] != block_id]
 
-# ==================== FUNÇÕES AUXILIARES ====================
-
-def criar_controlador(tipo: str, params: dict) -> TransferFunction:
-    """Cria controlador baseado no tipo"""
+def draw_block_diagram():
+    """Desenha o diagrama de blocos"""
+    fig, ax = plt.subplots(figsize=(14, 8))
+    ax.set_xlim(-1, 15)
+    ax.set_ylim(-1, 10)
+    ax.set_aspect('equal')
+    ax.grid(True, alpha=0.3)
+    ax.set_facecolor('#F5F5F5')
     
-    if tipo == 'controller_p':
-        kp = params.get('kp', 1.0)
-        return TransferFunction([kp], [1], f"P({kp})")
-    
-    elif tipo == 'controller_pid':
-        kp = params.get('kp', 1.0)
-        ki = params.get('ki', 0.5)
-        kd = params.get('kd', 0.5)
-        num = np.convolve([kd, kp, ki], [1])
-        return TransferFunction(num, [1, 0], "PID")
-    
-    else:
-        return TransferFunction([1], [1], "Unity")
-
-def criar_planta(tipo: str, params: dict) -> TransferFunction:
-    """Cria planta baseado no tipo"""
-    
-    if tipo == 'plant_1st':
-        k = params.get('gain', 1.0)
-        tau = params.get('tau', 1.0)
-        return TransferFunction([k], [tau, 1], f"G₁({k}/({tau}s+1))")
-    
-    elif tipo == 'plant_2nd':
-        k = params.get('gain', 1.0)
-        wn = params.get('wn', 2.0)
-        zeta = params.get('zeta', 0.7)
-        num = [k * wn**2]
-        den = [1, 2*zeta*wn, wn**2]
-        return TransferFunction(num, den, "G₂")
-    
-    else:
-        return TransferFunction([1], [1], "Unity")
-
-def construir_sistema(blocos: List[BlockDefinition], conexoes: List[Connection]) -> Optional[TransferFunction]:
-    """Constrói função de transferência a partir dos blocos"""
-    
-    if not blocos:
-        return None
-    
-    # Mapear blocos para TFs
-    tfs_blocos = {}
-    
-    for bloco in blocos:
-        if bloco.type.startswith('controller'):
-            tfs_blocos[bloco.id] = criar_controlador(bloco.type, bloco.params)
-        elif bloco.type.startswith('plant'):
-            tfs_blocos[bloco.id] = criar_planta(bloco.type, bloco.params)
-        elif bloco.type == 'feedback':
-            k = bloco.params.get('gain', 1.0)
-            tfs_blocos[bloco.id] = TransferFunction([k], [1], "B(s)")
-    
-    # Encontrar controladores e plantas
-    controllers = [b for b in blocos if b.type.startswith('controller')]
-    plants = [b for b in blocos if b.type.startswith('plant')]
-    feedbacks = [b for b in blocos if b.type == 'feedback']
-    
-    if not controllers or not plants:
-        return None
-    
-    # Construir C*G
-    C = tfs_blocos.get(controllers[0].id)
-    G = tfs_blocos.get(plants[0].id)
-    
-    if not C or not G:
-        return None
-    
-    CG = C * G
-    
-    # Se há realimentação, calcular malha fechada
-    if feedbacks:
-        B = tfs_blocos.get(feedbacks[0].id)
-        if B:
-            BCG = B * CG
-            # H(s) = C(s)*G(s) / [1 + B(s)*C(s)*G(s)]
-            num_mf = CG.num
-            try:
-                den_mf = np.polyadd(np.array([1]), BCG.num)
-            except:
-                den_mf = np.array([1]) + BCG.num
-            return TransferFunction(num_mf, den_mf, "H_MF")
-    
-    return CG
-
-# ==================== INICIALIZAR SESSION STATE ====================
-
-if 'blocos' not in st.session_state:
-    st.session_state.blocos = []
-
-if 'conexoes' not in st.session_state:
-    st.session_state.conexoes = []
-
-if 'bloco_selecionado' not in st.session_state:
-    st.session_state.bloco_selecionado = None
-
-if 'resultado_simulacao' not in st.session_state:
-    st.session_state.resultado_simulacao = None
-
-if 'id_contador' not in st.session_state:
-    st.session_state.id_contador = 1000
-
-# ==================== BIBLIOTECA DE BLOCOS ====================
-
-blocos_disponiveis = [
-    {'type': 'input', 'nome': '📥 Entrada R(s)', 'cor': '#3B82F6', 'descricao': 'Sinal de referência'},
-    {'type': 'sum', 'nome': '➕ Somador', 'cor': '#8B5CF6', 'descricao': 'Somador/Subtrator'},
-    {'type': 'controller_p', 'nome': '🎛️ P (Proporcional)', 'cor': '#10B981', 'descricao': 'Controlador P'},
-    {'type': 'controller_pid', 'nome': '🎛️ PID', 'cor': '#10B981', 'descricao': 'Controlador PID'},
-    {'type': 'plant_1st', 'nome': '🔧 Planta 1ª Ordem', 'cor': '#F59E0B', 'descricao': 'Sistema 1ª ordem'},
-    {'type': 'plant_2nd', 'nome': '🔧 Planta 2ª Ordem', 'cor': '#F59E0B', 'descricao': 'Sistema 2ª ordem'},
-    {'type': 'feedback', 'nome': '🔄 Realimentação B(s)', 'cor': '#EF4444', 'descricao': 'Sensor'},
-    {'type': 'output', 'nome': '📤 Saída Y(s)', 'cor': '#06B6D4', 'descricao': 'Sinal de saída'},
-    {'type': 'display', 'nome': '📊 Display', 'cor': '#64748B', 'descricao': 'Visualização'},
-]
-
-# ==================== LAYOUT PRINCIPAL ====================
-
-# Header
-st.markdown("""
-<div style='text-align: center; margin-bottom: 30px;'>
-    <h1 style='color: #60a5fa; margin-bottom: 10px;'>⚙️ XCOS Simulador Profissional</h1>
-    <p style='color: #94a3b8; font-size: 14px;'>Simulação de Sistemas de Controle Clássico em Malha Aberta e Fechada</p>
-</div>
-""", unsafe_allow_html=True)
-
-# Layout de colunas
-col_library, col_canvas = st.columns([1, 3], gap="medium")
-
-# ==================== PAINEL LATERAL - BIBLIOTECA ====================
-
-with col_library:
-    st.markdown("### 📦 Biblioteca de Blocos")
-    st.markdown("---")
-    
-    # Botão para adicionar blocos
-    for bloco_tipo in blocos_disponiveis:
-        col_btn = st.columns([1], gap="small")[0]
+    # Desenhar conexões primeiro
+    for conn in st.session_state.connections:
+        from_block = next((b for b in st.session_state.blocks if b['id'] == conn['from']), None)
+        to_block = next((b for b in st.session_state.blocks if b['id'] == conn['to']), None)
         
-        if col_btn.button(
-            f"{bloco_tipo['nome']}",
-            key=f"add_{bloco_tipo['type']}_{st.session_state.id_contador}",
-            use_container_width=True,
-            help=bloco_tipo['descricao']
-        ):
-            novo_bloco = BlockDefinition(
-                id=st.session_state.id_contador,
-                type=bloco_tipo['type'],
-                name=bloco_tipo['nome'],
-                x=np.random.uniform(100, 600),
-                y=np.random.uniform(100, 400),
-            )
-            st.session_state.blocos.append(novo_bloco)
-            st.session_state.id_contador += 1
-            st.rerun()
-    
-    st.markdown("---")
-    
-    st.markdown("### 🎮 Controles")
-    
-    col1, col2 = st.columns(2)
-    
-    if col1.button("▶️ Simular", use_container_width=True, help="Executar simulação"):
-        if st.session_state.blocos:
-            # Construir sistema
-            H = construir_sistema(st.session_state.blocos, st.session_state.conexoes)
+        if from_block and to_block:
+            x1 = from_block['x'] + from_block['width']/2
+            y1 = from_block['y']
+            x2 = to_block['x'] - to_block['width']/2
+            y2 = to_block['y']
             
-            if H:
-                st.session_state.resultado_simulacao = {
-                    'sistema': H,
-                    'estavel': H.is_stable(),
-                    'polos': H.polos,
-                    'zeros': H.zeros,
-                    'ganho_dc': H.ganho_dc(),
-                }
-                st.success("✅ Simulação executada com sucesso!")
-                st.rerun()
-            else:
-                st.error("❌ Erro ao construir o sistema. Verifique as conexões.")
-        else:
-            st.warning("⚠️ Adicione blocos primeiro!")
+            arrow = FancyArrowPatch((x1, y1), (x2, y2),
+                                  arrowstyle='->', mutation_scale=20,
+                                  linewidth=2, color='#1976D2', zorder=1)
+            ax.add_patch(arrow)
     
-    if col2.button("🗑️ Limpar", use_container_width=True, help="Remover tudo"):
-        st.session_state.blocos = []
-        st.session_state.conexoes = []
-        st.session_state.bloco_selecionado = None
-        st.session_state.resultado_simulacao = None
+    # Desenhar blocos
+    for block in st.session_state.blocks:
+        x, y = block['x'], block['y']
+        
+        if block['type'] == 'transfer':
+            # Bloco de transferência (retângulo)
+            rect = FancyBboxPatch((x - block['width']/2, y - block['height']/2),
+                                 block['width'], block['height'],
+                                 boxstyle="round,pad=0.1", 
+                                 edgecolor='#0D47A1', facecolor='#BBDEFB',
+                                 linewidth=2.5, zorder=2)
+            ax.add_patch(rect)
+            
+            # Texto da função de transferência
+            num_str = 'num: ' + str(block['tf_num'])
+            den_str = 'den: ' + str(block['tf_den'])
+            ax.text(x, y + 0.15, block['label'], ha='center', va='center',
+                   fontsize=10, fontweight='bold', zorder=3)
+            ax.text(x, y - 0.15, f"{num_str}\n{den_str}", ha='center', va='center',
+                   fontsize=7, zorder=3)
+            
+        elif block['type'] == 'sum':
+            # Somador (círculo)
+            circle = Circle((x, y), 0.4, edgecolor='#1B5E20', 
+                          facecolor='#C8E6C9', linewidth=2.5, zorder=2)
+            ax.add_patch(circle)
+            
+            # Sinais + e -
+            ax.plot([x-0.4, x+0.4], [y, y], 'k-', linewidth=2, zorder=3)
+            ax.plot([x, x], [y-0.4, y+0.4], 'k-', linewidth=2, zorder=3)
+            ax.text(x, y - 0.65, block['label'], ha='center', va='center',
+                   fontsize=9, fontweight='bold', zorder=3)
+            
+        elif block['type'] == 'junction':
+            # Junção (ponto)
+            circle = Circle((x, y), 0.15, edgecolor='#E65100', 
+                          facecolor='#FF6F00', linewidth=2, zorder=2)
+            ax.add_patch(circle)
+            ax.text(x, y - 0.5, block['label'], ha='center', va='center',
+                   fontsize=9, fontweight='bold', zorder=3)
+            
+        elif block['type'] == 'gain':
+            # Ganho (triângulo)
+            triangle = plt.Polygon([(x-0.4, y-0.4), (x-0.4, y+0.4), (x+0.4, y)],
+                                 edgecolor='#4A148C', facecolor='#E1BEE7',
+                                 linewidth=2.5, zorder=2)
+            ax.add_patch(triangle)
+            ax.text(x, y, block['label'], ha='center', va='center',
+                   fontsize=9, fontweight='bold', zorder=3)
+    
+    ax.set_xlabel('X', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Y', fontsize=12, fontweight='bold')
+    ax.set_title('Diagrama de Blocos do Sistema de Controle', 
+                fontsize=14, fontweight='bold', pad=20)
+    
+    return fig
+
+def calculate_system_transfer_function():
+    """Calcula a função de transferência total do sistema"""
+    try:
+        if len(st.session_state.blocks) == 0:
+            return None
+        
+        # Exemplo simplificado - em um sistema real, você precisaria de um algoritmo
+        # mais sofisticado para calcular a FT baseado nas conexões
+        
+        # Para demonstração, vamos assumir blocos em série
+        transfer_blocks = [b for b in st.session_state.blocks if b['type'] == 'transfer']
+        
+        if not transfer_blocks:
+            return None
+        
+        # Multiplicar funções de transferência em série
+        num_total = transfer_blocks[0]['tf_num']
+        den_total = transfer_blocks[0]['tf_den']
+        
+        for block in transfer_blocks[1:]:
+            num_total = np.convolve(num_total, block['tf_num'])
+            den_total = np.convolve(den_total, block['tf_den'])
+        
+        sys = ct.TransferFunction(num_total, den_total)
+        return sys
+    except Exception as e:
+        st.error(f"Erro ao calcular função de transferência: {e}")
+        return None
+
+def plot_bode():
+    """Plota o diagrama de Bode"""
+    sys = calculate_system_transfer_function()
+    if sys is None:
+        return None
+    
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
+    
+    # Calcular resposta em frequência
+    omega = np.logspace(-2, 3, 1000)
+    mag, phase, omega = ct.bode(sys, omega, plot=False)
+    
+    # Magnitude
+    ax1.semilogx(omega, 20 * np.log10(mag), 'b-', linewidth=2)
+    ax1.grid(True, which='both', alpha=0.3)
+    ax1.set_ylabel('Magnitude (dB)', fontsize=11, fontweight='bold')
+    ax1.set_title('Diagrama de Bode', fontsize=13, fontweight='bold')
+    
+    # Fase
+    ax2.semilogx(omega, phase * 180/np.pi, 'r-', linewidth=2)
+    ax2.grid(True, which='both', alpha=0.3)
+    ax2.set_xlabel('Frequência (rad/s)', fontsize=11, fontweight='bold')
+    ax2.set_ylabel('Fase (graus)', fontsize=11, fontweight='bold')
+    
+    plt.tight_layout()
+    return fig
+
+def plot_step_response():
+    """Plota a resposta ao degrau"""
+    sys = calculate_system_transfer_function()
+    if sys is None:
+        return None
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    t, y = ct.step_response(sys)
+    
+    ax.plot(t, y, 'b-', linewidth=2, label='Resposta ao Degrau')
+    ax.grid(True, alpha=0.3)
+    ax.set_xlabel('Tempo (s)', fontsize=11, fontweight='bold')
+    ax.set_ylabel('Amplitude', fontsize=11, fontweight='bold')
+    ax.set_title('Resposta ao Degrau Unitário', fontsize=13, fontweight='bold')
+    ax.legend()
+    
+    # Calcular e mostrar características
+    overshoot = (np.max(y) - y[-1]) / y[-1] * 100 if y[-1] != 0 else 0
+    settling_time = t[-1]
+    
+    ax.text(0.02, 0.98, f'Overshoot: {overshoot:.2f}%\nTempo de acomodação: {settling_time:.2f}s',
+            transform=ax.transAxes, verticalalignment='top',
+            bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+    
+    plt.tight_layout()
+    return fig
+
+def plot_impulse_response():
+    """Plota a resposta ao impulso"""
+    sys = calculate_system_transfer_function()
+    if sys is None:
+        return None
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    t, y = ct.impulse_response(sys)
+    
+    ax.plot(t, y, 'g-', linewidth=2, label='Resposta ao Impulso')
+    ax.grid(True, alpha=0.3)
+    ax.set_xlabel('Tempo (s)', fontsize=11, fontweight='bold')
+    ax.set_ylabel('Amplitude', fontsize=11, fontweight='bold')
+    ax.set_title('Resposta ao Impulso', fontsize=13, fontweight='bold')
+    ax.legend()
+    
+    plt.tight_layout()
+    return fig
+
+def plot_root_locus():
+    """Plota o lugar das raízes"""
+    sys = calculate_system_transfer_function()
+    if sys is None:
+        return None
+    
+    fig, ax = plt.subplots(figsize=(10, 8))
+    
+    ct.root_locus(sys, ax=ax)
+    ax.set_title('Lugar das Raízes', fontsize=13, fontweight='bold')
+    ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    return fig
+
+def plot_nyquist():
+    """Plota o diagrama de Nyquist"""
+    sys = calculate_system_transfer_function()
+    if sys is None:
+        return None
+    
+    fig, ax = plt.subplots(figsize=(10, 8))
+    
+    ct.nyquist_plot(sys, ax=ax)
+    ax.set_title('Diagrama de Nyquist', fontsize=13, fontweight='bold')
+    ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    return fig
+
+def plot_pole_zero():
+    """Plota polos e zeros"""
+    sys = calculate_system_transfer_function()
+    if sys is None:
+        return None
+    
+    fig, ax = plt.subplots(figsize=(10, 8))
+    
+    poles = ct.poles(sys)
+    zeros = ct.zeros(sys)
+    
+    # Plotar zeros
+    if len(zeros) > 0:
+        ax.plot(np.real(zeros), np.imag(zeros), 'go', markersize=12, 
+               markerfacecolor='white', markeredgewidth=2, label='Zeros')
+    
+    # Plotar polos
+    if len(poles) > 0:
+        ax.plot(np.real(poles), np.imag(poles), 'rx', markersize=12, 
+               markeredgewidth=2, label='Polos')
+    
+    # Círculo unitário
+    theta = np.linspace(0, 2*np.pi, 100)
+    ax.plot(np.cos(theta), np.sin(theta), 'b--', alpha=0.3, label='Círculo Unitário')
+    
+    ax.axhline(y=0, color='k', linewidth=0.5)
+    ax.axvline(x=0, color='k', linewidth=0.5)
+    ax.grid(True, alpha=0.3)
+    ax.set_xlabel('Parte Real', fontsize=11, fontweight='bold')
+    ax.set_ylabel('Parte Imaginária', fontsize=11, fontweight='bold')
+    ax.set_title('Mapa de Polos e Zeros', fontsize=13, fontweight='bold')
+    ax.legend()
+    ax.set_aspect('equal')
+    
+    plt.tight_layout()
+    return fig
+
+# Interface principal
+st.markdown('<p class="main-header">🎛️ Sistema de Controle Interativo</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-header">Crie, conecte e analise diagramas de blocos de sistemas de controle</p>', unsafe_allow_html=True)
+
+# Sidebar
+st.sidebar.title("🔧 Ferramentas")
+
+st.sidebar.subheader("➕ Adicionar Blocos")
+
+col1, col2 = st.sidebar.columns(2)
+
+with col1:
+    block_x = st.number_input("Posição X", min_value=0.0, max_value=14.0, value=2.0, step=0.5)
+with col2:
+    block_y = st.number_input("Posição Y", min_value=0.0, max_value=9.0, value=5.0, step=0.5)
+
+block_type = st.sidebar.selectbox(
+    "Tipo de Bloco",
+    ["transfer", "sum", "junction", "gain"],
+    format_func=lambda x: {
+        "transfer": "📦 Função de Transferência",
+        "sum": "➕ Somador",
+        "junction": "⚫ Junção",
+        "gain": "📐 Ganho"
+    }[x]
+)
+
+block_label = st.sidebar.text_input("Nome do Bloco", value=f"{block_type}_{st.session_state.block_counter}")
+
+if block_type == "transfer":
+    st.sidebar.markdown("**Função de Transferência:**")
+    
+    num_input = st.sidebar.text_input("Numerador (separado por vírgula)", value="1")
+    den_input = st.sidebar.text_input("Denominador (separado por vírgula)", value="1,1")
+    
+    try:
+        tf_num = [float(x.strip()) for x in num_input.split(',')]
+        tf_den = [float(x.strip()) for x in den_input.split(',')]
+    except:
+        tf_num = [1]
+        tf_den = [1, 1]
+        st.sidebar.error("Formato inválido! Use números separados por vírgula.")
+else:
+    tf_num = [1]
+    tf_den = [1]
+
+if st.sidebar.button("➕ Adicionar Bloco", use_container_width=True):
+    add_block(block_type, block_x, block_y, block_label, tf_num, tf_den)
+    st.rerun()
+
+st.sidebar.markdown("---")
+
+# Conexões
+st.sidebar.subheader("🔗 Conectar Blocos")
+
+if len(st.session_state.blocks) >= 2:
+    block_options = {f"{b['label']} (ID: {b['id']})": b['id'] for b in st.session_state.blocks}
+    
+    from_block_name = st.sidebar.selectbox("Bloco de Origem", list(block_options.keys()), key="from")
+    to_block_name = st.sidebar.selectbox("Bloco de Destino", list(block_options.keys()), key="to")
+    
+    if st.sidebar.button("🔗 Conectar", use_container_width=True):
+        add_connection(block_options[from_block_name], block_options[to_block_name])
         st.rerun()
+else:
+    st.sidebar.info("Adicione pelo menos 2 blocos para criar conexões")
+
+st.sidebar.markdown("---")
+
+# Gerenciamento de blocos
+st.sidebar.subheader("🗑️ Gerenciar Blocos")
+
+if st.session_state.blocks:
+    block_to_delete = st.sidebar.selectbox(
+        "Selecionar bloco para deletar",
+        [f"{b['label']} (ID: {b['id']})" for b in st.session_state.blocks]
+    )
     
-    st.markdown("---")
+    if st.sidebar.button("🗑️ Deletar Bloco", use_container_width=True):
+        block_id = int(block_to_delete.split("ID: ")[1].rstrip(")"))
+        delete_block(block_id)
+        st.rerun()
+
+if st.sidebar.button("🔄 Limpar Tudo", use_container_width=True):
+    st.session_state.blocks = []
+    st.session_state.connections = []
+    st.session_state.block_counter = 0
+    st.rerun()
+
+st.sidebar.markdown("---")
+
+# Exemplos pré-configurados
+st.sidebar.subheader("📋 Exemplos")
+
+if st.sidebar.button("🎯 Sistema Malha Fechada", use_container_width=True):
+    st.session_state.blocks = []
+    st.session_state.connections = []
+    st.session_state.block_counter = 0
     
-    st.markdown("### 📊 Informações do Sistema")
+    # Criar sistema de malha fechada básico
+    add_block('sum', 2, 5, 'Erro', [1], [1])
+    add_block('transfer', 5, 5, 'Controlador', [10], [1])
+    add_block('transfer', 9, 5, 'Planta', [1], [1, 2, 1])
+    add_block('junction', 11, 5, 'Saída', [1], [1])
+    add_block('transfer', 9, 3, 'Sensor', [1], [0.1, 1])
     
-    info_col = st.container()
+    add_connection(0, 1)
+    add_connection(1, 2)
+    add_connection(2, 3)
+    add_connection(3, 4)
+    add_connection(4, 0)
     
-    with info_col:
-        st.metric("Blocos", len(st.session_state.blocos))
-        st.metric("Conexões", len(st.session_state.conexoes))
+    st.rerun()
+
+if st.sidebar.button("⚙️ Sistema em Cascata", use_container_width=True):
+    st.session_state.blocks = []
+    st.session_state.connections = []
+    st.session_state.block_counter = 0
+    
+    add_block('transfer', 2, 5, 'G1', [1], [1, 1])
+    add_block('transfer', 5, 5, 'G2', [2], [1, 0.5])
+    add_block('transfer', 8, 5, 'G3', [5], [1, 2, 1])
+    add_block('junction', 10.5, 5, 'Saída', [1], [1])
+    
+    add_connection(0, 1)
+    add_connection(1, 2)
+    add_connection(2, 3)
+    
+    st.rerun()
+
+# Área principal com abas
+tab1, tab2, tab3, tab4 = st.tabs(["📊 Diagrama", "📈 Análise de Frequência", "⏱️ Análise Temporal", "🎯 Estabilidade"])
+
+with tab1:
+    st.subheader("Diagrama de Blocos")
+    
+    if st.session_state.blocks:
+        fig_diagram = draw_block_diagram()
+        st.pyplot(fig_diagram)
+        plt.close()
         
-        if st.session_state.resultado_simulacao:
-            resultado = st.session_state.resultado_simulacao
-            
-            if resultado['estavel']:
-                st.success("✅ Sistema Estável")
-            else:
-                st.error("❌ Sistema Instável")
-            
-            st.write(f"**Ganho DC:** {resultado['ganho_dc']:.4f}")
-            
-            if len(resultado['polos']) > 0:
-                st.write(f"**Polos:** {len(resultado['polos'])}")
-                for i, polo in enumerate(resultado['polos']):
-                    st.write(f"  p{i+1} = {polo:.4f}")
+        # Informações dos blocos
+        with st.expander("ℹ️ Informações dos Blocos"):
+            for block in st.session_state.blocks:
+                st.markdown(f"""
+                <div class="block-info">
+                <b>{block['label']}</b> (ID: {block['id']}) - Tipo: {block['type']}<br>
+                Posição: ({block['x']:.1f}, {block['y']:.1f})<br>
+                {f"FT: {block['tf_num']} / {block['tf_den']}" if block['type'] == 'transfer' else ""}
+                </div>
+                """, unsafe_allow_html=True)
+    else:
+        st.info("👈 Adicione blocos usando a barra lateral para começar!")
 
-# ==================== CANVAS PRINCIPAL ====================
-
-with col_canvas:
-    st.markdown("### 🎨 Canvas de Diagrama")
+with tab2:
+    st.subheader("Análise de Frequência")
     
-    # Container para o diagrama
-    canvas_container = st.container()
-    
-    with canvas_container:
-        if len(st.session_state.blocos) == 0:
-            st.info("👈 Adicione blocos da biblioteca para começar!")
+    if st.session_state.blocks:
+        analysis_type = st.radio(
+            "Selecione o tipo de análise:",
+            ["Diagrama de Bode", "Diagrama de Nyquist"],
+            horizontal=True
+        )
+        
+        if analysis_type == "Diagrama de Bode":
+            with st.spinner("Calculando diagrama de Bode..."):
+                fig_bode = plot_bode()
+                if fig_bode:
+                    st.pyplot(fig_bode)
+                    plt.close()
+                else:
+                    st.warning("Adicione blocos de transferência para análise")
+        
         else:
-            # Criar visualização dos blocos
-            col_blocos = st.columns(min(3, len(st.session_state.blocos)))
-            
-            for idx, bloco in enumerate(st.session_state.blocos):
-                with col_blocos[idx % 3]:
-                    # Encontrar cor do bloco
-                    cor_bloco = next((b['cor'] for b in blocos_disponiveis if b['type'] == bloco.type), '#6B7280')
-                    
-                    # Card do bloco
-                    bloco_selecionado = st.session_state.bloco_selecionado == bloco.id
-                    
-                    css_classe = "block-card selected" if bloco_selecionado else "block-card"
-                    
-                    st.markdown(f"""
-                    <div style='
-                        background-color: {cor_bloco};
-                        border: 3px solid {"#fbbf24" if bloco_selecionado else "#475569"};
-                        border-radius: 8px;
-                        padding: 12px;
-                        margin: 8px 0;
-                        cursor: pointer;
-                        opacity: 0.9;
-                    '>
-                        <div style='color: white; font-weight: bold; margin-bottom: 8px;'>
-                            {bloco.name}
-                        </div>
-                        <div style='color: rgba(255,255,255,0.8); font-size: 12px; margin-bottom: 8px;'>
-                            ID: {bloco.id}
-                        </div>
-                        <div style='color: rgba(255,255,255,0.7); font-size: 11px;'>
-                            Tipo: {bloco.type}
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    # Botão para selecionar
-                    if st.button("Selecionar", key=f"select_{bloco.id}", use_container_width=True):
-                        st.session_state.bloco_selecionado = bloco.id
-                        st.rerun()
-                    
-                    # Botão para deletar
-                    if st.button("🗑️ Deletar", key=f"delete_{bloco.id}", use_container_width=True):
-                        st.session_state.blocos = [b for b in st.session_state.blocos if b.id != bloco.id]
-                        st.session_state.conexoes = [c for c in st.session_state.conexoes 
-                                                     if c.from_block_id != bloco.id and c.to_block_id != bloco.id]
-                        st.rerun()
+            with st.spinner("Calculando diagrama de Nyquist..."):
+                fig_nyquist = plot_nyquist()
+                if fig_nyquist:
+                    st.pyplot(fig_nyquist)
+                    plt.close()
+                else:
+                    st.warning("Adicione blocos de transferência para análise")
+    else:
+        st.info("Adicione blocos ao diagrama para realizar análises de frequência")
 
-# ==================== PAINEL DE PROPRIEDADES ====================
-
-if st.session_state.bloco_selecionado:
-    bloco = next((b for b in st.session_state.blocos if b.id == st.session_state.bloco_selecionado), None)
+with tab3:
+    st.subheader("Análise Temporal")
     
-    if bloco:
-        st.markdown("---")
-        st.markdown(f"### ⚙️ Propriedades de {bloco.name}")
-        
-        # Abas para diferentes tipos de configuração
-        tab1, tab2 = st.tabs(["Parâmetros", "Conexões"])
-        
-        with tab1:
-            st.write(f"**ID:** {bloco.id}")
-            st.write(f"**Tipo:** {bloco.type}")
-            
-            # Parâmetros específicos por tipo
-            if bloco.type == 'controller_p':
-                bloco.params['kp'] = st.slider("Kp (Ganho Proporcional)", 0.1, 10.0, bloco.params['kp'], 0.1)
-                st.write(f"C(s) = {bloco.params['kp']}")
-            
-            elif bloco.type == 'controller_pid':
-                bloco.params['kp'] = st.slider("Kp", 0.1, 10.0, bloco.params['kp'], 0.1)
-                bloco.params['ki'] = st.slider("Ki", 0.0, 10.0, bloco.params['ki'], 0.1)
-                bloco.params['kd'] = st.slider("Kd", 0.0, 10.0, bloco.params['kd'], 0.1)
-                st.write(f"C(s) = {bloco.params['kp']} + {bloco.params['ki']}/s + {bloco.params['kd']}s")
-            
-            elif bloco.type == 'plant_1st':
-                bloco.params['gain'] = st.slider("Ganho (K)", 0.1, 10.0, bloco.params['gain'], 0.1)
-                bloco.params['tau'] = st.slider("Constante de Tempo (τ)", 0.1, 5.0, bloco.params['tau'], 0.1)
-                st.write(f"G(s) = {bloco.params['gain']} / ({bloco.params['tau']}s + 1)")
-            
-            elif bloco.type == 'plant_2nd':
-                bloco.params['gain'] = st.slider("Ganho (K)", 0.1, 10.0, bloco.params['gain'], 0.1)
-                bloco.params['wn'] = st.slider("Frequência Natural (ωn)", 0.1, 10.0, bloco.params['wn'], 0.1)
-                bloco.params['zeta'] = st.slider("Amortecimento (ζ)", 0.0, 2.0, bloco.params['zeta'], 0.1)
-                st.write(f"G(s) = {bloco.params['gain']*bloco.params['wn']**2} / (s² + {2*bloco.params['zeta']*bloco.params['wn']:.2f}s + {bloco.params['wn']**2:.2f})")
-            
-            elif bloco.type == 'feedback':
-                bloco.params['gain'] = st.slider("Ganho", 0.1, 5.0, bloco.params['gain'], 0.1)
-                st.write(f"B(s) = {bloco.params['gain']}")
-        
-        with tab2:
-            st.write("Conexões disponíveis para este bloco")
-            
-            # Botão para conectar
-            if st.button("➕ Adicionar Conexão", use_container_width=True):
-                # Criar diálogo para selecionar destino
-                blocos_destino = [b for b in st.session_state.blocos if b.id != bloco.id]
-                
-                if blocos_destino:
-                    bloco_destino = st.selectbox(
-                        "Conectar para:",
-                        blocos_destino,
-                        format_func=lambda x: x.name,
-                        key="select_conexao"
-                    )
-                    
-                    if st.button("Confirmar Conexão"):
-                        nova_conexao = Connection(
-                            id=len(st.session_state.conexoes),
-                            from_block_id=bloco.id,
-                            to_block_id=bloco_destino.id
-                        )
-                        st.session_state.conexoes.append(nova_conexao)
-                        st.success(f"✅ Conexão criada: {bloco.name} → {bloco_destino.name}")
-                        st.rerun()
-
-# ==================== RESULTADOS DA SIMULAÇÃO ====================
-
-if st.session_state.resultado_simulacao:
-    st.markdown("---")
-    st.markdown("### 📊 Resultados da Simulação")
-    
-    resultado = st.session_state.resultado_simulacao
-    sistema = resultado['sistema']
-    
-    # Abas de resultados
-    tab_degrau, tab_bode, tab_polos, tab_info = st.tabs([
-        "📈 Resposta ao Degrau",
-        "📊 Diagrama de Bode",
-        "🎯 Polos e Zeros",
-        "ℹ️ Informações"
-    ])
-    
-    # Tab 1: Resposta ao Degrau
-    with tab_degrau:
-        t = np.linspace(0, 10, 1000)
-        t_sim, y_sim = sistema.resposta_degrau(t)
-        
-        fig_degrau = go.Figure()
-        
-        fig_degrau.add_trace(go.Scatter(
-            x=t_sim,
-            y=y_sim,
-            mode='lines',
-            name='y(t)',
-            line=dict(color='#3B82F6', width=3)
-        ))
-        
-        fig_degrau.add_hline(
-            y=sistema.ganho_dc(),
-            line_dash="dash",
-            line_color="#EF4444",
-            annotation_text="Ganho DC"
+    if st.session_state.blocks:
+        response_type = st.radio(
+            "Selecione o tipo de resposta:",
+            ["Resposta ao Degrau", "Resposta ao Impulso"],
+            horizontal=True
         )
         
-        fig_degrau.update_layout(
-            title="Resposta ao Degrau Unitário",
-            xaxis_title="Tempo (s)",
-            yaxis_title="Amplitude",
-            hovermode='x unified',
-            plot_bgcolor='#0f172a',
-            paper_bgcolor='#1e293b',
-            font=dict(color='#e2e8f0'),
-            height=400
-        )
+        if response_type == "Resposta ao Degrau":
+            with st.spinner("Calculando resposta ao degrau..."):
+                fig_step = plot_step_response()
+                if fig_step:
+                    st.pyplot(fig_step)
+                    plt.close()
+                else:
+                    st.warning("Adicione blocos de transferência para análise")
         
-        st.plotly_chart(fig_degrau, use_container_width=True)
-    
-    # Tab 2: Bode
-    with tab_bode:
-        w = np.logspace(-2, 2, 500)
-        w_bode, mag_bode, fase_bode = sistema.diagrama_bode(w)
-        
-        fig_bode = go.Figure()
-        
-        # Magnitude
-        fig_bode.add_trace(go.Scatter(
-            x=w_bode,
-            y=mag_bode,
-            mode='lines',
-            name='Magnitude',
-            line=dict(color='#10B981', width=2),
-            yaxis='y'
-        ))
-        
-        # Fase (eixo Y secundário)
-        fig_bode.add_trace(go.Scatter(
-            x=w_bode,
-            y=fase_bode,
-            mode='lines',
-            name='Fase',
-            line=dict(color='#F59E0B', width=2),
-            yaxis='y2'
-        ))
-        
-        fig_bode.update_xaxes(type='log', title='Frequência (rad/s)')
-        
-        fig_bode.update_yaxes(title='Magnitude (dB)', secondary_y=False)
-        fig_bode.update_yaxes(title='Fase (graus)', secondary_y=True)
-        
-        fig_bode.update_layout(
-            title="Diagrama de Bode",
-            hovermode='x unified',
-            plot_bgcolor='#0f172a',
-            paper_bgcolor='#1e293b',
-            font=dict(color='#e2e8f0'),
-            height=500
-        )
-        
-        st.plotly_chart(fig_bode, use_container_width=True)
-    
-    # Tab 3: Polos e Zeros
-    with tab_polos:
-        polos = resultado['polos']
-        zeros = resultado['zeros']
-        
-        fig_pz = go.Figure()
-        
-        # Plotar polos
-        if len(polos) > 0:
-            fig_pz.add_trace(go.Scatter(
-                x=np.real(polos),
-                y=np.imag(polos),
-                mode='markers',
-                marker=dict(size=12, color='#EF4444', symbol='x', line=dict(width=2)),
-                name='Polos'
-            ))
-        
-        # Plotar zeros
-        if len(zeros) > 0:
-            fig_pz.add_trace(go.Scatter(
-                x=np.real(zeros),
-                y=np.imag(zeros),
-                mode='markers',
-                marker=dict(size=12, color='#3B82F6', symbol='circle', line=dict(width=2)),
-                name='Zeros'
-            ))
-        
-        # Eixos
-        fig_pz.add_hline(y=0, line_dash="dash", line_color='rgba(255,255,255,0.3)')
-        fig_pz.add_vline(x=0, line_dash="dash", line_color='rgba(255,255,255,0.3)')
-        
-        # Região estável (sombreada)
-        fig_pz.add_vrect(
-            x0=-10, x1=0,
-            fillcolor='green', opacity=0.1,
-            layer="below", line_width=0,
-            annotation_text="Região Estável", annotation_position="left"
-        )
-        
-        fig_pz.update_xaxes(title='Eixo Real', zeroline=True)
-        fig_pz.update_yaxes(title='Eixo Imaginário', zeroline=True)
-        
-        fig_pz.update_layout(
-            title="Diagrama de Polos e Zeros",
-            plot_bgcolor='#0f172a',
-            paper_bgcolor='#1e293b',
-            font=dict(color='#e2e8f0'),
-            height=500,
-            hovermode='closest'
-        )
-        
-        st.plotly_chart(fig_pz, use_container_width=True)
-    
-    # Tab 4: Informações
-    with tab_info:
-        info_col1, info_col2 = st.columns(2)
-        
-        with info_col1:
-            st.markdown("#### Características")
-            st.metric("Ganho DC", f"{resultado['ganho_dc']:.4f}")
-            st.metric("Número de Polos", len(polos))
-            st.metric("Número de Zeros", len(zeros))
-            
-            if resultado['estavel']:
-                st.success("✅ **Sistema Estável**")
-            else:
-                st.error("❌ **Sistema Instável**")
-        
-        with info_col2:
-            st.markdown("#### Função de Transferência")
-            st.write(f"**Numerador:** {sistema.num}")
-            st.write(f"**Denominador:** {sistema.den}")
-            
-            st.markdown("#### Polos")
-            for i, polo in enumerate(polos):
-                st.write(f"p{i+1} = {polo}")
-            
-            st.markdown("#### Zeros")
-            if len(zeros) > 0:
-                for i, zero in enumerate(zeros):
-                    st.write(f"z{i+1} = {zero}")
-            else:
-                st.write("Nenhum zero")
+        else:
+            with st.spinner("Calculando resposta ao impulso..."):
+                fig_impulse = plot_impulse_response()
+                if fig_impulse:
+                    st.pyplot(fig_impulse)
+                    plt.close()
+                else:
+                    st.warning("Adicione blocos de transferência para análise")
+    else:
+        st.info("Adicione blocos ao diagrama para realizar análises temporais")
 
-# ==================== FOOTER ====================
+with tab4:
+    st.subheader("Análise de Estabilidade")
+    
+    if st.session_state.blocks:
+        stability_type = st.radio(
+            "Selecione o tipo de análise:",
+            ["Lugar das Raízes", "Mapa de Polos e Zeros"],
+            horizontal=True
+        )
+        
+        if stability_type == "Lugar das Raízes":
+            with st.spinner("Calculando lugar das raízes..."):
+                fig_rlocus = plot_root_locus()
+                if fig_rlocus:
+                    st.pyplot(fig_rlocus)
+                    plt.close()
+                else:
+                    st.warning("Adicione blocos de transferência para análise")
+        
+        else:
+            with st.spinner("Calculando polos e zeros..."):
+                fig_pz = plot_pole_zero()
+                if fig_pz:
+                    st.pyplot(fig_pz)
+                    plt.close()
+                    
+                    # Análise de estabilidade
+                    sys = calculate_system_transfer_function()
+                    if sys:
+                        poles = ct.poles(sys)
+                        is_stable = all(np.real(p) < 0 for p in poles)
+                        
+                        if is_stable:
+                            st.success("✅ Sistema ESTÁVEL: Todos os polos têm parte real negativa")
+                        else:
+                            st.error("❌ Sistema INSTÁVEL: Existem polos com parte real positiva ou nula")
+                        
+                        st.write("**Polos do sistema:**")
+                        for i, pole in enumerate(poles):
+                            st.write(f"Polo {i+1}: {pole:.4f}")
+                else:
+                    st.warning("Adicione blocos de transferência para análise")
+    else:
+        st.info("Adicione blocos ao diagrama para realizar análises de estabilidade")
 
+# Rodapé
 st.markdown("---")
 st.markdown("""
-<div style='text-align: center; color: #94a3b8; font-size: 12px; margin-top: 20px;'>
-    <p>⚙️ XCOS Simulador Profissional v2.0 | Simulação de Sistemas de Controle Clássico</p>
-    <p>Desenvolvido com Streamlit | Python + NumPy + SciPy</p>
+<div style='text-align: center; color: #666;'>
+    <p><b>Sistema de Controle Interativo</b> - Desenvolvido com Streamlit</p>
+    <p>📚 Funcionalidades: Diagrama de Blocos, Bode, Nyquist, Resposta Temporal, Lugar das Raízes, Polos e Zeros</p>
 </div>
 """, unsafe_allow_html=True)
