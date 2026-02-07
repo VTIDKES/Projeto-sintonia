@@ -1,6 +1,6 @@
 # app.py
-# Streamlit (Python) version of your React "ControlSystemDesigner"
-# FIX: evita KeyError quando algum bloco não tem "color" (import antigo / estado antigo)
+# Streamlit Designer de Sistemas de Controle (tema escuro completo)
+# FIX: remove fundo branco do Plotly (paper_bgcolor e plot_bgcolor)
 
 import re
 import time
@@ -90,7 +90,7 @@ def type_by_id(tid: str) -> Dict:
 
 
 # =========================
-# State + Repair (FIX)
+# State + Repair
 # =========================
 
 def ensure_state():
@@ -103,28 +103,23 @@ def ensure_state():
     if "analysis" not in st.session_state:
         st.session_state.analysis = None
 
-    # --- REPAIR/DEFAULTS: evita KeyError e compatibiliza imports antigos ---
+    # Repair blocks (evita KeyError)
     repaired_blocks = []
     for b in st.session_state.blocks:
         t = type_by_id(b.get("type", "transfer"))
 
-        # garante chaves mínimas
         b.setdefault("id", _now_id())
         b.setdefault("type", t["id"])
         b.setdefault("x", 200.0)
         b.setdefault("y", 200.0)
 
-        # data: se vier None ou faltando, aplica default do tipo
         if not isinstance(b.get("data"), dict):
             b["data"] = dict(t["defaultData"])
         else:
-            # completa defaults sem apagar o que já existe
             for k, v in t["defaultData"].items():
                 b["data"].setdefault(k, v)
 
-        # FIX principal:
         b.setdefault("color", t["color"])
-
         b.setdefault("inputs", t["inputs"])
         b.setdefault("outputs", t["outputs"])
 
@@ -141,7 +136,7 @@ def ensure_state():
 
 
 # =========================
-# Parsing (TF)
+# Parsing TF
 # =========================
 
 def parse_num_coeffs(num_text: str) -> List[float]:
@@ -277,7 +272,7 @@ def add_connection(from_id: int, to_id: int):
 
 
 # =========================
-# Diagram (Plotly)
+# Diagram (Plotly) DARK THEME FIX
 # =========================
 
 def diagram_figure(blocks: List[Dict], connections: List[Dict]) -> go.Figure:
@@ -299,13 +294,12 @@ def diagram_figure(blocks: List[Dict], connections: List[Dict]) -> go.Figure:
                 x=[x1, x2],
                 y=[y1, y2],
                 mode="lines",
-                line=dict(width=2),
+                line=dict(width=2, color="#94a3b8"),
                 hoverinfo="skip",
                 showlegend=False,
             )
         )
 
-    # blocks
     shapes = []
     annotations = []
 
@@ -316,7 +310,6 @@ def diagram_figure(blocks: List[Dict], connections: List[Dict]) -> go.Figure:
         x, y = float(b.get("x", 200.0)), float(b.get("y", 200.0))
         w, h = 160, 80
 
-        # FIX: usa fallback se não existir "color"
         color = b.get("color", t["color"])
 
         shapes.append(
@@ -327,7 +320,7 @@ def diagram_figure(blocks: List[Dict], connections: List[Dict]) -> go.Figure:
                 x1=x + w,
                 y1=y + h,
                 line=dict(width=3, color=color),
-                fillcolor="rgba(30, 41, 59, 0.85)",
+                fillcolor="rgba(30, 41, 59, 0.95)",
             )
         )
 
@@ -346,8 +339,24 @@ def diagram_figure(blocks: List[Dict], connections: List[Dict]) -> go.Figure:
         elif tid == "branch":
             content = "•"
 
-        annotations.append(dict(x=x + w / 2, y=y + h - 16, text=title, showarrow=False, font=dict(size=12)))
-        annotations.append(dict(x=x + w / 2, y=y + h / 2 - 10, text=f"<b>{content}</b>", showarrow=False, font=dict(size=16)))
+        annotations.append(
+            dict(
+                x=x + w / 2,
+                y=y + h - 16,
+                text=f"<b>{title}</b>",
+                showarrow=False,
+                font=dict(size=12, color="#e2e8f0"),
+            )
+        )
+        annotations.append(
+            dict(
+                x=x + w / 2,
+                y=y + h / 2 - 10,
+                text=f"<b>{content}</b>",
+                showarrow=False,
+                font=dict(size=16, color="#e2e8f0"),
+            )
+        )
 
     fig.update_layout(
         shapes=shapes,
@@ -357,66 +366,130 @@ def diagram_figure(blocks: List[Dict], connections: List[Dict]) -> go.Figure:
         yaxis=dict(visible=False, scaleanchor="x", autorange="reversed"),
         dragmode="pan",
         height=640,
+
+        # DARK THEME FIX
+        template="plotly_dark",
+        paper_bgcolor="#0f172a",
+        plot_bgcolor="#0f172a",
+        font=dict(color="#e2e8f0"),
     )
-    fig.update_xaxes(fixedrange=False)
-    fig.update_yaxes(fixedrange=False)
+
+    fig.update_xaxes(showgrid=False, zeroline=False)
+    fig.update_yaxes(showgrid=False, zeroline=False)
+
     return fig
 
 
 # =========================
-# Analysis Plot Helpers
+# Analysis Figures DARK THEME FIX
 # =========================
 
 def bode_mag_fig(w, mag) -> go.Figure:
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=w, y=mag, mode="lines", name="Magnitude (dB)"))
+    fig.add_trace(go.Scatter(x=w, y=mag, mode="lines", name="Magnitude (dB)", line=dict(width=2)))
     fig.update_xaxes(type="log", title="ω (rad/s)")
     fig.update_yaxes(title="Magnitude (dB)")
-    fig.update_layout(height=320, margin=dict(l=10, r=10, t=40, b=10), title="Bode - Magnitude")
+    fig.update_layout(
+        height=320,
+        margin=dict(l=10, r=10, t=40, b=10),
+        title="Bode - Magnitude",
+        template="plotly_dark",
+        paper_bgcolor="#0f172a",
+        plot_bgcolor="#0f172a",
+        font=dict(color="#e2e8f0"),
+    )
     return fig
 
 
 def bode_phase_fig(w, phase) -> go.Figure:
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=w, y=phase, mode="lines", name="Fase (°)"))
+    fig.add_trace(go.Scatter(x=w, y=phase, mode="lines", name="Fase (°)", line=dict(width=2)))
     fig.update_xaxes(type="log", title="ω (rad/s)")
     fig.update_yaxes(title="Fase (°)")
-    fig.update_layout(height=320, margin=dict(l=10, r=10, t=40, b=10), title="Bode - Fase")
+    fig.update_layout(
+        height=320,
+        margin=dict(l=10, r=10, t=40, b=10),
+        title="Bode - Fase",
+        template="plotly_dark",
+        paper_bgcolor="#0f172a",
+        plot_bgcolor="#0f172a",
+        font=dict(color="#e2e8f0"),
+    )
     return fig
 
 
 def step_fig(t, y) -> go.Figure:
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=t, y=y, mode="lines", name="Resposta"))
+    fig.add_trace(go.Scatter(x=t, y=y, mode="lines", name="Resposta", line=dict(width=2)))
     fig.update_xaxes(title="Tempo (s)")
     fig.update_yaxes(title="Amplitude")
-    fig.update_layout(height=320, margin=dict(l=10, r=10, t=40, b=10), title="Resposta ao Degrau")
+    fig.update_layout(
+        height=320,
+        margin=dict(l=10, r=10, t=40, b=10),
+        title="Resposta ao Degrau",
+        template="plotly_dark",
+        paper_bgcolor="#0f172a",
+        plot_bgcolor="#0f172a",
+        font=dict(color="#e2e8f0"),
+    )
     return fig
 
 
 def pole_zero_fig(zeros, poles) -> go.Figure:
     fig = go.Figure()
+
     if zeros.size:
-        fig.add_trace(go.Scatter(x=zeros.real, y=zeros.imag, mode="markers", name="Zeros", marker_symbol="circle-open"))
+        fig.add_trace(go.Scatter(
+            x=zeros.real, y=zeros.imag,
+            mode="markers", name="Zeros",
+            marker=dict(symbol="circle-open", size=12, line=dict(width=2))
+        ))
+
     if poles.size:
-        fig.add_trace(go.Scatter(x=poles.real, y=poles.imag, mode="markers", name="Polos", marker_symbol="x"))
-    fig.add_hline(y=0)
-    fig.add_vline(x=0)
+        fig.add_trace(go.Scatter(
+            x=poles.real, y=poles.imag,
+            mode="markers", name="Polos",
+            marker=dict(symbol="x", size=12, line=dict(width=2))
+        ))
+
+    fig.add_hline(y=0, line_width=1, line_color="#64748b")
+    fig.add_vline(x=0, line_width=1, line_color="#64748b")
+
     fig.update_xaxes(title="Re")
     fig.update_yaxes(title="Im", scaleanchor="x")
-    fig.update_layout(height=320, margin=dict(l=10, r=10, t=40, b=10), title="Polos e Zeros")
+
+    fig.update_layout(
+        height=320,
+        margin=dict(l=10, r=10, t=40, b=10),
+        title="Polos e Zeros",
+        template="plotly_dark",
+        paper_bgcolor="#0f172a",
+        plot_bgcolor="#0f172a",
+        font=dict(color="#e2e8f0"),
+    )
     return fig
 
 
 def nyquist_fig(re_vals, im_vals) -> go.Figure:
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=re_vals, y=im_vals, mode="lines", name="Nyquist"))
-    fig.add_trace(go.Scatter(x=[-1], y=[0], mode="markers", name="Ponto crítico (-1,0)"))
-    fig.add_hline(y=0)
-    fig.add_vline(x=0)
+    fig.add_trace(go.Scatter(x=re_vals, y=im_vals, mode="lines", name="Nyquist", line=dict(width=2)))
+    fig.add_trace(go.Scatter(x=[-1], y=[0], mode="markers", name="Ponto crítico (-1,0)", marker=dict(size=10)))
+
+    fig.add_hline(y=0, line_width=1, line_color="#64748b")
+    fig.add_vline(x=0, line_width=1, line_color="#64748b")
+
     fig.update_xaxes(title="Re")
     fig.update_yaxes(title="Im", scaleanchor="x")
-    fig.update_layout(height=320, margin=dict(l=10, r=10, t=40, b=10), title="Diagrama de Nyquist")
+
+    fig.update_layout(
+        height=320,
+        margin=dict(l=10, r=10, t=40, b=10),
+        title="Diagrama de Nyquist",
+        template="plotly_dark",
+        paper_bgcolor="#0f172a",
+        plot_bgcolor="#0f172a",
+        font=dict(color="#e2e8f0"),
+    )
     return fig
 
 
@@ -439,6 +512,7 @@ st.markdown(
 )
 
 col_left, col_main, col_right = st.columns([0.9, 2.1, 1.0], gap="large")
+
 
 # Left (palette)
 with col_left:
@@ -481,7 +555,7 @@ with col_left:
                     "nyq_re": nr,
                     "nyq_im": ni,
                 }
-                st.success("Análise concluída (usando o 1º bloco de Função de Transferência).")
+                st.success("Análise concluída!")
             except Exception as e:
                 st.error(f"Erro ao analisar sistema: {e}")
 
@@ -492,7 +566,8 @@ with col_left:
         st.session_state.analysis = None
         st.rerun()
 
-    st.markdown('<div class="small-muted">Dica: no diagrama (Plotly), use scroll para zoom e arraste para pan.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="small-muted">Dica: no diagrama, use scroll para zoom e arraste para pan.</div>', unsafe_allow_html=True)
+
 
 # Center (tabs)
 with col_main:
@@ -551,6 +626,7 @@ with col_main:
 
             st.plotly_chart(nyquist_fig(a["nyq_re"], a["nyq_im"]), use_container_width=True)
 
+
 # Right (properties)
 with col_right:
     st.subheader("Propriedades")
@@ -562,7 +638,6 @@ with col_right:
         options = [b.get("id") for b in blocks]
         labels = {b.get("id"): f"{type_by_id(b.get('type','transfer'))['name']} — id {b.get('id')}" for b in blocks}
 
-        # resolve índice seguro
         default_idx = 0
         if st.session_state.selected_block_id in options:
             default_idx = options.index(st.session_state.selected_block_id)
@@ -625,7 +700,7 @@ with col_right:
                     obj = eval(import_txt, {"__builtins__": {}})
                     st.session_state.blocks = obj.get("blocks", [])
                     st.session_state.connections = obj.get("connections", [])
-                    ensure_state()  # repara defaults após importar
+                    ensure_state()
                     st.success("Importado!")
                     st.rerun()
                 except Exception as e:
