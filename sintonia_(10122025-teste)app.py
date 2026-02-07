@@ -1,35 +1,23 @@
 #!/usr/bin/env python3
 """
-XCOS SIMULATOR - Simulador de Sistemas de Controle
-Interface gráfica similar ao Xcos (Scilab) em Python
+XCOS SIMULATOR - Streamlit Version
+Interface web para design e análise de sistemas de controle
 """
 
-import sys
-import json
+import streamlit as st
 import numpy as np
-from typing import Dict, List, Tuple, Optional
+import json
+import plotly.graph_objects as go
+import plotly.express as px
+from scipy import signal
+from dataclasses import asdict, dataclass
+from typing import Dict, List, Optional, Tuple
 from enum import Enum
-from dataclasses import dataclass, asdict
 import uuid
 
-from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QSplitter, QListWidget, QListWidgetItem, QPushButton, QLabel,
-    QSpinBox, QDoubleSpinBox, QComboBox, QTextEdit, QFileDialog,
-    QMessageBox, QDialog, QFormLayout, QTabWidget, QTableWidget,
-    QTableWidgetItem, QHeaderView, QDockWidget, QProgressBar
-)
-from PyQt6.QtCore import Qt, QPoint, QRect, QTimer, QThread, pyqtSignal
-from PyQt6.QtGui import (
-    QPainter, QColor, QPen, QBrush, QFont, QIcon, QPolygon,
-    QDrag, QPixmap
-)
-from PyQt6.QtCore import QMimeData
-from scipy import signal
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
-
+# =====================================================================
+# CLASSES E ESTRUTURAS DE DADOS
+# =====================================================================
 
 class BlockType(Enum):
     """Tipos de blocos disponíveis"""
@@ -64,32 +52,26 @@ class BlockType(Enum):
 
 
 @dataclass
-class BlockData:
-    """Dados de um bloco"""
+class Block:
+    """Representa um bloco"""
     id: str
-    type: BlockType
-    x: float
-    y: float
+    type: str
     params: Dict
-    label: str = ""
+    label: str
     
     def to_dict(self):
         return {
             'id': self.id,
-            'type': self.type.value,
-            'x': self.x,
-            'y': self.y,
+            'type': self.type,
             'params': self.params,
             'label': self.label
         }
     
     @staticmethod
     def from_dict(data):
-        return BlockData(
+        return Block(
             id=data['id'],
-            type=BlockType(data['type']),
-            x=data['x'],
-            y=data['y'],
+            type=data['type'],
             params=data['params'],
             label=data.get('label', '')
         )
@@ -97,971 +79,709 @@ class BlockData:
 
 @dataclass
 class Connection:
-    """Conexão entre dois blocos"""
+    """Representa conexão entre blocos"""
     from_block_id: str
     to_block_id: str
-    from_port: str = "out"
-    to_port: str = "in"
     
     def to_dict(self):
-        return asdict(self)
+        return {
+            'from_block_id': self.from_block_id,
+            'to_block_id': self.to_block_id
+        }
     
     @staticmethod
     def from_dict(data):
-        return Connection(**data)
+        return Connection(
+            from_block_id=data['from_block_id'],
+            to_block_id=data['to_block_id']
+        )
 
 
-class Block:
-    """Representa um bloco no diagrama"""
-    
-    WIDTH = 100
-    HEIGHT = 60
-    BLOCK_COLORS = {
-        'input': '#90EE90',      # Verde claro
-        'dynamic': '#87CEEB',    # Azul claro
-        'operation': '#FFB6C1',  # Rosa claro
-        'output': '#FFD700',     # Ouro
-        'controller': '#DDA0DD'  # Orquídea
+# =====================================================================
+# CONFIGURAÇÃO STREAMLIT
+# =====================================================================
+
+st.set_page_config(
+    page_title="XCOS Simulator",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+st.markdown("""
+<style>
+    .main {
+        padding: 0;
     }
-    
-    BLOCK_INFO = {
-        BlockType.STEP: {'label': 'Step', 'category': 'input'},
-        BlockType.RAMP: {'label': 'Ramp', 'category': 'input'},
-        BlockType.SINE: {'label': 'Sine', 'category': 'input'},
-        BlockType.PULSE: {'label': 'Pulse', 'category': 'input'},
-        BlockType.TF: {'label': 'TF', 'category': 'dynamic'},
-        BlockType.INTEGRATOR: {'label': '∫', 'category': 'dynamic'},
-        BlockType.DERIVATIVE: {'label': 'd/dt', 'category': 'dynamic'},
-        BlockType.GAIN: {'label': 'K', 'category': 'dynamic'},
-        BlockType.STATE_SPACE: {'label': 'SS', 'category': 'dynamic'},
-        BlockType.DELAY: {'label': 'Delay', 'category': 'dynamic'},
-        BlockType.SUM: {'label': 'Σ', 'category': 'operation'},
-        BlockType.PRODUCT: {'label': '×', 'category': 'operation'},
-        BlockType.DIVIDE: {'label': '÷', 'category': 'operation'},
-        BlockType.SCOPE: {'label': 'Scope', 'category': 'output'},
-        BlockType.PLOT: {'label': 'Plot', 'category': 'output'},
-        BlockType.SINK: {'label': 'Sink', 'category': 'output'},
-        BlockType.PID: {'label': 'PID', 'category': 'controller'},
-        BlockType.LEAD: {'label': 'Lead', 'category': 'controller'},
-        BlockType.LAG: {'label': 'Lag', 'category': 'controller'},
+    .stTabs [data-baseweb="tab-list"] button {
+        font-size: 16px;
+        font-weight: bold;
     }
-    
-    DEFAULT_PARAMS = {
-        BlockType.STEP: {'amplitude': 1.0, 'delay': 0},
-        BlockType.RAMP: {'slope': 1.0, 'start_time': 0},
-        BlockType.SINE: {'amplitude': 1.0, 'frequency': 1.0, 'phase': 0},
-        BlockType.PULSE: {'amplitude': 1.0, 'period': 2.0, 'duty': 0.5},
-        BlockType.TF: {'numerator': [1], 'denominator': [1, 1]},
-        BlockType.INTEGRATOR: {'initial_value': 0},
-        BlockType.DERIVATIVE: {},
-        BlockType.GAIN: {'K': 1.0},
-        BlockType.STATE_SPACE: {'A': [[1]], 'B': [[1]], 'C': [[1]], 'D': [[0]]},
-        BlockType.DELAY: {'tau': 0.1},
-        BlockType.SUM: {'gains': [1, -1]},
-        BlockType.PRODUCT: {},
-        BlockType.DIVIDE: {},
-        BlockType.SCOPE: {'buffer_size': 10000},
-        BlockType.PLOT: {},
-        BlockType.SINK: {},
-        BlockType.PID: {'Kp': 1.0, 'Ki': 0, 'Kd': 0},
-        BlockType.LEAD: {'K': 1.0, 'z': 1.0, 'p': 2.0},
-        BlockType.LAG: {'K': 1.0, 'z': 0.5, 'p': 0.1},
+    .block-box {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 15px;
+        border-radius: 10px;
+        margin: 5px 0;
+        cursor: pointer;
+        font-weight: bold;
+        text-align: center;
+        transition: all 0.3s;
     }
-    
-    def __init__(self, block_type: BlockType, x: float = 0, y: float = 0):
-        self.id = str(uuid.uuid4())[:8]
-        self.type = block_type
-        self.x = x
-        self.y = y
-        self.width = self.WIDTH
-        self.height = self.HEIGHT
-        self.params = self.DEFAULT_PARAMS[block_type].copy()
-        self.selected = False
-        
-        info = self.BLOCK_INFO[block_type]
-        self.label = info['label']
-        self.category = info['category']
-        self.color = self.BLOCK_COLORS[self.category]
-    
-    def get_rect(self):
-        """Retorna o retângulo do bloco"""
-        return QRect(int(self.x), int(self.y), self.width, self.height)
-    
-    def contains_point(self, x: float, y: float) -> bool:
-        """Verifica se o ponto está dentro do bloco"""
-        return self.get_rect().contains(int(x), int(y))
-    
-    def get_port_positions(self) -> Tuple[QPoint, QPoint]:
-        """Retorna posições de entrada e saída"""
-        in_port = QPoint(int(self.x), int(self.y + self.height / 2))
-        out_port = QPoint(int(self.x + self.width), int(self.y + self.height / 2))
-        return in_port, out_port
-    
-    def draw(self, painter: QPainter):
-        """Desenha o bloco"""
-        rect = self.get_rect()
-        
-        # Fundo
-        color = QColor(self.color)
-        painter.fillRect(rect, QBrush(color))
-        
-        # Borda
-        pen = QPen(Qt.GlobalColor.black, 2)
-        if self.selected:
-            pen.setWidth(3)
-            pen.setColor(Qt.GlobalColor.blue)
-        painter.setPen(pen)
-        painter.drawRect(rect)
-        
-        # Texto
-        painter.setFont(QFont("Arial", 9, QFont.Weight.Bold))
-        painter.setPen(QPen(Qt.GlobalColor.black))
-        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self.label)
-        
-        # Portas (entrada e saída)
-        painter.fillRect(int(self.x) - 4, int(self.y + self.height/2 - 4), 8, 8, 
-                        QBrush(Qt.GlobalColor.black))
-        painter.fillRect(int(self.x + self.width) - 4, int(self.y + self.height/2 - 4), 8, 8,
-                        QBrush(Qt.GlobalColor.black))
+    .block-box:hover {
+        transform: scale(1.05);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    }
+    .info-box {
+        background: #e8f4f8;
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 5px solid #0066cc;
+        margin: 10px 0;
+    }
+    .success-box {
+        background: #d4edda;
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 5px solid #28a745;
+        margin: 10px 0;
+    }
+    .error-box {
+        background: #f8d7da;
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 5px solid #dc3545;
+        margin: 10px 0;
+    }
+</style>
+""", unsafe_allow_html=True)
 
+# =====================================================================
+# INICIALIZAÇÃO DO ESTADO
+# =====================================================================
 
-class BlockListWidget(QListWidget):
-    """Widget para listar blocos disponíveis com drag-drop"""
-    
-    def __init__(self):
-        super().__init__()
-        self.setup_blocks()
-        self.setDragEnabled(True)
-        self.setStyleSheet("""
-            QListWidget {
-                background-color: #f0f0f0;
-                border: 1px solid #ccc;
-            }
-            QListWidget::item {
-                padding: 5px;
-                border-bottom: 1px solid #ddd;
-            }
-            QListWidget::item:hover {
-                background-color: #e0e0e0;
-            }
-        """)
-    
-    def setup_blocks(self):
-        """Configura blocos disponíveis"""
-        categories = {
-            'Entradas': [BlockType.STEP, BlockType.RAMP, BlockType.SINE, BlockType.PULSE],
-            'Dinâmica': [BlockType.TF, BlockType.INTEGRATOR, BlockType.DERIVATIVE, 
-                        BlockType.GAIN, BlockType.STATE_SPACE, BlockType.DELAY],
-            'Operações': [BlockType.SUM, BlockType.PRODUCT, BlockType.DIVIDE],
-            'Saída': [BlockType.SCOPE, BlockType.PLOT, BlockType.SINK],
-            'Controladores': [BlockType.PID, BlockType.LEAD, BlockType.LAG],
-        }
-        
-        for category, block_types in categories.items():
-            # Adicionar categoria como item desabilitado
-            category_item = QListWidgetItem(f"► {category}")
-            category_item.setFlags(category_item.flags() & ~Qt.ItemFlag.ItemIsSelectable)
-            category_font = QFont()
-            category_font.setBold(True)
-            category_item.setFont(category_font)
-            self.addItem(category_item)
-            
-            # Adicionar blocos
-            for block_type in block_types:
-                info = Block.BLOCK_INFO[block_type]
-                item = QListWidgetItem(f"  {info['label']}")
-                item.setData(Qt.ItemDataRole.UserRole, block_type.value)
-                self.addItem(item)
+def init_session():
+    """Inicializa variáveis de sessão"""
+    if 'blocks' not in st.session_state:
+        st.session_state.blocks = {}
+    if 'connections' not in st.session_state:
+        st.session_state.connections = []
+    if 'block_counter' not in st.session_state:
+        st.session_state.block_counter = 0
+    if 'selected_block' not in st.session_state:
+        st.session_state.selected_block = None
 
+init_session()
 
-class Canvas(QWidget):
-    """Canvas para desenho dos blocos e conexões"""
-    
-    block_selected = pyqtSignal(Block)
-    blocks_changed = pyqtSignal()
-    
-    def __init__(self):
-        super().__init__()
-        self.blocks: Dict[str, Block] = {}
-        self.connections: List[Connection] = []
-        self.dragging_block: Optional[Block] = None
-        self.drag_start_pos = QPoint()
-        self.connecting = False
-        self.connection_from_block: Optional[Block] = None
-        self.temp_connection_end = QPoint()
-        
-        self.setAcceptDrops(True)
-        self.setMouseTracking(True)
-        self.setStyleSheet("background-color: #fafafa; border: 1px solid #ccc;")
-    
-    def add_block(self, block_type: BlockType, x: float, y: float) -> Block:
-        """Adiciona um bloco ao canvas"""
-        block = Block(block_type, x, y)
-        self.blocks[block.id] = block
-        self.blocks_changed.emit()
-        self.update()
-        return block
-    
-    def remove_block(self, block_id: str):
-        """Remove um bloco"""
-        if block_id in self.blocks:
-            del self.blocks[block_id]
-            # Remover conexões relacionadas
-            self.connections = [c for c in self.connections 
-                              if c.from_block_id != block_id and c.to_block_id != block_id]
-            self.blocks_changed.emit()
-            self.update()
-    
-    def add_connection(self, from_block_id: str, to_block_id: str):
-        """Adiciona uma conexão entre blocos"""
-        # Evitar auto-conexões
-        if from_block_id != to_block_id:
-            # Remover conexão existente para o mesmo destino
-            self.connections = [c for c in self.connections if c.to_block_id != to_block_id]
-            self.connections.append(Connection(from_block_id, to_block_id))
-            self.blocks_changed.emit()
-            self.update()
-    
-    def remove_connection(self, from_id: str, to_id: str):
-        """Remove uma conexão"""
-        self.connections = [c for c in self.connections 
-                           if not (c.from_block_id == from_id and c.to_block_id == to_id)]
-        self.blocks_changed.emit()
-        self.update()
-    
-    def dragEnterEvent(self, event):
-        """Aceita drag de blocos"""
-        if event.mimeData().hasFormat('text/plain'):
-            event.acceptProposedAction()
-    
-    def dragMoveEvent(self, event):
-        """Mostra feedback durante drag"""
-        event.acceptProposedAction()
-    
-    def dropEvent(self, event):
-        """Processa drop de bloco"""
-        mime_data = event.mimeData()
-        if mime_data.hasFormat('text/plain'):
-            block_type_str = mime_data.text()
-            try:
-                block_type = BlockType(block_type_str)
-                x = event.position().x()
-                y = event.position().y()
-                self.add_block(block_type, x, y)
-            except ValueError:
-                pass
-    
-    def mousePressEvent(self, event):
-        """Tratamento de clique do mouse"""
-        if event.button() == Qt.MouseButton.LeftButton:
-            # Verificar se clicou em um bloco
-            for block_id, block in self.blocks.items():
-                if block.contains_point(event.position().x(), event.position().y()):
-                    # Desselecionar outros
-                    for b in self.blocks.values():
-                        b.selected = False
-                    block.selected = True
-                    self.dragging_block = block
-                    self.drag_start_pos = QPoint(int(event.position().x()), 
-                                                int(event.position().y()))
-                    self.block_selected.emit(block)
-                    self.update()
-                    return
-            
-            # Desselecionar todos se clicou no vazio
-            for b in self.blocks.values():
-                b.selected = False
-            self.update()
-        
-        elif event.button() == Qt.MouseButton.RightButton:
-            # Menu de contexto
-            for block_id, block in self.blocks.items():
-                if block.contains_point(event.position().x(), event.position().y()):
-                    # Iniciar conexão
-                    if self.connecting:
-                        # Tentar conectar
-                        if self.connection_from_block and self.connection_from_block != block:
-                            self.add_connection(self.connection_from_block.id, block.id)
-                            self.connecting = False
-                            self.connection_from_block = None
-                    else:
-                        # Começar conexão
-                        self.connecting = True
-                        self.connection_from_block = block
-                    self.update()
-                    return
-    
-    def mouseMoveEvent(self, event):
-        """Movimento do mouse"""
-        if self.dragging_block:
-            # Mover bloco
-            delta_x = event.position().x() - self.drag_start_pos.x()
-            delta_y = event.position().y() - self.drag_start_pos.y()
-            
-            self.dragging_block.x += delta_x
-            self.dragging_block.y += delta_y
-            
-            self.drag_start_pos = QPoint(int(event.position().x()), 
-                                        int(event.position().y()))
-            self.update()
-        
-        if self.connecting:
-            self.temp_connection_end = QPoint(int(event.position().x()), 
-                                             int(event.position().y()))
-            self.update()
-    
-    def mouseReleaseEvent(self, event):
-        """Liberação do mouse"""
-        self.dragging_block = None
-    
-    def keyPressEvent(self, event):
-        """Teclas"""
-        if event.key() == Qt.Key.Key_Delete:
-            # Deletar bloco selecionado
-            for block_id, block in list(self.blocks.items()):
-                if block.selected:
-                    self.remove_block(block_id)
-        elif event.key() == Qt.Key.Key_Escape:
-            if self.connecting:
-                self.connecting = False
-                self.connection_from_block = None
-                self.update()
-    
-    def paintEvent(self, event):
-        """Renderização do canvas"""
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        
-        # Desenhar grid
-        self.draw_grid(painter)
-        
-        # Desenhar conexões
-        self.draw_connections(painter)
-        
-        # Desenhar blocos
-        for block in self.blocks.values():
-            block.draw(painter)
-        
-        # Desenhar conexão em progresso
-        if self.connecting and self.connection_from_block:
-            pen = QPen(Qt.GlobalColor.red, 2)
-            pen.setStyle(Qt.PenStyle.DashLine)
-            painter.setPen(pen)
-            in_pos, out_pos = self.connection_from_block.get_port_positions()
-            painter.drawLine(out_pos, self.temp_connection_end)
-    
-    def draw_grid(self, painter: QPainter):
-        """Desenha grid de fundo"""
-        painter.setPen(QPen(QColor(220, 220, 220), 1))
-        grid_size = 20
-        
-        for x in range(0, self.width(), grid_size):
-            painter.drawLine(x, 0, x, self.height())
-        for y in range(0, self.height(), grid_size):
-            painter.drawLine(0, y, self.width(), y)
-    
-    def draw_connections(self, painter: QPainter):
-        """Desenha conexões entre blocos"""
-        painter.setPen(QPen(Qt.GlobalColor.blue, 2))
-        
-        for conn in self.connections:
-            from_block = self.blocks.get(conn.from_block_id)
-            to_block = self.blocks.get(conn.to_block_id)
-            
-            if from_block and to_block:
-                _, out_pos = from_block.get_port_positions()
-                in_pos, _ = to_block.get_port_positions()
-                
-                # Desenhar linha curva (Bezier)
-                path_x1, path_y1 = out_pos.x(), out_pos.y()
-                path_x2, path_y2 = in_pos.x(), in_pos.y()
-                ctrl_x = (path_x1 + path_x2) / 2
-                
-                # Usar quadratic bezier para conexão suave
-                painter.drawLine(out_pos, in_pos)
-    
-    def clear(self):
-        """Limpa o canvas"""
-        self.blocks.clear()
-        self.connections.clear()
-        self.update()
-    
-    def save_to_json(self) -> str:
-        """Salva o diagrama em JSON"""
-        data = {
-            'blocks': [block.__dict__ for block in self.blocks.values()],
-            'connections': [asdict(c) for c in self.connections]
-        }
-        
-        # Serializar dados dos blocos
-        blocks_data = []
-        for block in self.blocks.values():
-            block_dict = {
-                'id': block.id,
-                'type': block.type.value,
-                'x': block.x,
-                'y': block.y,
-                'params': block.params,
-                'label': block.label
-            }
-            blocks_data.append(block_dict)
-        
-        data['blocks'] = blocks_data
-        return json.dumps(data, indent=2)
-    
-    def load_from_json(self, json_str: str):
-        """Carrega diagrama de JSON"""
-        try:
-            data = json.loads(json_str)
-            self.clear()
-            
-            # Carregar blocos
-            for block_data in data.get('blocks', []):
-                block_type = BlockType(block_data['type'])
-                block = self.add_block(block_type, block_data['x'], block_data['y'])
-                block.id = block_data['id']
-                block.params = block_data['params']
-                self.blocks[block.id] = block
-            
-            # Carregar conexões
-            for conn_data in data.get('connections', []):
-                conn = Connection.from_dict(conn_data)
-                self.connections.append(conn)
-            
-            self.update()
-        except Exception as e:
-            print(f"Erro ao carregar JSON: {e}")
+# =====================================================================
+# DEFINIÇÕES DE BLOCOS
+# =====================================================================
 
+BLOCK_INFO = {
+    'step': {'label': 'Step', 'category': 'Entrada', 'icon': '📊'},
+    'ramp': {'label': 'Ramp', 'category': 'Entrada', 'icon': '📈'},
+    'sine': {'label': 'Sine', 'category': 'Entrada', 'icon': '〰️'},
+    'pulse': {'label': 'Pulse', 'category': 'Entrada', 'icon': '⬜'},
+    'tf': {'label': 'TF', 'category': 'Dinâmica', 'icon': '⚙️'},
+    'integrator': {'label': '∫', 'category': 'Dinâmica', 'icon': '∫'},
+    'derivative': {'label': 'd/dt', 'category': 'Dinâmica', 'icon': 'd'},
+    'gain': {'label': 'K', 'category': 'Dinâmica', 'icon': '✕'},
+    'state_space': {'label': 'SS', 'category': 'Dinâmica', 'icon': '▦'},
+    'delay': {'label': 'Delay', 'category': 'Dinâmica', 'icon': '⏱'},
+    'sum': {'label': 'Σ', 'category': 'Operação', 'icon': '➕'},
+    'product': {'label': '×', 'category': 'Operação', 'icon': '✕'},
+    'divide': {'label': '÷', 'category': 'Operação', 'icon': '➗'},
+    'scope': {'label': 'Scope', 'category': 'Saída', 'icon': '📺'},
+    'plot': {'label': 'Plot', 'category': 'Saída', 'icon': '📊'},
+    'sink': {'label': 'Sink', 'category': 'Saída', 'icon': '💧'},
+    'pid': {'label': 'PID', 'category': 'Controlador', 'icon': '🎛'},
+    'lead': {'label': 'Lead', 'category': 'Controlador', 'icon': '➡'},
+    'lag': {'label': 'Lag', 'category': 'Controlador', 'icon': '⬅'},
+}
 
-class PropertyPanel(QWidget):
-    """Painel de propriedades"""
+DEFAULT_PARAMS = {
+    'step': {'amplitude': 1.0, 'delay': 0},
+    'ramp': {'slope': 1.0, 'start_time': 0},
+    'sine': {'amplitude': 1.0, 'frequency': 1.0, 'phase': 0},
+    'pulse': {'amplitude': 1.0, 'period': 2.0, 'duty': 0.5},
+    'tf': {'numerator': [1], 'denominator': [1, 1]},
+    'integrator': {'initial_value': 0},
+    'derivative': {},
+    'gain': {'K': 1.0},
+    'state_space': {'A': [[1]], 'B': [[1]], 'C': [[1]], 'D': [[0]]},
+    'delay': {'tau': 0.1},
+    'sum': {'gains': [1, -1]},
+    'product': {},
+    'divide': {},
+    'scope': {'buffer_size': 10000},
+    'plot': {},
+    'sink': {},
+    'pid': {'Kp': 1.0, 'Ki': 0, 'Kd': 0},
+    'lead': {'K': 1.0, 'z': 1.0, 'p': 2.0},
+    'lag': {'K': 1.0, 'z': 0.5, 'p': 0.1},
+}
+
+# =====================================================================
+# FUNÇÕES AUXILIARES
+# =====================================================================
+
+def add_block(block_type: str) -> str:
+    """Adiciona um novo bloco"""
+    st.session_state.block_counter += 1
+    block_id = f"{block_type}_{st.session_state.block_counter}"
     
-    def __init__(self):
-        super().__init__()
-        self.current_block: Optional[Block] = None
-        self.param_widgets: Dict = {}
-        
-        layout = QVBoxLayout()
-        
-        # Label de informação
-        self.info_label = QLabel("Nenhum bloco selecionado")
-        self.info_label.setStyleSheet("font-weight: bold; color: #333;")
-        layout.addWidget(self.info_label)
-        
-        # Area de parâmetros
-        self.params_layout = QVBoxLayout()
-        layout.addLayout(self.params_layout)
-        
-        # Botões
-        button_layout = QHBoxLayout()
-        
-        self.delete_btn = QPushButton("🗑️ Deletar")
-        self.delete_btn.clicked.connect(self.on_delete)
-        button_layout.addWidget(self.delete_btn)
-        
-        self.duplicate_btn = QPushButton("📋 Duplicar")
-        self.duplicate_btn.clicked.connect(self.on_duplicate)
-        button_layout.addWidget(self.duplicate_btn)
-        
-        layout.addLayout(button_layout)
-        layout.addStretch()
-        
-        self.setLayout(layout)
-        self.setStyleSheet("""
-            PropertyPanel {
-                background-color: #f5f5f5;
-                border: 1px solid #ddd;
-            }
-        """)
+    info = BLOCK_INFO[block_type]
+    block = Block(
+        id=block_id,
+        type=block_type,
+        params=DEFAULT_PARAMS[block_type].copy(),
+        label=info['label']
+    )
     
-    def set_block(self, block: Block):
-        """Define o bloco selecionado"""
-        self.current_block = block
-        self.update_display()
+    st.session_state.blocks[block_id] = block
+    return block_id
+
+def remove_block(block_id: str):
+    """Remove um bloco"""
+    if block_id in st.session_state.blocks:
+        del st.session_state.blocks[block_id]
+        # Remover conexões relacionadas
+        st.session_state.connections = [
+            c for c in st.session_state.connections
+            if c.from_block_id != block_id and c.to_block_id != block_id
+        ]
+
+def add_connection(from_id: str, to_id: str):
+    """Adiciona conexão entre blocos"""
+    if from_id != to_id and from_id in st.session_state.blocks and to_id in st.session_state.blocks:
+        # Remover conexões existentes para o destino
+        st.session_state.connections = [
+            c for c in st.session_state.connections
+            if c.to_block_id != to_id
+        ]
+        st.session_state.connections.append(Connection(from_id, to_id))
+
+def build_transfer_function() -> Optional[signal.TransferFunction]:
+    """Constrói função de transferência a partir dos blocos"""
+    # Encontrar blocos TF
+    tf_blocks = [b for b in st.session_state.blocks.values() if b.type == 'tf']
     
-    def update_display(self):
-        """Atualiza a exibição de propriedades"""
-        # Limpar widgets anteriores
-        for widget in self.param_widgets.values():
-            widget.deleteLater()
-        self.param_widgets.clear()
-        
-        if not self.current_block:
-            self.info_label.setText("Nenhum bloco selecionado")
-            return
-        
-        self.info_label.setText(f"Bloco: {self.current_block.label} (ID: {self.current_block.id})")
-        
-        # Adicionar campos de parâmetros
-        for param_name, param_value in self.current_block.params.items():
-            self.add_param_widget(param_name, param_value)
+    if not tf_blocks:
+        return None
     
-    def add_param_widget(self, name: str, value):
-        """Adiciona widget para parâmetro"""
-        label = QLabel(f"{name}:")
+    # Usar primeiro TF
+    tf_block = tf_blocks[0]
+    num = tf_block.params.get('numerator', [1])
+    den = tf_block.params.get('denominator', [1, 1])
+    
+    # Aplicar ganhos
+    gain_blocks = [b for b in st.session_state.blocks.values() if b.type == 'gain']
+    for gb in gain_blocks:
+        K = gb.params.get('K', 1.0)
+        num = [n * K for n in num]
+    
+    return signal.TransferFunction(num, den)
+
+def simulate_step_response(sys: signal.TransferFunction, t_final: float = 10) -> Tuple:
+    """Simula resposta ao degrau"""
+    t = np.linspace(0, t_final, 1000)
+    t, y = signal.step(sys, T=t)
+    return t, y
+
+def calculate_metrics(t, y) -> Dict:
+    """Calcula métricas da resposta"""
+    y_final = y[-1]
+    y_max = np.max(y)
+    y_min = np.min(y)
+    
+    # Overshoot
+    if y_final != 0:
+        overshoot = ((y_max - y_final) / abs(y_final)) * 100
+    else:
+        overshoot = 0
+    
+    # Tempo de acomodação (2%)
+    tolerance = 0.02 * abs(y_final) if y_final != 0 else 0.02
+    idx_settle = np.where(np.abs(y - y_final) <= tolerance)[0]
+    settling_time = t[idx_settle[0]] if len(idx_settle) > 0 else None
+    
+    # Tempo de pico
+    idx_peak = np.argmax(np.abs(y - y_final))
+    peak_time = t[idx_peak]
+    
+    return {
+        'steady_state': float(y_final),
+        'peak': float(y_max),
+        'overshoot_percent': float(overshoot),
+        'peak_time': float(peak_time),
+        'settling_time': float(settling_time) if settling_time else None,
+    }
+
+# =====================================================================
+# INTERFACE PRINCIPAL
+# =====================================================================
+
+st.title("⚡ XCOS Simulator - Simulador de Sistemas de Controle")
+st.markdown("Interface web para design e análise de sistemas de controle lineares")
+
+# Sidebar - Blocos disponíveis
+st.sidebar.header("📦 Blocos Disponíveis")
+
+categories = {}
+for block_type, info in BLOCK_INFO.items():
+    cat = info['category']
+    if cat not in categories:
+        categories[cat] = []
+    categories[cat].append((block_type, info))
+
+for category in sorted(categories.keys()):
+    st.sidebar.subheader(f"🔹 {category}")
+    cols = st.sidebar.columns(2)
+    
+    for idx, (block_type, info) in enumerate(categories[category]):
+        with cols[idx % 2]:
+            if st.button(f"{info['icon']} {info['label']}", key=f"btn_{block_type}", use_container_width=True):
+                block_id = add_block(block_type)
+                st.success(f"✓ {info['label']} adicionado!")
+                st.rerun()
+
+st.sidebar.divider()
+
+# Botões principais
+col1, col2, col3 = st.sidebar.columns(3)
+
+with col1:
+    if st.button("💾 Salvar", use_container_width=True):
+        st.session_state.save_requested = True
+
+with col2:
+    if st.button("📂 Carregar", use_container_width=True):
+        st.session_state.load_requested = True
+
+with col3:
+    if st.button("🗑️ Limpar", use_container_width=True):
+        st.session_state.blocks.clear()
+        st.session_state.connections.clear()
+        st.rerun()
+
+# =====================================================================
+# ABAS PRINCIPAIS
+# =====================================================================
+
+tab1, tab2, tab3, tab4 = st.tabs(["🔧 Diagrama", "📊 Análise", "💾 Projeto", "ℹ️ Info"])
+
+# =====================================================================
+# ABA 1: DIAGRAMA
+# =====================================================================
+
+with tab1:
+    col_left, col_right = st.columns([2, 1])
+    
+    with col_left:
+        st.subheader("📐 Diagrama em Blocos")
         
-        if isinstance(value, (int, float)):
-            widget = QDoubleSpinBox()
-            widget.setValue(float(value))
-            widget.setRange(-1000, 1000)
-            widget.setSingleStep(0.1)
-            widget.valueChanged.connect(lambda v: self.on_param_changed(name, v))
-        elif isinstance(value, list):
-            widget = QTextEdit()
-            widget.setText(str(value))
-            widget.textChanged.connect(lambda: self.on_param_changed(name, widget.toPlainText()))
+        if st.session_state.blocks:
+            # Visualizar blocos
+            st.write("**Blocos no Diagrama:**")
+            
+            for block_id, block in st.session_state.blocks.items():
+                with st.expander(f"📦 {block.label} ({block_id})", expanded=False):
+                    st.write(f"**Tipo:** {block.type}")
+                    
+                    # Editar parâmetros
+                    st.write("**Parâmetros:**")
+                    params = block.params.copy()
+                    
+                    for param_name, param_value in params.items():
+                        if isinstance(param_value, (int, float)):
+                            new_val = st.number_input(
+                                param_name,
+                                value=float(param_value),
+                                step=0.1,
+                                key=f"{block_id}_{param_name}"
+                            )
+                            block.params[param_name] = new_val
+                        elif isinstance(param_value, list):
+                            new_val_str = st.text_input(
+                                f"{param_name} (separado por espaço)",
+                                value=str(param_value),
+                                key=f"{block_id}_{param_name}"
+                            )
+                            try:
+                                block.params[param_name] = [float(x) for x in new_val_str.strip('[]').split(',')]
+                            except:
+                                st.error(f"Formato inválido para {param_name}")
+                    
+                    # Botões de ação
+                    col_del, col_dup = st.columns(2)
+                    with col_del:
+                        if st.button("🗑️ Deletar", key=f"del_{block_id}", use_container_width=True):
+                            remove_block(block_id)
+                            st.rerun()
+                    with col_dup:
+                        if st.button("📋 Duplicar", key=f"dup_{block_id}", use_container_width=True):
+                            new_id = add_block(block.type)
+                            st.session_state.blocks[new_id].params = block.params.copy()
+                            st.rerun()
+            
+            st.divider()
+            
+            # Conexões
+            st.write("**Conexões:**")
+            
+            col_from, col_to, col_add = st.columns([2, 2, 1])
+            
+            with col_from:
+                from_block = st.selectbox(
+                    "De:",
+                    options=list(st.session_state.blocks.keys()),
+                    format_func=lambda x: f"{st.session_state.blocks[x].label} ({x})"
+                )
+            
+            with col_to:
+                to_blocks = [b for b in st.session_state.blocks.keys() if b != from_block]
+                to_block = st.selectbox(
+                    "Para:",
+                    options=to_blocks,
+                    format_func=lambda x: f"{st.session_state.blocks[x].label} ({x})"
+                )
+            
+            with col_add:
+                if st.button("➕ Conectar", use_container_width=True):
+                    add_connection(from_block, to_block)
+                    st.success("✓ Conexão criada!")
+                    st.rerun()
+            
+            # Listar conexões
+            if st.session_state.connections:
+                st.write("**Conexões Existentes:**")
+                for idx, conn in enumerate(st.session_state.connections):
+                    from_label = st.session_state.blocks[conn.from_block_id].label
+                    to_label = st.session_state.blocks[conn.to_block_id].label
+                    
+                    col_info, col_remove = st.columns([4, 1])
+                    with col_info:
+                        st.write(f"{idx+1}. {from_label} → {to_label}")
+                    with col_remove:
+                        if st.button("✕", key=f"remove_conn_{idx}", use_container_width=True):
+                            st.session_state.connections.pop(idx)
+                            st.rerun()
         else:
-            widget = QTextEdit()
-            widget.setText(str(value))
-            widget.textChanged.connect(lambda: self.on_param_changed(name, widget.toPlainText()))
-        
-        self.param_widgets[name] = widget
-        
-        # Adicionar à layout
-        param_layout = QHBoxLayout()
-        param_layout.addWidget(label)
-        param_layout.addWidget(widget)
-        self.params_layout.insertLayout(self.params_layout.count() - 1, param_layout)
+            st.info("👈 Adicione blocos usando os botões no painel esquerdo")
     
-    def on_param_changed(self, name: str, value):
-        """Atualiza parâmetro do bloco"""
-        if self.current_block:
+    with col_right:
+        st.subheader("📋 Resumo")
+        
+        st.metric("Total de Blocos", len(st.session_state.blocks))
+        st.metric("Conexões", len(st.session_state.connections))
+        
+        # Listar tipos
+        if st.session_state.blocks:
+            st.write("**Distribuição de Blocos:**")
+            types = {}
+            for block in st.session_state.blocks.values():
+                types[block.type] = types.get(block.type, 0) + 1
+            
+            for btype, count in sorted(types.items()):
+                info = BLOCK_INFO[btype]
+                st.write(f"{info['icon']} {info['label']}: {count}")
+
+# =====================================================================
+# ABA 2: ANÁLISE
+# =====================================================================
+
+with tab2:
+    if st.session_state.blocks:
+        st.subheader("📊 Análise do Sistema")
+        
+        sys = build_transfer_function()
+        
+        if sys:
+            # Parâmetros de simulação
+            col1, col2 = st.columns(2)
+            with col1:
+                t_final = st.slider("Tempo final (s)", 1.0, 30.0, 10.0)
+            with col2:
+                t_points = st.slider("Número de pontos", 100, 5000, 1000)
+            
+            # Simular
+            if st.button("▶️ Simular Resposta ao Degrau", use_container_width=True):
+                try:
+                    t = np.linspace(0, t_final, t_points)
+                    t, y = signal.step(sys, T=t)
+                    
+                    # Calcular métricas
+                    metrics = calculate_metrics(t, y)
+                    
+                    # Plotar
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.write("**Resposta ao Degrau:**")
+                        
+                        fig = go.Figure()
+                        fig.add_trace(go.Scatter(
+                            x=t, y=y,
+                            mode='lines',
+                            name='y(t)',
+                            line=dict(color='blue', width=2)
+                        ))
+                        fig.add_hline(y=metrics['steady_state'], 
+                                    line_dash="dash", 
+                                    line_color="red",
+                                    annotation_text="Valor final")
+                        fig.update_layout(
+                            title="Resposta ao Degrau Unitário",
+                            xaxis_title="Tempo (s)",
+                            yaxis_title="Amplitude",
+                            hovermode='x unified',
+                            height=400
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                    with col2:
+                        st.write("**Métricas:**")
+                        
+                        col_a, col_b = st.columns(2)
+                        with col_a:
+                            st.metric("Valor Final", f"{metrics['steady_state']:.6f}")
+                            st.metric("Pico", f"{metrics['peak']:.6f}")
+                        with col_b:
+                            st.metric("Overshoot", f"{metrics['overshoot_percent']:.2f}%")
+                            st.metric("Tempo Pico", f"{metrics['peak_time']:.4f}s")
+                        
+                        if metrics['settling_time']:
+                            st.metric("Tempo Acomodação", f"{metrics['settling_time']:.4f}s")
+                    
+                    # Polos e Zeros
+                    st.write("---")
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.write("**Polos e Zeros:**")
+                        
+                        poles = np.roots(sys.den)
+                        zeros = np.roots(sys.num) if len(sys.num) > 0 else np.array([])
+                        is_stable = all(p.real < 0 for p in poles)
+                        
+                        st.write(f"✓ **Estável:** {'SIM' if is_stable else 'NÃO'}")
+                        st.write(f"**Polos:** {[f'{p:.4f}' for p in poles]}")
+                        st.write(f"**Zeros:** {[f'{z:.4f}' for z in zeros]}")
+                        
+                        fig = go.Figure()
+                        
+                        # Polos
+                        fig.add_trace(go.Scatter(
+                            x=poles.real, y=poles.imag,
+                            mode='markers',
+                            marker=dict(size=12, color='red', symbol='x'),
+                            name='Polos'
+                        ))
+                        
+                        # Zeros
+                        if len(zeros) > 0:
+                            fig.add_trace(go.Scatter(
+                                x=zeros.real, y=zeros.imag,
+                                mode='markers',
+                                marker=dict(size=12, color='blue', symbol='circle'),
+                                name='Zeros'
+                            ))
+                        
+                        # Eixo de estabilidade
+                        fig.add_vline(x=0, line_dash="dash", line_color="gray")
+                        fig.add_hline(y=0, line_dash="dash", line_color="gray")
+                        
+                        fig.update_layout(
+                            title="Mapa de Polos e Zeros",
+                            xaxis_title="Parte Real",
+                            yaxis_title="Parte Imaginária",
+                            hovermode='closest',
+                            height=400,
+                            showlegend=True
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                    with col2:
+                        st.write("**Diagrama de Bode:**")
+                        
+                        w = np.logspace(-2, 2, 500)
+                        w_rad, mag, phase = signal.bode(sys, w)
+                        
+                        fig = go.Figure()
+                        
+                        # Magnitude
+                        fig.add_trace(go.Scatter(
+                            x=np.log10(w_rad), y=mag,
+                            mode='lines',
+                            name='Magnitude (dB)',
+                            line=dict(color='blue'),
+                            yaxis='y1'
+                        ))
+                        
+                        # Fase
+                        fig.add_trace(go.Scatter(
+                            x=np.log10(w_rad), y=phase,
+                            mode='lines',
+                            name='Fase (°)',
+                            line=dict(color='red'),
+                            yaxis='y2'
+                        ))
+                        
+                        fig.update_layout(
+                            title="Diagrama de Bode",
+                            xaxis_title="log10(ω) [rad/s]",
+                            yaxis=dict(title="Magnitude (dB)", side='left'),
+                            yaxis2=dict(title="Fase (°)", overlaying='y', side='right'),
+                            hovermode='x unified',
+                            height=400,
+                            showlegend=True
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                
+                except Exception as e:
+                    st.error(f"❌ Erro na simulação: {str(e)}")
+        else:
+            st.warning("⚠️ Nenhum bloco Transfer Function encontrado. Adicione um bloco TF para simular.")
+    else:
+        st.info("👈 Adicione blocos para realizar análise")
+
+# =====================================================================
+# ABA 3: PROJETO
+# =====================================================================
+
+with tab3:
+    col_export, col_import = st.columns(2)
+    
+    with col_export:
+        st.subheader("💾 Exportar Projeto")
+        
+        if st.session_state.blocks or st.session_state.connections:
+            project_data = {
+                'blocks': [b.to_dict() for b in st.session_state.blocks.values()],
+                'connections': [c.to_dict() for c in st.session_state.connections]
+            }
+            
+            json_str = json.dumps(project_data, indent=2)
+            
+            st.download_button(
+                label="📥 Baixar Projeto (JSON)",
+                data=json_str,
+                file_name="xcos_diagram.json",
+                mime="application/json"
+            )
+            
+            st.text_area("Visualizar JSON:", value=json_str, height=300)
+        else:
+            st.info("Nenhum diagrama para exportar")
+    
+    with col_import:
+        st.subheader("📤 Importar Projeto")
+        
+        uploaded_file = st.file_uploader("Carregar arquivo JSON", type=['json'])
+        
+        if uploaded_file:
             try:
-                if isinstance(value, str):
-                    # Tentar parsear como lista
-                    if value.startswith('['):
-                        self.current_block.params[name] = eval(value)
-                    else:
-                        # Tentar como número
-                        self.current_block.params[name] = float(value)
-                else:
-                    self.current_block.params[name] = value
-            except:
-                pass
-    
-    def on_delete(self):
-        """Deleta bloco"""
-        # Emitir sinal
-        pass
-    
-    def on_duplicate(self):
-        """Duplica bloco"""
-        # Emitir sinal
-        pass
+                project_data = json.load(uploaded_file)
+                
+                # Limpar estado atual
+                st.session_state.blocks.clear()
+                st.session_state.connections.clear()
+                
+                # Carregar blocos
+                for block_data in project_data.get('blocks', []):
+                    block = Block.from_dict(block_data)
+                    st.session_state.blocks[block.id] = block
+                
+                # Carregar conexões
+                for conn_data in project_data.get('connections', []):
+                    conn = Connection.from_dict(conn_data)
+                    st.session_state.connections.append(conn)
+                
+                st.success("✓ Projeto carregado com sucesso!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Erro ao carregar arquivo: {str(e)}")
 
+# =====================================================================
+# ABA 4: INFORMAÇÕES
+# =====================================================================
 
-class SimulationThread(QThread):
-    """Thread para executar simulação sem bloquear UI"""
+with tab4:
+    col1, col2 = st.columns(2)
     
-    progress = pyqtSignal(int)
-    finished = pyqtSignal(dict)
-    error = pyqtSignal(str)
-    
-    def __init__(self, canvas: Canvas, t_final: float = 10, num_points: int = 1000):
-        super().__init__()
-        self.canvas = canvas
-        self.t_final = t_final
-        self.num_points = num_points
-    
-    def run(self):
-        """Executa a simulação"""
-        try:
-            self.progress.emit(10)
-            
-            # Construir função de transferência a partir dos blocos
-            if not self.canvas.blocks:
-                self.error.emit("Nenhum bloco no diagrama")
-                return
-            
-            # Encontrar blocos de entrada e saída
-            input_blocks = [b for b in self.canvas.blocks.values() 
-                          if b.type in [BlockType.STEP, BlockType.RAMP, BlockType.SINE]]
-            output_blocks = [b for b in self.canvas.blocks.values()
-                           if b.type in [BlockType.SCOPE, BlockType.PLOT]]
-            
-            if not input_blocks or not output_blocks:
-                self.error.emit("É necessário pelo menos um bloco de entrada e um de saída")
-                return
-            
-            self.progress.emit(30)
-            
-            # Extrair funções de transferência
-            tf_blocks = [b for b in self.canvas.blocks.values() if b.type == BlockType.TF]
-            
-            if tf_blocks:
-                # Usar primeiro TF encontrado
-                tf_block = tf_blocks[0]
-                num = tf_block.params.get('numerator', [1])
-                den = tf_block.params.get('denominator', [1, 1])
-                
-                sys = signal.TransferFunction(num, den)
-                
-                self.progress.emit(50)
-                
-                # Simular resposta ao degrau
-                t = np.linspace(0, self.t_final, self.num_points)
-                t, y = signal.step(sys, T=t)
-                
-                self.progress.emit(80)
-                
-                # Calcular métricas
-                y_final = y[-1]
-                y_max = np.max(y)
-                overshoot = ((y_max - y_final) / y_final * 100) if y_final != 0 else 0
-                
-                # Calcular tempo de acomodação (2%)
-                tolerance = 0.02 * y_final
-                idx_settle = np.where(np.abs(y - y_final) <= tolerance)[0]
-                settling_time = t[idx_settle[0]] if len(idx_settle) > 0 else None
-                
-                # Calcular polos
-                poles = np.roots(den)
-                is_stable = all(p.real < 0 for p in poles)
-                
-                self.progress.emit(100)
-                
-                self.finished.emit({
-                    't': t.tolist(),
-                    'y': y.tolist(),
-                    'metrics': {
-                        'steady_state': float(y_final),
-                        'overshoot_percent': float(overshoot),
-                        'peak_value': float(y_max),
-                        'settling_time': float(settling_time) if settling_time else None,
-                        'poles': poles.tolist(),
-                        'stable': is_stable
-                    }
-                })
-            else:
-                self.error.emit("Nenhum bloco Transfer Function encontrado")
+    with col1:
+        st.subheader("📚 Sobre XCOS Simulator")
         
-        except Exception as e:
-            self.error.emit(f"Erro na simulação: {str(e)}")
-
-
-class XcosMainWindow(QMainWindow):
-    """Janela principal da aplicação"""
-    
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("XCOS Simulator - Simulador de Sistemas de Controle")
-        self.setGeometry(100, 100, 1400, 900)
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #ffffff;
-            }
-            QToolBar {
-                background-color: #f0f0f0;
-                border: 1px solid #ccc;
-            }
-            QPushButton {
-                background-color: #667eea;
-                color: white;
-                border: none;
-                padding: 5px 10px;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #5568d3;
-            }
-            QPushButton:pressed {
-                background-color: #4452b8;
-            }
+        st.markdown("""
+        **XCOS Simulator** é uma ferramenta web para design e análise de sistemas de controle.
+        
+        ### Características:
+        - 🔧 Interface visual intuitiva
+        - 📦 20+ tipos de blocos pré-configurados
+        - 📊 Análise completa (Bode, Nyquist, Polos/Zeros)
+        - 💾 Salvar/carregar projetos em JSON
+        - ⚡ Simulação rápida
+        
+        ### Tipos de Blocos:
+        - **Entradas:** Step, Ramp, Sine, Pulse
+        - **Dinâmica:** TF, Integrador, Derivador, Ganho, State Space, Delay
+        - **Operações:** Soma, Multiplicação, Divisão
+        - **Saída:** Scope, Plot, Sink
+        - **Controladores:** PID, Lead, Lag
         """)
-        
-        # Canvas central
-        self.canvas = Canvas()
-        self.canvas.block_selected.connect(self.on_block_selected)
-        self.canvas.blocks_changed.connect(self.on_blocks_changed)
-        
-        # Layout principal
-        main_widget = QWidget()
-        main_layout = QHBoxLayout()
-        
-        # Splitter para redimensionamento
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        
-        # Painel esquerdo - Blocos disponíveis
-        left_widget = QWidget()
-        left_layout = QVBoxLayout()
-        left_layout.addWidget(QLabel("Blocos Disponíveis:"))
-        left_layout.addWidget(self.create_block_list())
-        left_widget.setLayout(left_layout)
-        left_widget.setMaximumWidth(200)
-        
-        # Canvas
-        splitter.addWidget(self.canvas)
-        splitter.addWidget(left_widget)
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 0)
-        
-        # Painel direito - Propriedades
-        right_splitter = QSplitter(Qt.Orientation.Vertical)
-        
-        self.property_panel = PropertyPanel()
-        right_splitter.addWidget(self.property_panel)
-        
-        # Painel de saída
-        output_widget = QWidget()
-        output_layout = QVBoxLayout()
-        output_layout.addWidget(QLabel("Informações:"))
-        
-        self.output_text = QTextEdit()
-        self.output_text.setReadOnly(True)
-        self.output_text.setMaximumHeight(200)
-        output_layout.addWidget(self.output_text)
-        
-        output_widget.setLayout(output_layout)
-        right_splitter.addWidget(output_widget)
-        right_splitter.setStretchFactor(0, 1)
-        right_splitter.setStretchFactor(1, 0)
-        
-        splitter.addWidget(right_splitter)
-        
-        main_layout.addWidget(splitter)
-        main_widget.setLayout(main_layout)
-        
-        self.setCentralWidget(main_widget)
-        
-        # Criar toolbar
-        self.create_toolbar()
-        
-        # Criar menus
-        self.create_menus()
-        
-        # Thread de simulação
-        self.sim_thread: Optional[SimulationThread] = None
-        
-        self.show()
     
-    def create_block_list(self) -> BlockListWidget:
-        """Cria lista de blocos"""
-        block_list = BlockListWidget()
-        block_list.model().rowsMoved.connect(self.on_blocks_changed)
-        return block_list
+    with col2:
+        st.subheader("🚀 Guia Rápido")
+        
+        st.markdown("""
+        ### Como usar:
+        
+        1️⃣ **Adicionar Blocos**
+           - Clique nos botões no painel esquerdo
+           - Blocos aparecem na aba Diagrama
+        
+        2️⃣ **Configurar Parâmetros**
+           - Expanda cada bloco
+           - Edite os parâmetros
+        
+        3️⃣ **Conectar Blocos**
+           - Use os seletores "De" e "Para"
+           - Clique "➕ Conectar"
+        
+        4️⃣ **Simular**
+           - Vá para "Análise"
+           - Clique "▶️ Simular"
+           - Visualize resultados
+        
+        5️⃣ **Salvar Projeto**
+           - Vá para "Projeto"
+           - Clique "📥 Baixar"
+        """)
     
-    def create_toolbar(self):
-        """Cria toolbar"""
-        toolbar = self.addToolBar("Ferramentas")
-        toolbar.setMovable(False)
-        
-        # Novo
-        new_btn = QPushButton("📄 Novo")
-        new_btn.clicked.connect(self.new_diagram)
-        toolbar.addWidget(new_btn)
-        
-        # Abrir
-        open_btn = QPushButton("📂 Abrir")
-        open_btn.clicked.connect(self.open_diagram)
-        toolbar.addWidget(open_btn)
-        
-        # Salvar
-        save_btn = QPushButton("💾 Salvar")
-        save_btn.clicked.connect(self.save_diagram)
-        toolbar.addWidget(save_btn)
-        
-        toolbar.addSeparator()
-        
-        # Simular
-        sim_btn = QPushButton("▶️ Simular")
-        sim_btn.clicked.connect(self.simulate)
-        toolbar.addWidget(sim_btn)
-        
-        # Análise
-        analysis_btn = QPushButton("📊 Análise")
-        analysis_btn.clicked.connect(self.show_analysis)
-        toolbar.addWidget(analysis_btn)
-        
-        toolbar.addSeparator()
-        
-        # Limpar
-        clear_btn = QPushButton("🗑️ Limpar")
-        clear_btn.clicked.connect(self.clear_canvas)
-        toolbar.addWidget(clear_btn)
-        
-        # Progresso
-        toolbar.addSeparator()
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setMaximumWidth(200)
-        self.progress_bar.setVisible(False)
-        toolbar.addWidget(self.progress_bar)
+    st.divider()
     
-    def create_menus(self):
-        """Cria menus"""
-        menubar = self.menuBar()
-        
-        # Menu Arquivo
-        file_menu = menubar.addMenu("&Arquivo")
-        
-        new_action = file_menu.addAction("&Novo")
-        new_action.triggered.connect(self.new_diagram)
-        new_action.setShortcut("Ctrl+N")
-        
-        open_action = file_menu.addAction("&Abrir")
-        open_action.triggered.connect(self.open_diagram)
-        open_action.setShortcut("Ctrl+O")
-        
-        save_action = file_menu.addAction("&Salvar")
-        save_action.triggered.connect(self.save_diagram)
-        save_action.setShortcut("Ctrl+S")
-        
-        file_menu.addSeparator()
-        
-        exit_action = file_menu.addAction("&Sair")
-        exit_action.triggered.connect(self.close)
-        exit_action.setShortcut("Ctrl+Q")
-        
-        # Menu Simulação
-        sim_menu = menubar.addMenu("&Simulação")
-        
-        run_action = sim_menu.addAction("&Executar")
-        run_action.triggered.connect(self.simulate)
-        run_action.setShortcut("F5")
-        
-        # Menu Edição
-        edit_menu = menubar.addMenu("&Edição")
-        
-        clear_action = edit_menu.addAction("&Limpar Tudo")
-        clear_action.triggered.connect(self.clear_canvas)
+    st.subheader("⚙️ Referência de Blocos")
     
-    def on_block_selected(self, block: Block):
-        """Bloco foi selecionado"""
-        self.property_panel.set_block(block)
-    
-    def on_blocks_changed(self):
-        """Blocos foram modificados"""
-        self.update_info()
-    
-    def update_info(self):
-        """Atualiza painel de informações"""
-        num_blocks = len(self.canvas.blocks)
-        num_connections = len(self.canvas.connections)
-        
-        info = f"Blocos: {num_blocks} | Conexões: {num_connections}\n"
-        
-        # Listar tipos de blocos
-        block_types = {}
-        for block in self.canvas.blocks.values():
-            block_type = block.type.value
-            block_types[block_type] = block_types.get(block_type, 0) + 1
-        
-        for block_type, count in block_types.items():
-            info += f"  • {block_type}: {count}\n"
-        
-        self.output_text.setText(info)
-    
-    def new_diagram(self):
-        """Novo diagrama"""
-        reply = QMessageBox.question(self, "Novo Diagrama", 
-                                     "Descartar diagrama atual?",
-                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        if reply == QMessageBox.StandardButton.Yes:
-            self.canvas.clear()
-    
-    def open_diagram(self):
-        """Abre diagrama"""
-        file_path, _ = QFileDialog.getOpenFileName(self, "Abrir Diagrama", "", "JSON Files (*.json)")
-        if file_path:
-            try:
-                with open(file_path, 'r') as f:
-                    self.canvas.load_from_json(f.read())
-                QMessageBox.information(self, "Sucesso", "Diagrama carregado!")
-            except Exception as e:
-                QMessageBox.critical(self, "Erro", f"Erro ao abrir arquivo: {e}")
-    
-    def save_diagram(self):
-        """Salva diagrama"""
-        file_path, _ = QFileDialog.getSaveFileName(self, "Salvar Diagrama", "", "JSON Files (*.json)")
-        if file_path:
-            try:
-                with open(file_path, 'w') as f:
-                    f.write(self.canvas.save_to_json())
-                QMessageBox.information(self, "Sucesso", "Diagrama salvo!")
-            except Exception as e:
-                QMessageBox.critical(self, "Erro", f"Erro ao salvar arquivo: {e}")
-    
-    def simulate(self):
-        """Executa simulação"""
-        self.progress_bar.setVisible(True)
-        self.progress_bar.setValue(0)
-        
-        self.sim_thread = SimulationThread(self.canvas, t_final=10, num_points=1000)
-        self.sim_thread.progress.connect(self.progress_bar.setValue)
-        self.sim_thread.finished.connect(self.on_simulation_finished)
-        self.sim_thread.error.connect(self.on_simulation_error)
-        self.sim_thread.start()
-        
-        self.output_text.setText("Simulando...")
-    
-    def on_simulation_finished(self, results: dict):
-        """Simulação concluída"""
-        self.progress_bar.setVisible(False)
-        
-        metrics = results['metrics']
-        info = f"""
-        === RESULTADOS DA SIMULAÇÃO ===
-        
-        Estável: {'✓ SIM' if metrics['stable'] else '✗ NÃO'}
-        Valor Final: {metrics['steady_state']:.6f}
-        Pico: {metrics['peak_value']:.6f}
-        Overshoot: {metrics['overshoot_percent']:.2f}%
-        Tempo de Acomodação: {metrics['settling_time']:.4f}s (2%)
-        
-        Polos: {[f'{p:.4f}' for p in metrics['poles']]}
-        """
-        
-        self.output_text.setText(info)
-        
-        # Plotar resultado
-        self.plot_results(results)
-    
-    def on_simulation_error(self, error: str):
-        """Erro na simulação"""
-        self.progress_bar.setVisible(False)
-        QMessageBox.critical(self, "Erro na Simulação", error)
-        self.output_text.setText(f"Erro: {error}")
-    
-    def plot_results(self, results: dict):
-        """Plota resultados da simulação"""
-        t = results['t']
-        y = results['y']
-        
-        fig, ax = plt.subplots(figsize=(10, 6))
-        ax.plot(t, y, 'b-', linewidth=2, label='Resposta')
-        ax.axhline(y=y[-1], color='r', linestyle='--', alpha=0.5, label='Valor Final')
-        ax.grid(True, alpha=0.3)
-        ax.set_xlabel('Tempo (s)')
-        ax.set_ylabel('Amplitude')
-        ax.set_title('Resposta ao Degrau')
-        ax.legend()
-        
-        plt.tight_layout()
-        plt.show()
-    
-    def show_analysis(self):
-        """Mostra análise do sistema"""
-        QMessageBox.information(self, "Análise", "Funcionalidade em desenvolvimento")
-    
-    def clear_canvas(self):
-        """Limpa canvas"""
-        reply = QMessageBox.question(self, "Limpar", 
-                                     "Descartar todos os blocos?",
-                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        if reply == QMessageBox.StandardButton.Yes:
-            self.canvas.clear()
+    for category in sorted(categories.keys()):
+        with st.expander(f"🔹 {category}", expanded=False):
+            for block_type, info in categories[category]:
+                with st.expander(f"{info['icon']} {info['label']}", expanded=False):
+                    default_params = DEFAULT_PARAMS[block_type]
+                    
+                    st.write(f"**Tipo:** `{block_type}`")
+                    st.write("**Parâmetros padrão:**")
+                    
+                    for param_name, param_value in default_params.items():
+                        st.write(f"- `{param_name}`: {param_value}")
 
+# =====================================================================
+# FOOTER
+# =====================================================================
 
-def main():
-    """Função principal"""
-    app = QApplication(sys.argv)
-    
-    # Tema
-    app.setStyle('Fusion')
-    
-    window = XcosMainWindow()
-    sys.exit(app.exec())
-
-
-if __name__ == '__main__':
-    main()
+st.divider()
+st.markdown("""
+<div style="text-align: center; color: #666; font-size: 12px;">
+    <p>⚡ XCOS Simulator v1.0 | Desenvolvido em Python com Streamlit | 2025</p>
+    <p>Para sistemas de controle lineares | Educação & Engenharia</p>
+</div>
+""", unsafe_allow_html=True)
