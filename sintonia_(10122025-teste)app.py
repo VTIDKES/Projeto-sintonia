@@ -16,7 +16,6 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit.components.v1 as components
 import json
-import base64
 
 # =====================================================
 # CONFIGURAÇÕES E CONSTANTES
@@ -588,7 +587,7 @@ def criar_diagrama_blocos_html():
     conexoes_data = json.dumps(st.session_state.diagrama_blocos['conexoes'])
     
     # Código HTML completo para o editor visual
-    html_code = f"""
+    html_code = f'''
     <!DOCTYPE html>
     <html>
     <head>
@@ -753,10 +752,10 @@ def criar_diagrama_blocos_html():
             let offsetX = 0, offsetY = 0;
 
             function adicionarBloco(tipo, config) {{
-                const container = document.getElementById('canvas-container');
-                const bloco = document.createElement('div');
-                bloco.className = 'bloco';
-                bloco.id = 'bloco-' + blocoIdCounter;
+                const container = document.getElementById("canvas-container");
+                const bloco = document.createElement("div");
+                bloco.className = "bloco";
+                bloco.id = "bloco-" + blocoIdCounter;
                 
                 const blocoData = {{
                     id: blocoIdCounter,
@@ -768,28 +767,28 @@ def criar_diagrama_blocos_html():
                 
                 blocos.push(blocoData);
                 
-                bloco.style.left = blocoData.x + 'px';
-                bloco.style.top = blocoData.y + 'px';
+                bloco.style.left = blocoData.x + "px";
+                bloco.style.top = blocoData.y + "px";
                 
                 let nomeDisplay = config.nome || tipo;
-                let tfDisplay = config.tf || '';
+                let tfDisplay = config.tf || "";
                 
                 bloco.innerHTML = `
                     <div class="bloco-tipo">${{tipo}}</div>
                     <div class="bloco-nome">${{nomeDisplay}}</div>
-                    ${{tfDisplay ? '<div class="bloco-tf">' + tfDisplay + '</div>' : ''}}
+                    ${{tfDisplay ? '<div class="bloco-tf">' + tfDisplay + "</div>" : ""}}
                     <div class="porta porta-entrada" data-bloco="${{blocoIdCounter}}" data-tipo="entrada"></div>
                     <div class="porta porta-saida" data-bloco="${{blocoIdCounter}}" data-tipo="saida"></div>
                 `;
                 
                 container.appendChild(bloco);
                 
-                bloco.addEventListener('mousedown', iniciarArrastar);
-                bloco.addEventListener('click', selecionarBloco);
+                bloco.addEventListener("mousedown", iniciarArrastar);
+                bloco.addEventListener("click", selecionarBloco);
                 
-                const portas = bloco.querySelectorAll('.porta');
+                const portas = bloco.querySelectorAll(".porta");
                 portas.forEach(porta => {{
-                    porta.addEventListener('click', clickPorta);
+                    porta.addEventListener("click", clickPorta);
                 }});
                 
                 blocoIdCounter++;
@@ -797,68 +796,68 @@ def criar_diagrama_blocos_html():
             }}
 
             function adicionarBlocoTransferencia() {{
-                const num = prompt('Numerador (ex: 1, s+1):', '1');
+                const num = prompt("Numerador (ex: 1, s+1):", "1");
                 if (num === null) return;
-                const den = prompt('Denominador (ex: s+1, s^2+2*s+1):', 's+1');
+                const den = prompt("Denominador (ex: s+1, s^2+2*s+1):", "s+1");
                 if (den === null) return;
-                adicionarBloco('Transferência', {{
-                    nome: 'G' + blocoIdCounter,
+                adicionarBloco("Transferência", {{
+                    nome: "G" + blocoIdCounter,
                     numerador: num,
                     denominador: den,
-                    tf: num + ' / ' + den
+                    tf: num + " / " + den
                 }});
             }}
 
             function adicionarBlocoSomador() {{
-                adicionarBloco('Somador', {{nome: 'Σ' + blocoIdCounter}});
+                adicionarBloco("Somador", {{nome: "Σ" + blocoIdCounter}});
             }}
 
             function adicionarBlocoGanho() {{
-                const ganho = prompt('Valor do ganho K:', '1');
+                const ganho = prompt("Valor do ganho K:", "1");
                 if (ganho === null) return;
-                adicionarBloco('Ganho', {{nome: 'K=' + ganho, valor: ganho, tf: ganho}});
+                adicionarBloco("Ganho", {{nome: "K=" + ganho, valor: ganho, tf: ganho}});
             }}
 
             function adicionarBlocoIntegrador() {{
-                adicionarBloco('Integrador', {{nome: '∫', tf: '1/s'}});
+                adicionarBloco("Integrador", {{nome: "∫", tf: "1/s"}});
             }}
 
             function adicionarBlocoAtraso() {{
-                const atraso = prompt('Tempo de atraso τ:', '1');
+                const atraso = prompt("Tempo de atraso τ:", "1");
                 if (atraso === null) return;
-                adicionarBloco('Atraso', {{nome: 'τ=' + atraso, tf: 'e^{ -' + atraso + 's}'}});
+                adicionarBloco("Atraso", {{nome: "τ=" + atraso, tf: "e^{ -" + atraso + "s}"}});
             }}
 
             function adicionarBlocoFeedback() {{
-                adicionarBloco('Feedback', {{nome: 'H' + blocoIdCounter}});
+                adicionarBloco("Feedback", {{nome: "H" + blocoIdCounter}});
             }}
 
             function iniciarArrastar(e) {{
-                if (e.target.classList.contains('porta')) return;
+                if (e.target.classList.contains("porta")) return;
                 e.stopPropagation();
                 arrastandoBloco = e.currentTarget;
                 const rect = arrastandoBloco.getBoundingClientRect();
-                const container = document.getElementById('canvas-container').getBoundingClientRect();
+                const container = document.getElementById("canvas-container").getBoundingClientRect();
                 offsetX = e.clientX - rect.left;
                 offsetY = e.clientY - rect.top;
                 
-                document.addEventListener('mousemove', arrastar);
-                document.addEventListener('mouseup', pararArrastar);
+                document.addEventListener("mousemove", arrastar);
+                document.addEventListener("mouseup", pararArrastar);
             }}
 
             function arrastar(e) {{
                 if (arrastandoBloco) {{
-                    const container = document.getElementById('canvas-container').getBoundingClientRect();
+                    const container = document.getElementById("canvas-container").getBoundingClientRect();
                     let x = e.clientX - container.left - offsetX;
                     let y = e.clientY - container.top - offsetY;
                     
                     x = Math.max(0, Math.min(x, container.width - arrastandoBloco.offsetWidth));
                     y = Math.max(0, Math.min(y, container.height - arrastandoBloco.offsetHeight));
                     
-                    arrastandoBloco.style.left = x + 'px';
-                    arrastandoBloco.style.top = y + 'px';
+                    arrastandoBloco.style.left = x + "px";
+                    arrastandoBloco.style.top = y + "px";
                     
-                    const blocoId = parseInt(arrastandoBloco.id.split('-')[1]);
+                    const blocoId = parseInt(arrastandoBloco.id.split("-")[1]);
                     const bloco = blocos.find(b => b.id === blocoId);
                     if (bloco) {{
                         bloco.x = x;
@@ -871,18 +870,18 @@ def criar_diagrama_blocos_html():
 
             function pararArrastar() {{
                 arrastandoBloco = null;
-                document.removeEventListener('mousemove', arrastar);
-                document.removeEventListener('mouseup', pararArrastar);
+                document.removeEventListener("mousemove", arrastar);
+                document.removeEventListener("mouseup", pararArrastar);
                 salvarEstado();
             }}
 
             function selecionarBloco(e) {{
-                if (e.target.classList.contains('porta')) return;
+                if (e.target.classList.contains("porta")) return;
                 e.stopPropagation();
                 
-                document.querySelectorAll('.bloco').forEach(b => b.classList.remove('selecionado'));
-                e.currentTarget.classList.add('selecionado');
-                blocoSelecionado = parseInt(e.currentTarget.id.split('-')[1]);
+                document.querySelectorAll(".bloco").forEach(b => b.classList.remove("selecionado"));
+                e.currentTarget.classList.add("selecionado");
+                blocoSelecionado = parseInt(e.currentTarget.id.split("-")[1]);
             }}
 
             function clickPorta(e) {{
@@ -891,75 +890,75 @@ def criar_diagrama_blocos_html():
                 const tipoPorta = e.target.dataset.tipo;
                 
                 if (!portaSelecionada) {{
-                    portaSelecionada = {{blocoId, tipo: tipoPorta}};
-                    e.target.style.background = '#FFC107';
+                    portaSelecionada = {{blocoId: blocoId, tipo: tipoPorta}};
+                    e.target.style.background = "#FFC107";
                 }} else {{
-                    if (portaSelecionada.tipo === 'saida' && tipoPorta === 'entrada') {{
+                    if (portaSelecionada.tipo === "saida" && tipoPorta === "entrada") {{
                         conexoes.push({{
                             origem: portaSelecionada.blocoId,
                             destino: blocoId
                         }});
                         redesenharConexoes();
-                    }} else if (portaSelecionada.tipo === 'entrada' && tipoPorta === 'saida') {{
+                    }} else if (portaSelecionada.tipo === "entrada" && tipoPorta === "saida") {{
                         conexoes.push({{
                             origem: blocoId,
                             destino: portaSelecionada.blocoId
                         }});
                         redesenharConexoes();
                     }} else {{
-                        alert('Conecte saída → entrada');
+                        alert("Conecte saída → entrada");
                     }}
                     
-                    document.querySelectorAll('.porta').forEach(p => p.style.background = '#4CAF50');
+                    document.querySelectorAll(".porta").forEach(p => p.style.background = "#4CAF50");
                     portaSelecionada = null;
                     salvarEstado();
                 }}
             }}
 
             function redesenharConexoes() {{
-                const svg = document.getElementById('conexoes-svg');
-                svg.innerHTML = '';
+                const svg = document.getElementById("conexoes-svg");
+                svg.innerHTML = "";
                 
                 conexoes.forEach(conexao => {{
-                    const blocoOrigem = document.getElementById('bloco-' + conexao.origem);
-                    const blocoDestino = document.getElementById('bloco-' + conexao.destino);
+                    const blocoOrigem = document.getElementById("bloco-" + conexao.origem);
+                    const blocoDestino = document.getElementById("bloco-" + conexao.destino);
                     
                     if (blocoOrigem && blocoDestino) {{
                         const rectOrigem = blocoOrigem.getBoundingClientRect();
                         const rectDestino = blocoDestino.getBoundingClientRect();
-                        const container = document.getElementById('canvas-container').getBoundingClientRect();
+                        const container = document.getElementById("canvas-container").getBoundingClientRect();
                         
                         const x1 = rectOrigem.right - container.left;
                         const y1 = rectOrigem.top + rectOrigem.height/2 - container.top;
                         const x2 = rectDestino.left - container.left;
                         const y2 = rectDestino.top + rectDestino.height/2 - container.top;
                         
-                        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
                         const dx = x2 - x1;
                         const curva = Math.abs(dx) / 2;
                         const d = `M ${{x1}} ${{y1}} C ${{x1 + curva}} ${{y1}}, ${{x2 - curva}} ${{y2}}, ${{x2}} ${{y2}}`;
                         
-                        path.setAttribute('d', d);
-                        path.setAttribute('stroke', '#667eea');
-                        path.setAttribute('stroke-width', '3');
-                        path.setAttribute('fill', 'none');
-                        path.setAttribute('marker-end', 'url(#arrowhead)');
+                        path.setAttribute("d", d);
+                        path.setAttribute("stroke", "#667eea");
+                        path.setAttribute("stroke-width", "3");
+                        path.setAttribute("fill", "none");
+                        path.setAttribute("marker-end", "url(#arrowhead)");
                         
                         svg.appendChild(path);
                     }}
                 }});
                 
-                const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-                const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
-                marker.setAttribute('id', 'arrowhead');
-                marker.setAttribute('markerWidth', '10');
-                marker.setAttribute('markerHeight', '10');
-                marker.setAttribute('refX', '9');
-                marker.setAttribute('refY', '3');
-                marker.setAttribute('orient', 'auto');
-                const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-                polygon.setAttribute('points', '0 0, 10 3, 0 6');
-                polygon.setAttribute('fill', '#667eea');
+                const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+                const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+                marker.setAttribute("id", "arrowhead");
+                marker.setAttribute("markerWidth", "10");
+                marker.setAttribute("markerHeight", "10");
+                marker.setAttribute("refX", "9");
+                marker.setAttribute("refY", "3");
+                marker.setAttribute("orient", "auto");
+                const polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+                polygon.setAttribute("points", "0 0, 10 3, 0 6");
+                polygon.setAttribute("fill", "#667eea");
                 marker.appendChild(polygon);
                 defs.appendChild(marker);
                 svg.appendChild(defs);
@@ -967,7 +966,7 @@ def criar_diagrama_blocos_html():
 
             function removerSelecionado() {{
                 if (blocoSelecionado !== null) {{
-                    const blocoEl = document.getElementById('bloco-' + blocoSelecionado);
+                    const blocoEl = document.getElementById("bloco-" + blocoSelecionado);
                     if (blocoEl) {{
                         blocoEl.remove();
                         blocos = blocos.filter(b => b.id !== blocoSelecionado);
@@ -977,78 +976,78 @@ def criar_diagrama_blocos_html():
                         salvarEstado();
                     }}
                 }} else {{
-                    alert('Selecione um bloco primeiro!');
+                    alert("Selecione um bloco primeiro!");
                 }}
             }}
 
             function limparDiagrama() {{
-                if (confirm('Deseja limpar todo o diagrama?')) {{
+                if (confirm("Deseja limpar todo o diagrama?")) {{
                     blocos = [];
                     conexoes = [];
                     blocoSelecionado = null;
-                    document.getElementById('canvas-container').innerHTML = '<svg id="conexoes-svg"></svg><div id="info-panel"><strong>📊 Instruções:</strong><div>• Clique nos botões para adicionar</div><div>• Arraste blocos para mover</div><div>• Clique nas portas verdes para conectar</div><div>• Clique no bloco para selecionar</div></div>';
+                    document.getElementById("canvas-container").innerHTML = '<svg id="conexoes-svg"></svg><div id="info-panel"><strong>📊 Instruções:</strong><div>• Clique nos botões para adicionar</div><div>• Arraste blocos para mover</div><div>• Clique nas portas verdes para conectar</div><div>• Clique no bloco para selecionar</div></div>';
                     salvarEstado();
                 }}
             }}
 
             function salvarEstado() {{
                 window.parent.postMessage({{
-                    type: 'salvar_diagrama',
+                    type: "salvar_diagrama",
                     blocos: blocos,
                     conexoes: conexoes,
                     contador: blocoIdCounter
-                }}, '*');
+                }}, "*");
             }}
 
             // Inicializar blocos existentes
             blocos.forEach(blocoData => {{
-                const container = document.getElementById('canvas-container');
-                const bloco = document.createElement('div');
-                bloco.className = 'bloco';
-                bloco.id = 'bloco-' + blocoData.id;
-                bloco.style.left = blocoData.x + 'px';
-                bloco.style.top = blocoData.y + 'px';
+                const container = document.getElementById("canvas-container");
+                const bloco = document.createElement("div");
+                bloco.className = "bloco";
+                bloco.id = "bloco-" + blocoData.id;
+                bloco.style.left = blocoData.x + "px";
+                bloco.style.top = blocoData.y + "px";
                 
                 let nomeDisplay = blocoData.config.nome || blocoData.tipo;
-                let tfDisplay = blocoData.config.tf || '';
+                let tfDisplay = blocoData.config.tf || "";
                 
                 bloco.innerHTML = `
                     <div class="bloco-tipo">${{blocoData.tipo}}</div>
                     <div class="bloco-nome">${{nomeDisplay}}</div>
-                    ${{tfDisplay ? '<div class="bloco-tf">' + tfDisplay + '</div>' : ''}}
+                    ${{tfDisplay ? '<div class="bloco-tf">' + tfDisplay + "</div>" : ""}}
                     <div class="porta porta-entrada" data-bloco="${{blocoData.id}}" data-tipo="entrada"></div>
                     <div class="porta porta-saida" data-bloco="${{blocoData.id}}" data-tipo="saida"></div>
                 `;
                 
                 container.appendChild(bloco);
-                bloco.addEventListener('mousedown', iniciarArrastar);
-                bloco.addEventListener('click', selecionarBloco);
+                bloco.addEventListener("mousedown", iniciarArrastar);
+                bloco.addEventListener("click", selecionarBloco);
                 
-                const portas = bloco.querySelectorAll('.porta');
+                const portas = bloco.querySelectorAll(".porta");
                 portas.forEach(porta => {{
-                    porta.addEventListener('click', clickPorta);
+                    porta.addEventListener("click", clickPorta);
                 }});
             }});
 
             redesenharConexoes();
             
             // Adicionar evento de mensagem para comunicação com Streamlit
-            window.addEventListener('message', function(event) {{
-                if (event.data.type === 'load_diagram') {{
+            window.addEventListener("message", function(event) {{
+                if (event.data.type === "load_diagram") {{
                     // Receber dados do Streamlit
                     blocos = event.data.blocos;
                     conexoes = event.data.conexoes;
                     blocoIdCounter = event.data.contador;
                     
                     // Redesenhar
-                    document.querySelectorAll('.bloco').forEach(b => b.remove());
+                    document.querySelectorAll(".bloco").forEach(b => b.remove());
                     redesenharConexoes();
                 }}
             }});
         </script>
     </body>
     </html>
-    """
+    '''
     return html_code
 
 def processar_diagrama_blocos():
