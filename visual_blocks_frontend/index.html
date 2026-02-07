@@ -1,0 +1,494 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Visual Blocks</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root{
+        --bg:#0f2b3a;
+        --panel:#16384a;
+        --panel2:#0b2230;
+        --card:#f5f7fb;
+        --accent:#22c55e;
+        --warn:#f59e0b;
+        --danger:#ef4444;
+        --muted:#94a3b8;
+      }
+      html,body{height:100%; margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;}
+      .wrap{height:100%; display:flex; flex-direction:column;}
+      .top{
+        display:grid; grid-template-columns: 1.2fr 1fr 1fr;
+        gap:10px; padding:10px; background:#ffffff;
+      }
+      .pill{
+        border-radius:6px; padding:10px 12px; background:#eef6ff; color:#0f172a;
+        display:flex; align-items:center; gap:8px; font-size:13px;
+        border:1px solid #e5e7eb;
+      }
+      .pill.ok{background:#ecfdf5;}
+      .pill .dot{width:8px; height:8px; border-radius:999px; background:#3b82f6;}
+      .pill.ok .dot{background:var(--accent);}
+      .bar{
+        display:flex; gap:8px; padding:10px; background:#1f4b63; align-items:center; flex-wrap:wrap;
+      }
+      .btn{
+        border:0; border-radius:8px; padding:7px 10px; font-size:12px; cursor:pointer;
+        color:white; background:#2563eb;
+        display:flex; align-items:center; gap:6px;
+        user-select:none;
+      }
+      .btn.orange{background:#f59e0b; color:#0f172a;}
+      .btn.green{background:#22c55e; color:#0f172a;}
+      .btn.purple{background:#a855f7;}
+      .btn.red{background:#ef4444;}
+      .btn.gray{background:#334155;}
+      .content{flex:1; display:flex; min-height:0;}
+      .canvasWrap{flex:1; position:relative; background:var(--bg); overflow:hidden;}
+      .canvas{
+        position:absolute; inset:0;
+        background-image:
+          linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px);
+        background-size: 24px 24px;
+      }
+      svg.wires{position:absolute; inset:0; pointer-events:none;}
+      .node{
+        position:absolute;
+        width:160px; min-height:58px;
+        border-radius:10px;
+        background:#ffffff;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+        border:1px solid rgba(15,23,42,0.15);
+        overflow:hidden;
+      }
+      .node .head{
+        display:flex; align-items:center; justify-content:space-between;
+        padding:8px 10px; background:#f1f5f9; font-size:12px; font-weight:650;
+      }
+      .node .body{padding:8px 10px; font-size:12px; color:#0f172a;}
+      .tag{font-size:11px; color:#334155; background:#e2e8f0; padding:2px 6px; border-radius:999px;}
+      .ports{position:absolute; inset:0; pointer-events:none;}
+      .port{
+        width:10px; height:10px; border-radius:999px;
+        background:#0ea5e9; position:absolute; pointer-events:auto; cursor:crosshair;
+        border:2px solid rgba(255,255,255,0.9);
+        box-shadow:0 4px 10px rgba(0,0,0,0.25);
+      }
+      .port.out{background:#22c55e;}
+      .port.in{background:#0ea5e9;}
+      .node.sel{outline:3px solid rgba(34,197,94,0.75);}
+      .side{
+        width:280px; background:#ffffff; border-left:1px solid #e5e7eb;
+        padding:10px; display:flex; flex-direction:column; gap:10px;
+      }
+      .card{border:1px solid #e5e7eb; border-radius:10px; padding:10px; background:#f8fafc;}
+      .card h4{margin:0 0 8px 0; font-size:13px;}
+      .kv{display:grid; grid-template-columns:1fr auto; gap:6px; font-size:12px;}
+      .hint{font-size:12px; color:#334155; line-height:1.3;}
+      .input{width:100%; padding:7px 8px; border-radius:8px; border:1px solid #cbd5e1; font-size:12px;}
+      .small{font-size:11px; color:#475569;}
+      .hr{height:1px; background:#e5e7eb; margin:8px 0;}
+      .kbd{font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; padding:2px 6px; border:1px solid #cbd5e1; border-bottom-width:2px; border-radius:6px; background:white;}
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="top">
+        <div class="pill"><span class="dot"></span><strong>Modo Editor Visual Ativo</strong>&nbsp;<span class="small">Construa sistemas de controle visualmente!</span></div>
+        <div class="pill ok"><span class="dot"></span><strong>Blocos:</strong>&nbsp;<span id="countNodes">0</span></div>
+        <div class="pill ok"><span class="dot"></span><strong>Conexões:</strong>&nbsp;<span id="countEdges">0</span></div>
+      </div>
+
+      <div class="bar">
+        <span class="small" style="color:#e2e8f0; font-weight:700; margin-right:6px;">BLOCOS:</span>
+        <button class="btn" data-add="tf">🧮 Função Transferência</button>
+        <button class="btn orange" data-add="gain">🔧 Ganho</button>
+        <button class="btn purple" data-add="int">∫ Integrador</button>
+        <button class="btn gray" data-add="der">d/dt Derivador</button>
+        <button class="btn orange" data-add="sum" title="Somador (ainda não é convertido no backend)">➕ Somador</button>
+        <button class="btn orange" data-add="sat" title="Saturação (tratada como 1 no backend)">⬆️/⬇️ Saturação</button>
+
+        <span style="flex:1"></span>
+        <span class="small" style="color:#e2e8f0; font-weight:700; margin-right:6px;">AÇÕES:</span>
+        <button class="btn red" id="btnDelete">🗑️ Deletar</button>
+        <button class="btn gray" id="btnDuplicate">📄 Duplicar</button>
+        <button class="btn red" id="btnClear">🧹 Limpar Tudo</button>
+        <button class="btn green" id="btnAuto">✨ Auto-organizar</button>
+      </div>
+
+      <div class="content">
+        <div class="canvasWrap" id="wrap">
+          <div class="canvas" id="canvas"></div>
+          <svg class="wires" id="wires"></svg>
+        </div>
+
+        <div class="side">
+          <div class="card">
+            <h4>📌 Informações do Sistema</h4>
+            <div class="kv"><div>Blocos:</div><div id="sideNodes">0</div></div>
+            <div class="kv"><div>Conexões:</div><div id="sideEdges">0</div></div>
+            <div class="kv"><div>Selecionado:</div><div id="sideSel">Nenhum</div></div>
+          </div>
+
+          <div class="card">
+            <h4>⚙️ Parâmetros do bloco</h4>
+            <div id="paramArea" class="hint">Selecione um bloco para editar.</div>
+          </div>
+
+          <div class="card">
+            <h4>💡 Dicas</h4>
+            <div class="hint">
+              • Arraste blocos para posicionar<br/>
+              • Clique num bloco para selecionar<br/>
+              • Clique no <span class="kbd">ponto verde</span> (saída) e depois no <span class="kbd">ponto azul</span> (entrada) para conectar<br/>
+              • <span class="kbd">Del</span> remove selecionado<br/>
+              • <span class="kbd">Ctrl+D</span> duplica selecionado
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Streamlit component lib -->
+    <script src="https://unpkg.com/streamlit-component-lib/dist/streamlit-component-lib.js"></script>
+    <script>
+      const wrap = document.getElementById("wrap");
+      const canvas = document.getElementById("canvas");
+      const wires = document.getElementById("wires");
+      const countNodes = document.getElementById("countNodes");
+      const countEdges = document.getElementById("countEdges");
+      const sideNodes = document.getElementById("sideNodes");
+      const sideEdges = document.getElementById("sideEdges");
+      const sideSel = document.getElementById("sideSel");
+      const paramArea = document.getElementById("paramArea");
+
+      let model = {nodes: [], edges: []};
+      let selId = null;
+      let drag = null; // {id,dx,dy}
+      let connectFrom = null; // {nodeId, port:"out"}
+
+      const randId = (p)=> p + "_" + Math.random().toString(16).slice(2) + Date.now().toString(16);
+
+      function updateCounters(){
+        countNodes.textContent = model.nodes.length;
+        countEdges.textContent = model.edges.length;
+        sideNodes.textContent = model.nodes.length;
+        sideEdges.textContent = model.edges.length;
+        sideSel.textContent = selId ? (model.nodes.find(n=>n.id===selId)?.label || selId) : "Nenhum";
+      }
+
+      function setSel(id){
+        selId = id;
+        document.querySelectorAll(".node").forEach(el=>{
+          el.classList.toggle("sel", el.dataset.id===id);
+        });
+        renderParams();
+        updateCounters();
+      }
+
+      function nodeTitle(type){
+        if(type==="tf") return "G(s)";
+        if(type==="sum") return "Σ";
+        if(type==="gain") return "K";
+        if(type==="int") return "1/s";
+        if(type==="der") return "s";
+        if(type==="sat") return "sat";
+        return type;
+      }
+
+      function defaultParams(type){
+        if(type==="tf") return {num:"1", den:"s+1"};
+        if(type==="gain") return {k:"1"};
+        if(type==="sum") return {signs:"+ +"};
+        if(type==="int") return {};
+        if(type==="der") return {};
+        if(type==="sat") return {min:"-1", max:"1"};
+        return {};
+      }
+
+      function addNode(type){
+        const r = wrap.getBoundingClientRect();
+        const n = {
+          id: randId("n"),
+          type,
+          label: nodeTitle(type),
+          x: Math.max(20, r.width*0.12 + Math.random()*60),
+          y: Math.max(30, r.height*0.2 + Math.random()*60),
+          params: defaultParams(type),
+        };
+        model.nodes.push(n);
+        render();
+        setSel(n.id);
+        pushToStreamlit();
+      }
+
+      function removeSelected(){
+        if(!selId) return;
+        model.edges = model.edges.filter(e => e.src!==selId && e.dst!==selId);
+        model.nodes = model.nodes.filter(n=>n.id!==selId);
+        selId = null;
+        render();
+        pushToStreamlit();
+      }
+
+      function duplicateSelected(){
+        if(!selId) return;
+        const n0 = model.nodes.find(n=>n.id===selId);
+        if(!n0) return;
+        const n = {...n0, id: randId("n"), x:n0.x+30, y:n0.y+30, params: {...n0.params}};
+        model.nodes.push(n);
+        render();
+        setSel(n.id);
+        pushToStreamlit();
+      }
+
+      function clearAll(){
+        model = {nodes: [], edges: []};
+        selId = null;
+        connectFrom = null;
+        render();
+        pushToStreamlit();
+      }
+
+      function autoArrange(){
+        const marginX = 40, marginY = 80;
+        let x = marginX, y = marginY;
+        model.nodes.forEach((n,i)=>{
+          n.x = x + i*200;
+          n.y = y;
+        });
+        render();
+        pushToStreamlit();
+      }
+
+      function edgeExists(src,dst){
+        return model.edges.some(e => e.src===src && e.dst===dst);
+      }
+
+      function connect(srcId, dstId){
+        if(srcId===dstId) return;
+        if(edgeExists(srcId,dstId)) return;
+        model.edges.push({id: randId("e"), src: srcId, srcPort:"out", dst: dstId, dstPort:"in"});
+        connectFrom = null;
+        render();
+        pushToStreamlit();
+      }
+
+      function getPortPos(nodeId, kind){
+        const nodeEl = document.querySelector(`.node[data-id="${nodeId}"]`);
+        if(!nodeEl) return {x:0,y:0};
+        const portEl = nodeEl.querySelector(`.port.${kind}`);
+        const r = portEl.getBoundingClientRect();
+        const rw = wrap.getBoundingClientRect();
+        return {x: r.left - rw.left + r.width/2, y: r.top - rw.top + r.height/2};
+      }
+
+      function renderWires(){
+        while(wires.firstChild) wires.removeChild(wires.firstChild);
+        const rw = wrap.getBoundingClientRect();
+        wires.setAttribute("width", rw.width);
+        wires.setAttribute("height", rw.height);
+
+        model.edges.forEach(e=>{
+          const a = getPortPos(e.src, "out");
+          const b = getPortPos(e.dst, "in");
+          const dx = Math.max(40, (b.x - a.x) * 0.5);
+          const c1 = {x: a.x + dx, y: a.y};
+          const c2 = {x: b.x - dx, y: b.y};
+
+          const path = document.createElementNS("http://www.w3.org/2000/svg","path");
+          const d = `M ${a.x} ${a.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${b.x} ${b.y}`;
+          path.setAttribute("d", d);
+          path.setAttribute("fill","none");
+          path.setAttribute("stroke","rgba(34,197,94,0.95)");
+          path.setAttribute("stroke-width","3");
+          path.setAttribute("stroke-linecap","round");
+          wires.appendChild(path);
+
+          const dot = document.createElementNS("http://www.w3.org/2000/svg","circle");
+          dot.setAttribute("cx", b.x);
+          dot.setAttribute("cy", b.y);
+          dot.setAttribute("r", 4.5);
+          dot.setAttribute("fill","rgba(34,197,94,1)");
+          wires.appendChild(dot);
+        });
+      }
+
+      function renderParams(){
+        if(!selId){
+          paramArea.innerHTML = `<div class="hint">Selecione um bloco para editar.</div>`;
+          return;
+        }
+        const n = model.nodes.find(n=>n.id===selId);
+        if(!n){
+          paramArea.innerHTML = `<div class="hint">Selecione um bloco para editar.</div>`;
+          return;
+        }
+
+        function inputRow(label, key, value){
+          return `
+            <div style="margin-bottom:8px;">
+              <div class="small" style="margin-bottom:4px;">${label}</div>
+              <input class="input" data-param="${key}" value="${String(value ?? "")}"/>
+            </div>
+          `;
+        }
+
+        let html = `<div class="small">Tipo: <strong>${n.type}</strong></div><div class="hr"></div>`;
+        if(n.type==="tf"){
+          html += inputRow("Numerador (em s)", "num", n.params.num);
+          html += inputRow("Denominador (em s)", "den", n.params.den);
+        }else if(n.type==="gain"){
+          html += inputRow("Ganho K", "k", n.params.k);
+        }else if(n.type==="sum"){
+          html += inputRow("Sinais (ex: + -)", "signs", n.params.signs);
+        }else if(n.type==="sat"){
+          html += inputRow("Min", "min", n.params.min);
+          html += inputRow("Max", "max", n.params.max);
+        }else{
+          html += `<div class="hint">Sem parâmetros para este bloco.</div>`;
+        }
+
+        paramArea.innerHTML = html;
+
+        paramArea.querySelectorAll("input[data-param]").forEach(inp=>{
+          inp.addEventListener("input", (ev)=>{
+            const k = ev.target.getAttribute("data-param");
+            n.params[k] = ev.target.value;
+            pushToStreamlitDebounced();
+          });
+        });
+      }
+
+      function render(){
+        canvas.querySelectorAll(".node").forEach(el=>el.remove());
+
+        model.nodes.forEach(n=>{
+          const el = document.createElement("div");
+          el.className = "node";
+          el.dataset.id = n.id;
+          el.style.left = `${n.x}px`;
+          el.style.top  = `${n.y}px`;
+
+          const bodyText = (n.type==="tf")
+            ? `${n.params.num || "1"} / ${n.params.den || "1"}`
+            : (n.type==="gain" ? `K=${n.params.k||"1"}` : "");
+
+          el.innerHTML = `
+            <div class="head">
+              <span>${n.label}</span>
+              <span class="tag">${n.type}</span>
+            </div>
+            <div class="body">${bodyText}</div>
+            <div class="ports">
+              <div class="port in"  style="left:-6px; top:50%; transform:translateY(-50%);" title="Entrada"></div>
+              <div class="port out" style="right:-6px; top:50%; transform:translateY(-50%);" title="Saída"></div>
+            </div>
+          `;
+
+          canvas.appendChild(el);
+
+          el.addEventListener("mousedown",(ev)=>{
+            if(ev.target.classList.contains("port")) return;
+            setSel(n.id);
+            drag = {id:n.id, dx: ev.offsetX, dy: ev.offsetY};
+          });
+
+          const portIn = el.querySelector(".port.in");
+          const portOut = el.querySelector(".port.out");
+
+          portOut.addEventListener("mousedown",(ev)=>{
+            ev.stopPropagation();
+            setSel(n.id);
+            connectFrom = {nodeId: n.id, port:"out"};
+          });
+
+          portIn.addEventListener("mousedown",(ev)=>{
+            ev.stopPropagation();
+            setSel(n.id);
+            if(connectFrom && connectFrom.port==="out"){
+              connect(connectFrom.nodeId, n.id);
+            }
+          });
+        });
+
+        document.querySelectorAll(".node").forEach(el=>{
+          el.classList.toggle("sel", el.dataset.id===selId);
+        });
+
+        updateCounters();
+        renderWires();
+        renderParams();
+      }
+
+      window.addEventListener("mousemove",(ev)=>{
+        if(!drag) return;
+        const n = model.nodes.find(n=>n.id===drag.id);
+        if(!n) return;
+        const rw = wrap.getBoundingClientRect();
+        n.x = Math.max(10, Math.min(rw.width-180, ev.clientX - rw.left - drag.dx));
+        n.y = Math.max(10, Math.min(rw.height-90, ev.clientY - rw.top - drag.dy));
+        const el = document.querySelector(`.node[data-id="${n.id}"]`);
+        if(el){
+          el.style.left = `${n.x}px`;
+          el.style.top  = `${n.y}px`;
+        }
+        renderWires();
+      });
+
+      window.addEventListener("mouseup", ()=>{
+        if(drag){
+          drag = null;
+          pushToStreamlit();
+        }
+      });
+
+      window.addEventListener("keydown",(ev)=>{
+        if(ev.key==="Delete") removeSelected();
+        if(ev.ctrlKey && (ev.key==="d" || ev.key==="D")){
+          ev.preventDefault();
+          duplicateSelected();
+        }
+      });
+
+      document.querySelectorAll("button[data-add]").forEach(btn=>{
+        btn.addEventListener("click", ()=> addNode(btn.getAttribute("data-add")));
+      });
+      document.getElementById("btnDelete").addEventListener("click", removeSelected);
+      document.getElementById("btnDuplicate").addEventListener("click", duplicateSelected);
+      document.getElementById("btnClear").addEventListener("click", clearAll);
+      document.getElementById("btnAuto").addEventListener("click", autoArrange);
+
+      let sendTimer = null;
+      function pushToStreamlit(){
+        if(window.Streamlit){
+          window.Streamlit.setComponentValue(JSON.stringify(model));
+          window.Streamlit.setFrameHeight(document.body.scrollHeight);
+        }
+      }
+      function pushToStreamlitDebounced(){
+        clearTimeout(sendTimer);
+        sendTimer = setTimeout(pushToStreamlit, 250);
+      }
+
+      function onRender(event){
+        const data = event.detail.args || {};
+        try{
+          const incoming = JSON.parse(data.model || "{}");
+          if(incoming && incoming.nodes && incoming.edges){
+            model = incoming;
+          }
+        }catch(err){}
+        render();
+        pushToStreamlit();
+      }
+
+      window.Streamlit.events.addEventListener(window.Streamlit.RENDER_EVENT, onRender);
+      window.Streamlit.setComponentReady();
+      window.Streamlit.setFrameHeight(document.body.scrollHeight);
+
+      new ResizeObserver(()=>{ renderWires(); window.Streamlit.setFrameHeight(document.body.scrollHeight); }).observe(wrap);
+    </script>
+  </body>
+</html>
