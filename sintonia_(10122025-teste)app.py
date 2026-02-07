@@ -43,7 +43,7 @@ import streamlit.components.v1 as components
 # (A) EDITOR VISUAL - componente embutido em 1 arquivo
 # =====================================================
 
-_EDITOR_FRONTEND_DIR = Path("/tmp/visual_blocks_frontend")
+_EDITOR_FRONTEND_DIR = Path(__file__).parent / 'visual_blocks_frontend'
 _EDITOR_INDEX = _EDITOR_FRONTEND_DIR / "index.html"
 
 _EDITOR_HTML = r"""
@@ -543,17 +543,7 @@ _EDITOR_HTML = r"""
 </html>
 """
 
-def _ensure_editor_frontend():
-    """Garante que o HTML do editor exista no filesystem (Streamlit Cloud permite escrever em /tmp)."""
-    try:
-        _EDITOR_FRONTEND_DIR.mkdir(parents=True, exist_ok=True)
-        if not _EDITOR_INDEX.exists():
-            _EDITOR_INDEX.write_text(_EDITOR_HTML, encoding="utf-8")
-    except Exception as e:
-        st.error(f"Falha ao preparar o editor visual: {e}")
-        st.stop()
-
-_ensure_editor_frontend()
+# (Frontend do componente fica em ./visual_blocks_frontend/index.html no repositório)
 
 # declara o componente
 _visual_blocks = components.declare_component("visual_blocks", path=str(_EDITOR_FRONTEND_DIR))
