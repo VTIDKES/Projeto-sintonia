@@ -1,134 +1,41 @@
 import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
-
-from uuid import uuid4
-from collections import defaultdict, deque
-
-# Diagrama/flow (React Flow via Streamlit component)
-from streamlit_flow import streamlit_flow
-from streamlit_flow.elements import StreamlitFlowNode, StreamlitFlowEdge
-from streamlit_flow.state import StreamlitFlowState
-
-# Controle clássico
 import control as ctrl
 
 
 # ============================================================
-# UI
+# Configuração Streamlit
 # ============================================================
-st.set_page_config(page_title="Mini-XCOS (Streamlit)", layout="wide")
+st.set_page_config(page_title="XCOS SISO - Controle Clássico", layout="wide")
 
-st.title("Mini-XCOS no Streamlit (SISO em série)")
-st.caption(
-    "Arraste/conecte blocos (INPUT → ... → OUTPUT). "
-    "O app interpreta uma cadeia em série (sem bifurcações) e simula: tempo, Bode, polos e zeros."
-)
+st.title("XCOS SISO (Malha Fechada) - Controle Clássico")
+st.caption("Modelo padrão: R(s) → Σ → C(s) → G(s) → Y(s) com feedback Y(s) → B(s) → Σ")
 
 
 # ============================================================
-# Helpers do Flow
+# Funções auxiliares
 # ============================================================
-def new_id(prefix: str) -> str:
-    return f"{prefix}_{uuid4()}"
-
-def default_node(node_type: str, x: int, y: int, label: str, params: dict):
-    return StreamlitFlowNode(
-        id=new_id("node"),
-        pos=(x, y),
-        data={"label": label, "params": params, "block_type": node_type},
-        node_type="default",
-        source_position="right",
-        target_position="left",
-    )
-
-def get_nodes_edges(state: StreamlitFlowState):
-    nodes = getattr(state, "nodes", None) or []
-    edges = getattr(state, "edges", None) or []
-    nd = {n.id: n for n in nodes}
-    ed = [(e.source, e.target) for e in edges]
-    return nd, ed
-
-def find_unique_path(edges, start, end):
+def parse_poly(text):
     """
-    Acha UM caminho start->end em grafo dirigido.
-    Se houver 0 ou >1 caminhos, retorna None.
+    Converte string "1, 2, 3" -> [1,2,3]
     """
-    g = defaultdict(list)
-    for s, t in edges:
-        g[s].append(t)
+    vals = []
+    for x in text.split(","):
+        x = x.strip()
+        if x != "":
+            vals.append(float(x))
+    return vals
 
-    q = deque([(start, [start])])
-    found_paths = []
+def make_tf(num_str, den_str):
+    num = parse_poly(num_str)
+    den = parse_poly(den_str)
+    if len(num) == 0 or len(den) == 0:
+        raise ValueError("Numerador ou denominador vazio.")
+    return ctrl.tf(num, den)
 
-    while q:
-        u, path = q.popleft()
-        if u == end:
-            found_paths.append(path)
-            if len(found_paths) > 1:
-                return None
-            continue
-
-        for v in g[u]:
-            if v in path:
-                continue
-            q.append((v, path + [v]))
-
-    if len(found_paths) == 1:
-        return found_paths[0]
-    return None
-
-
-# ============================================================
-# Blocos -> Função de Transferência
-# ============================================================
-def block_to_tf(node: StreamlitFlowNode):
-    data = node.data or {}
-    btype = data.get("block_type", "GAIN")
-    params = data.get("params", {})
-
-    if btype in ("INPUT", "OUTPUT"):
-        return ctrl.tf([1], [1])
-
-    if btype == "GAIN":
-        k = float(params.get("k", 1.0))
-        return ctrl.tf([k], [1])
-
-    if btype == "TF":
-        num_s = str(params.get("num", "1"))
-        den_s = str(params.get("den", "1, 1"))
-
-        def parse_poly(s):
-            vals = []
-            for x in s.split(","):
-                x = x.strip()
-                if x != "":
-                    vals.append(float(x))
-            return vals
-
-        num = parse_poly(num_s)
-        den = parse_poly(den_s)
-
-        if len(num) == 0 or len(den) == 0:
-            raise ValueError("TF inválida: num/den vazios.")
-
-        return ctrl.tf(num, den)
-
-    # fallback
-    return ctrl.tf([1], [1])
-
-def series_tf(nodes_in_path, node_map):
-    G = ctrl.tf([1], [1])
-    for nid in nodes_in_path:
-        G = ctrl.series(G, block_to_tf(node_map[nid]))
-    return G
-
-
-# ============================================================
-# Plots e análises
-# ============================================================
 def bode_plot(G, wmin=1e-2, wmax=1e2):
-    w = np.logspace(np.log10(wmin), np.log10(wmax), 600)
+    w = np.logspace(np.log10(wmin), np.log10(wmax), 800)
     mag, phase, omega = ctrl.bode_plot(G, w, plot=False)
 
     mag = np.array(mag).squeeze()
@@ -139,36 +46,24 @@ def bode_plot(G, wmin=1e-2, wmax=1e2):
 
     fig1 = plt.figure()
     plt.semilogx(omega, mag_db)
+    plt.grid(True, which="both")
     plt.xlabel("ω (rad/s)")
     plt.ylabel("|G(jω)| (dB)")
-    plt.grid(True, which="both")
-    plt.title("Bode — Magnitude")
+    plt.title("Bode - Magnitude")
 
     fig2 = plt.figure()
     plt.semilogx(omega, np.degrees(phase))
-    plt.xlabel("ω (rad/s)")
-    plt.ylabel("∠G(jω) (graus)")
     plt.grid(True, which="both")
-    plt.title("Bode — Fase")
+    plt.xlabel("ω (rad/s)")
+    plt.ylabel("Fase (graus)")
+    plt.title("Bode - Fase")
 
     return fig1, fig2
 
-def pz_data(G):
-    try:
-        poles = ctrl.poles(G)
-    except Exception:
-        poles = ctrl.pole(G)
+def pz_plot(G):
+    poles = np.array(ctrl.poles(G), dtype=complex).flatten()
+    zeros = np.array(ctrl.zeros(G), dtype=complex).flatten()
 
-    try:
-        zeros = ctrl.zeros(G)
-    except Exception:
-        zeros = ctrl.zero(G)
-
-    poles = np.array(poles, dtype=complex).flatten()
-    zeros = np.array(zeros, dtype=complex).flatten()
-    return poles, zeros
-
-def pz_plot(poles, zeros):
     fig = plt.figure()
     ax = plt.gca()
 
@@ -179,15 +74,16 @@ def pz_plot(poles, zeros):
 
     ax.axhline(0, linewidth=1)
     ax.axvline(0, linewidth=1)
-    ax.set_xlabel("Re")
-    ax.set_ylabel("Im")
-    ax.grid(True, which="both")
+    ax.grid(True)
+    ax.set_xlabel("Parte Real")
+    ax.set_ylabel("Parte Imaginária")
     ax.legend()
     ax.set_title("Plano-s (Polos e Zeros)")
-    return fig
 
-def time_response(G, kind="Degrau", tmax=10.0, n=2000, amp=1.0, freq_hz=1.0, duty=0.5):
-    t = np.linspace(0, float(tmax), int(n))
+    return fig, poles, zeros
+
+def time_response(G, kind, tmax, amp, freq_hz, duty, custom_expr=None):
+    t = np.linspace(0, float(tmax), 2500)
 
     if kind == "Degrau":
         tout, y = ctrl.step_response(G, T=t)
@@ -202,293 +98,236 @@ def time_response(G, kind="Degrau", tmax=10.0, n=2000, amp=1.0, freq_hz=1.0, dut
         tout, y, _ = ctrl.forced_response(G, T=t, U=u)
 
     elif kind == "Seno":
-        u = amp * np.sin(2 * np.pi * float(freq_hz) * t)
+        u = amp * np.sin(2*np.pi*freq_hz*t)
         tout, y, _ = ctrl.forced_response(G, T=t, U=u)
 
     elif kind == "Pulso":
-        period = 1.0 / max(float(freq_hz), 1e-9)
-        u = amp * (((t % period) / period) < float(duty)).astype(float)
+        period = 1.0 / max(freq_hz, 1e-9)
+        u = amp * (((t % period) / period) < duty).astype(float)
+        tout, y, _ = ctrl.forced_response(G, T=t, U=u)
+
+    elif kind == "Custom":
+        safe_globals = {"np": np}
+        safe_locals = {"t": t}
+        u = eval(custom_expr, safe_globals, safe_locals)
+        u = np.array(u, dtype=float).flatten()
+
+        if u.shape[0] != t.shape[0]:
+            raise ValueError("u(t) deve ter o mesmo tamanho do vetor t.")
+
         tout, y, _ = ctrl.forced_response(G, T=t, U=u)
 
     else:
-        raise ValueError("kind inválido.")
+        raise ValueError("Tipo de entrada inválida.")
 
     fig = plt.figure()
     plt.plot(tout, y, label="y(t)")
+    plt.grid(True)
     plt.xlabel("t (s)")
     plt.ylabel("Saída")
-    plt.grid(True)
+    plt.title(f"Resposta no tempo - {kind}")
 
     if u is not None:
         plt.plot(tout, u, "--", label="u(t)")
         plt.legend()
 
-    plt.title(f"Resposta no tempo — {kind}")
     return fig
 
 
 # ============================================================
-# Inicializa estado do diagrama (COM FIX DE VERSÃO)
+# Sidebar: Configuração do Sistema
 # ============================================================
-if "flow_state" not in st.session_state:
-    nodes = []
+st.sidebar.header("Configuração do Sistema")
 
-    n_in = StreamlitFlowNode(
-        id="IN",
-        pos=(50, 120),
-        data={"label": "INPUT", "params": {}, "block_type": "INPUT"},
-        node_type="input",
-        source_position="right",
-        target_position="left",
-    )
-    n_out = StreamlitFlowNode(
-        id="OUT",
-        pos=(900, 120),
-        data={"label": "OUTPUT", "params": {}, "block_type": "OUTPUT"},
-        node_type="output",
-        source_position="right",
-        target_position="left",
-    )
-    nodes.extend([n_in, n_out])
+usar_controlador = st.sidebar.checkbox("Incluir Controlador C(s)", value=True)
+usar_feedback = st.sidebar.checkbox("Incluir Feedback B(s)", value=True)
 
-    g0 = default_node("GAIN", 380, 120, "GAIN (k=2)", {"k": 2.0})
-    nodes.append(g0)
+tipo_feedback = st.sidebar.selectbox("Tipo de Feedback", ["Negativo (-)", "Positivo (+)"], index=0)
 
-    edges = [
-        StreamlitFlowEdge(id="e1", source="IN", target=g0.id, animated=True),
-        StreamlitFlowEdge(id="e2", source=g0.id, target="OUT", animated=True),
-    ]
+st.sidebar.divider()
 
-    # Criação compatível com versões diferentes do streamlit-flow-component
-    try:
-        st.session_state.flow_state = StreamlitFlowState(key="flow", nodes=nodes, edges=edges)
-    except TypeError:
-        try:
-            st.session_state.flow_state = StreamlitFlowState(nodes, edges, key="flow")
-        except TypeError:
-            st.session_state.flow_state = StreamlitFlowState(nodes, edges)
-            try:
-                st.session_state.flow_state.key = "flow"
-            except Exception:
-                pass
+st.sidebar.subheader("Planta G(s)")
+G_num = st.sidebar.text_input("Numerador G(s)", value="1")
+G_den = st.sidebar.text_input("Denominador G(s)", value="1, 1")
+
+st.sidebar.divider()
+
+if usar_controlador:
+    st.sidebar.subheader("Controlador C(s)")
+    C_num = st.sidebar.text_input("Numerador C(s)", value="1")
+    C_den = st.sidebar.text_input("Denominador C(s)", value="1")
+else:
+    C_num, C_den = "1", "1"
+
+st.sidebar.divider()
+
+if usar_feedback:
+    st.sidebar.subheader("Sensor/Feedback B(s)")
+    B_num = st.sidebar.text_input("Numerador B(s)", value="1")
+    B_den = st.sidebar.text_input("Denominador B(s)", value="1")
+else:
+    B_num, B_den = "1", "1"
+
+st.sidebar.divider()
+
+st.sidebar.subheader("Entrada e Simulação")
+
+entrada = st.sidebar.selectbox(
+    "Tipo de entrada",
+    ["Degrau", "Impulso", "Rampa", "Seno", "Pulso", "Custom"],
+    index=0
+)
+
+tmax = st.sidebar.number_input("Tempo máximo (s)", min_value=0.1, value=10.0, step=0.5)
+amp = st.sidebar.number_input("Amplitude", value=1.0, step=0.1)
+
+freq_hz = 1.0
+duty = 0.5
+custom_expr = "np.ones_like(t)"
+
+if entrada in ["Seno", "Pulso"]:
+    freq_hz = st.sidebar.number_input("Frequência (Hz)", min_value=0.0001, value=1.0, step=0.1)
+
+if entrada == "Pulso":
+    duty = st.sidebar.slider("Duty Cycle", min_value=0.05, max_value=0.95, value=0.5, step=0.05)
+
+if entrada == "Custom":
+    custom_expr = st.sidebar.text_area("u(t) =", value="2*np.sin(2*np.pi*1*t)")
+
+st.sidebar.divider()
+
+st.sidebar.subheader("Bode")
+wmin = st.sidebar.number_input("ω min", min_value=1e-6, value=1e-2, format="%.6f")
+wmax = st.sidebar.number_input("ω max", min_value=1e-6, value=1e2, format="%.6f")
 
 
 # ============================================================
-# Sidebar
+# Construção do sistema
 # ============================================================
-with st.sidebar:
-    st.subheader("Blocos")
-    st.write("Adicione blocos e conecte no diagrama (cadeia em série).")
+try:
+    Gs = make_tf(G_num, G_den)
+    Cs = make_tf(C_num, C_den)
+    Bs = make_tf(B_num, B_den)
 
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("➕ GAIN"):
-            st.session_state.flow_state.nodes.append(
-                default_node("GAIN", 380, 260, "GAIN (k=1)", {"k": 1.0})
-            )
-            st.rerun()
+    # Malha aberta
+    L = ctrl.series(Cs, Gs)
 
-    with c2:
-        if st.button("➕ TF"):
-            st.session_state.flow_state.nodes.append(
-                default_node("TF", 380, 400, "TF [1]/[1,1]", {"num": "1", "den": "1, 1"})
-            )
-            st.rerun()
-
-    st.divider()
-    st.subheader("Editar bloco (pelo ID)")
-    st.caption("Use o painel 'Estado (debug)' para ver o ID do nó (ou copie e cole).")
-
-    edit_id = st.text_input("ID do nó", value="")
-    if edit_id:
-        node_map, _ = get_nodes_edges(st.session_state.flow_state)
-        if edit_id in node_map:
-            n = node_map[edit_id]
-            data = n.data or {}
-            btype = data.get("block_type", "GAIN")
-            st.write(f"Tipo: **{btype}**")
-            params = data.get("params", {})
-
-            if btype == "GAIN":
-                k = st.number_input("k", value=float(params.get("k", 1.0)))
-                n.data["params"] = {"k": float(k)}
-                n.data["label"] = f"GAIN (k={k:g})"
-                if st.button("Salvar"):
-                    st.rerun()
-
-            elif btype == "TF":
-                num = st.text_input("num (ex: 1, 2)", value=str(params.get("num", "1")))
-                den = st.text_input("den (ex: 1, 2, 1)", value=str(params.get("den", "1, 1")))
-                n.data["params"] = {"num": num, "den": den}
-                n.data["label"] = f"TF [{num}] / [{den}]"
-                if st.button("Salvar"):
-                    st.rerun()
-            else:
-                st.info("INPUT/OUTPUT não são editáveis.")
+    # Feedback
+    if usar_feedback:
+        if tipo_feedback == "Negativo (-)":
+            T = ctrl.feedback(L, Bs, sign=-1)   # padrão de controle
         else:
-            st.warning("ID não encontrado no diagrama.")
+            T = ctrl.feedback(L, Bs, sign=+1)
+    else:
+        T = L
 
-    st.divider()
-    st.subheader("Simulação")
+except Exception as e:
+    st.error(f"Erro na criação do sistema: {e}")
+    st.stop()
 
-    entrada = st.selectbox(
-        "Entrada para resposta no tempo",
-        ["Degrau", "Impulso", "Rampa", "Seno", "Pulso", "Custom"],
-        index=0,
+
+# ============================================================
+# Mostrar diagrama (texto)
+# ============================================================
+st.subheader("Estrutura do Sistema (Modelo Padrão)")
+
+st.latex(r"R(s) \rightarrow \Sigma \rightarrow C(s) \rightarrow G(s) \rightarrow Y(s)")
+st.latex(r"Y(s) \rightarrow B(s) \rightarrow \Sigma")
+
+if tipo_feedback == "Negativo (-)":
+    st.write("🔁 Feedback configurado como: **NEGATIVO**")
+else:
+    st.write("🔁 Feedback configurado como: **POSITIVO**")
+
+
+# ============================================================
+# Resultados
+# ============================================================
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("Funções de Transferência")
+
+    st.write("### Planta G(s)")
+    st.code(str(Gs), language="text")
+
+    if usar_controlador:
+        st.write("### Controlador C(s)")
+        st.code(str(Cs), language="text")
+
+    if usar_feedback:
+        st.write("### Feedback B(s)")
+        st.code(str(Bs), language="text")
+
+    st.write("### Malha Aberta L(s) = C(s)G(s)")
+    st.code(str(L), language="text")
+
+    st.write("### Malha Fechada T(s)")
+    st.code(str(T), language="text")
+
+with col2:
+    st.subheader("Polos e Zeros da Malha Fechada")
+
+    fig_pz, poles, zeros = pz_plot(T)
+    st.pyplot(fig_pz, clear_figure=True)
+
+    st.write("### Polos")
+    if poles.size == 0:
+        st.write("Nenhum")
+    else:
+        st.code("\n".join([str(p) for p in poles]), language="text")
+
+    st.write("### Zeros")
+    if zeros.size == 0:
+        st.write("Nenhum")
+    else:
+        st.code("\n".join([str(z) for z in zeros]), language="text")
+
+
+st.divider()
+
+# ============================================================
+# Resposta no tempo
+# ============================================================
+st.subheader("Resposta no Tempo")
+
+try:
+    fig_time = time_response(
+        T,
+        kind=entrada,
+        tmax=tmax,
+        amp=amp,
+        freq_hz=freq_hz,
+        duty=duty,
+        custom_expr=custom_expr
     )
+    st.pyplot(fig_time, clear_figure=True)
+except Exception as e:
+    st.error(f"Erro na resposta no tempo: {e}")
 
-    tmax = st.number_input("Tempo máx (s)", min_value=0.1, value=10.0, step=0.5)
-    amp = st.number_input("Amplitude", value=1.0, step=0.1)
 
-    freq_hz = 1.0
-    duty = 0.5
-    custom_expr = "np.ones_like(t)"
-
-    if entrada in ["Seno", "Pulso"]:
-        freq_hz = st.number_input("Frequência (Hz)", min_value=0.0001, value=1.0, step=0.1)
-    if entrada == "Pulso":
-        duty = st.slider("Duty cycle", min_value=0.05, max_value=0.95, value=0.5, step=0.05)
-    if entrada == "Custom":
-        st.caption("Escreva u(t) usando numpy. Variável disponível: t (array). Ex: 2*np.sin(2*np.pi*1*t)")
-        custom_expr = st.text_area("u(t) =", value="2*np.sin(2*np.pi*1*t)")
-
-    st.divider()
-    st.subheader("Bode")
-    wmin = st.number_input("Bode ω min", min_value=1e-6, value=1e-2, format="%.6f")
-    wmax = st.number_input("Bode ω max", min_value=1e-6, value=1e2, format="%.6f")
-
+st.divider()
 
 # ============================================================
-# Layout principal
+# Bode
 # ============================================================
-left, right = st.columns([1.25, 1])
+st.subheader("Diagramas de Bode (Malha Fechada)")
 
-with left:
-    st.subheader("Diagrama")
+try:
+    fig_mag, fig_phase = bode_plot(T, wmin=wmin, wmax=wmax)
+    st.pyplot(fig_mag, clear_figure=True)
+    st.pyplot(fig_phase, clear_figure=True)
+except Exception as e:
+    st.error(f"Erro no Bode: {e}")
 
-    # Renderiza e captura estado atualizado (COM FIX DE VERSÃO)
-    try:
-        st.session_state.flow_state = streamlit_flow("flow", st.session_state.flow_state)
-    except TypeError:
-        st.session_state.flow_state = streamlit_flow(
-            "flow",
-            st.session_state.flow_state.nodes,
-            st.session_state.flow_state.edges
-        )
 
-    with st.expander("Estado (debug)"):
-        st.json(
-            {
-                "nodes": [
-                    {
-                        "id": n.id,
-                        "label": (n.data or {}).get("label"),
-                        "block_type": (n.data or {}).get("block_type"),
-                    }
-                    for n in st.session_state.flow_state.nodes
-                ],
-                "edges": [
-                    {"source": e.source, "target": e.target}
-                    for e in st.session_state.flow_state.edges
-                ],
-            }
-        )
+st.divider()
 
-with right:
-    st.subheader("Resultados")
-
-    node_map, edge_list = get_nodes_edges(st.session_state.flow_state)
-
-    if "IN" not in node_map or "OUT" not in node_map:
-        st.error("Faltou INPUT/OUTPUT no diagrama.")
-        st.stop()
-
-    path = find_unique_path(edge_list, "IN", "OUT")
-    if path is None:
-        st.error(
-            "Não consegui achar um caminho ÚNICO IN → OUT.\n\n"
-            "✅ Deixe apenas uma cadeia em série (sem bifurcações/paralelo/loops)."
-        )
-        st.stop()
-
-    middle = [nid for nid in path if nid not in ("IN", "OUT")]
-
-    try:
-        G = series_tf(middle, node_map)
-        st.write("**Função de Transferência equivalente:**")
-        st.code(str(G), language="text")
-    except Exception as e:
-        st.error(f"Erro montando a função de transferência: {e}")
-        st.stop()
-
-    # -------------------------
-    # Resposta no tempo
-    # -------------------------
-    try:
-        if entrada == "Custom":
-            t = np.linspace(0, float(tmax), 2000)
-
-            # Segurança mínima: só permite np e t
-            safe_globals = {"np": np}
-            safe_locals = {"t": t}
-
-            u = eval(custom_expr, safe_globals, safe_locals)
-            u = np.array(u, dtype=float).flatten()
-
-            if u.shape[0] != t.shape[0]:
-                raise ValueError("u(t) deve ter o mesmo tamanho de t.")
-
-            tout, y, _ = ctrl.forced_response(G, T=t, U=u)
-
-            fig_time = plt.figure()
-            plt.plot(tout, y, label="y(t)")
-            plt.plot(tout, u, "--", label="u(t)")
-            plt.xlabel("t (s)")
-            plt.ylabel("Saída")
-            plt.grid(True)
-            plt.legend()
-            plt.title("Resposta no tempo — Custom")
-            st.pyplot(fig_time, clear_figure=True)
-        else:
-            fig_time = time_response(G, kind=entrada, tmax=tmax, amp=amp, freq_hz=freq_hz, duty=duty)
-            st.pyplot(fig_time, clear_figure=True)
-    except Exception as e:
-        st.error(f"Erro na resposta no tempo: {e}")
-        st.stop()
-
-    # -------------------------
-    # Bode
-    # -------------------------
-    try:
-        fig_mag, fig_phase = bode_plot(G, wmin=wmin, wmax=wmax)
-        st.pyplot(fig_mag, clear_figure=True)
-        st.pyplot(fig_phase, clear_figure=True)
-    except Exception as e:
-        st.error(f"Erro no Bode: {e}")
-
-    # -------------------------
-    # Polos e Zeros
-    # -------------------------
-    try:
-        poles, zeros = pz_data(G)
-
-        cA, cB = st.columns(2)
-        with cA:
-            st.write("**Polos:**")
-            if poles.size == 0:
-                st.write("Nenhum")
-            else:
-                st.code("\n".join([str(p) for p in poles]), language="text")
-
-        with cB:
-            st.write("**Zeros:**")
-            if zeros.size == 0:
-                st.write("Nenhum")
-            else:
-                st.code("\n".join([str(z) for z in zeros]), language="text")
-
-        fig_pz = pz_plot(poles, zeros)
-        st.pyplot(fig_pz, clear_figure=True)
-
-    except Exception as e:
-        st.error(f"Erro em polos/zeros: {e}")
+# ============================================================
+# Informação final
+# ============================================================
+st.info(
+    "Este app implementa o padrão clássico SISO: "
+    "R(s) → Σ → C(s) → G(s) → Y(s) com feedback Y(s) → B(s) → Σ. "
+    "Ideal para modelagem de sistemas de controle no estilo XCOS/Simulink."
+)
