@@ -1,1210 +1,473 @@
-# -*- coding: utf-8 -*-
-"""
-Sistema de Modelagem e Análise de Sistemas de Controle
-Otimizado para Streamlit Cloud
-Versão com Diagrama de Blocos Visual
-"""
+def criar_diagrama_blocos_html():
+    """Cria o editor visual de diagrama de blocos"""
+    blocos_data = json.dumps(st.session_state.diagrama_blocos['blocos'])
+    conexoes_data = json.dumps(st.session_state.diagrama_blocos['conexoes'])
+    contador = st.session_state.bloco_contador
+    
+    # Usar substituição direta
+    html_template = '''<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+        #canvas-container {
+            width: 100%;
+            height: 600px;
+            background: linear-gradient(#f0f0f0 1px, transparent 1px),
+                        linear-gradient(90deg, #f0f0f0 1px, transparent 1px);
+            background-size: 20px 20px;
+            position: relative;
+            border: 2px solid #ddd;
+            cursor: crosshair;
+        }
+        .bloco {
+            position: absolute;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            cursor: move;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            min-width: 120px;
+            text-align: center;
+            user-select: none;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        .bloco:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+        }
+        .bloco.selecionado {
+            border: 3px solid #ffd700;
+            box-shadow: 0 0 20px rgba(255,215,0,0.5);
+        }
+        .bloco-tipo {
+            font-size: 10px;
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+        .bloco-nome {
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+        .bloco-tf {
+            font-size: 11px;
+            font-family: 'Courier New', monospace;
+            background: rgba(0,0,0,0.2);
+            padding: 5px;
+            border-radius: 4px;
+            margin-top: 5px;
+        }
+        .porta {
+            width: 12px;
+            height: 12px;
+            background: #4CAF50;
+            border: 2px solid white;
+            border-radius: 50%;
+            position: absolute;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .porta:hover {
+            background: #45a049;
+            transform: scale(1.3);
+        }
+        .porta-entrada {
+            left: -6px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        .porta-saida {
+            right: -6px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        .toolbar {
+            background: #333;
+            color: white;
+            padding: 10px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.3s;
+        }
+        .btn:hover {
+            background: #5568d3;
+        }
+        .btn-danger {
+            background: #e74c3c;
+        }
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+        svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        #info-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255,255,255,0.95);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-width: 250px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <button class="btn" onclick="adicionarBlocoTransferencia()">➕ Função Transferência</button>
+        <button class="btn" onclick="adicionarBlocoSomador()">⊕ Somador</button>
+        <button class="btn" onclick="adicionarBlocoGanho()">📊 Ganho</button>
+        <button class="btn" onclick="adicionarBlocoIntegrador()">∫ Integrador</button>
+        <button class="btn" onclick="adicionarBlocoAtraso()">⏱️ Atraso</button>
+        <button class="btn" onclick="adicionarBlocoFeedback()">🔄 Feedback</button>
+        <button class="btn btn-danger" onclick="removerSelecionado()">🗑️ Remover</button>
+        <button class="btn btn-danger" onclick="limparDiagrama()">🔄 Limpar</button>
+    </div>
+    
+    <div id="canvas-container">
+        <svg id="conexoes-svg"></svg>
+        <div id="info-panel">
+            <strong>📊 Instruções:</strong>
+            <div>• Clique nos botões para adicionar blocos</div>
+            <div>• Arraste blocos para mover</div>
+            <div>• Clique nas portas verdes para conectar</div>
+            <div>• Clique no bloco para selecionar</div>
+        </div>
+    </div>
 
-import streamlit as st
-import pandas as pd
-import numpy as np
-import sympy as sp
-from sympy.parsing.sympy_parser import parse_expr
-import control as ctrl
-from control import TransferFunction, margin, step_response, forced_response, root_locus
-from scipy import signal
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+    <script>
+        let blocos = BLOCOS_DATA;
+        let conexoes = CONEXOES_DATA;
+        let blocoIdCounter = CONTADOR;
+        let blocoSelecionado = null;
+        let portaSelecionada = null;
+        let arrastandoBloco = null;
+        let offsetX = 0, offsetY = 0;
 
-# =====================================================
-# CONFIGURAÇÕES E CONSTANTES
-# =====================================================
-
-# Opções de análise
-ANALYSIS_OPTIONS = {
-    "malha_aberta": ["Resposta no tempo", "Desempenho", "Diagrama de Polos e Zeros",
-                    "Diagrama De Bode Magnitude", "Diagrama De Bode Fase", "Nyquist"],
-    "malha_fechada": ["Resposta no tempo", "Desempenho", "Diagrama de Polos e Zeros",
-                     "Diagrama De Bode Magnitude", "Diagrama De Bode Fase", "LGR"]
-}
-
-# Sinais de entrada
-INPUT_SIGNALS = ['Degrau', 'Rampa', 'Senoidal', 'Impulso', 'Parabólica']
-
-# =====================================================
-# FUNÇÕES AUXILIARES
-# =====================================================
-
-def formatar_numero(valor):
-    """Formata números para exibição amigável"""
-    if np.isinf(valor):
-        return '∞'
-    elif np.isnan(valor):
-        return '-'
-    else:
-        return f"{valor:.3f}"
-
-# =====================================================
-# DIAGRAMA DE BLOCOS - NOVA FUNCIONALIDADE
-# =====================================================
-
-def criar_diagrama_blocos(tipo_malha="Malha Aberta", ganho_k=1.0):
-    """
-    Cria um diagrama de blocos visual usando Plotly
-    
-    Args:
-        tipo_malha: "Malha Aberta" ou "Malha Fechada"
-        ganho_k: Valor do ganho K
-    
-    Returns:
-        fig: Figura Plotly com o diagrama de blocos
-    """
-    df = st.session_state.blocos
-    
-    # Criar figura
-    fig = go.Figure()
-    
-    # Configurações de layout
-    block_width = 1.2
-    block_height = 0.6
-    spacing_x = 2.0
-    
-    # Cores dos blocos
-    cores = {
-        'Planta': '#FF6B6B',
-        'Controlador': '#4ECDC4',
-        'Sensor': '#95E1D3',
-        'Ganho': '#FFD93D',
-        'Outro': '#A8DADC'
-    }
-    
-    if tipo_malha == "Malha Aberta":
-        # Diagrama de Malha Aberta
-        x_positions = []
-        current_x = 0
-        
-        # Entrada
-        fig.add_trace(go.Scatter(
-            x=[current_x - 1], y=[0],
-            mode='markers+text',
-            marker=dict(size=15, color='green', symbol='arrow-right'),
-            text=['R(s)'],
-            textposition='top center',
-            textfont=dict(size=14, color='green'),
-            showlegend=False,
-            hoverinfo='skip'
-        ))
-        
-        # Ganho K (se aplicável)
-        if ganho_k != 1.0:
-            fig.add_shape(
-                type="rect",
-                x0=current_x, y0=-block_height/2,
-                x1=current_x + block_width, y1=block_height/2,
-                fillcolor=cores['Ganho'],
-                line=dict(color='black', width=2)
-            )
-            fig.add_annotation(
-                x=current_x + block_width/2, y=0,
-                text=f"K = {ganho_k:.2f}",
-                showarrow=False,
-                font=dict(size=12, color='black', family='Arial Black')
-            )
-            current_x += spacing_x
-        
-        # Controlador (se existir)
-        controlador = df[df['tipo'] == 'Controlador']
-        if not controlador.empty:
-            fig.add_shape(
-                type="rect",
-                x0=current_x, y0=-block_height/2,
-                x1=current_x + block_width, y1=block_height/2,
-                fillcolor=cores['Controlador'],
-                line=dict(color='black', width=2)
-            )
-            fig.add_annotation(
-                x=current_x + block_width/2, y=0,
-                text=f"C(s)<br>{controlador.iloc[0]['nome']}",
-                showarrow=False,
-                font=dict(size=10, color='black')
-            )
-            current_x += spacing_x
-        
-        # Planta
-        planta = df[df['tipo'] == 'Planta']
-        if not planta.empty:
-            fig.add_shape(
-                type="rect",
-                x0=current_x, y0=-block_height/2,
-                x1=current_x + block_width, y1=block_height/2,
-                fillcolor=cores['Planta'],
-                line=dict(color='black', width=2)
-            )
-            fig.add_annotation(
-                x=current_x + block_width/2, y=0,
-                text=f"G(s)<br>{planta.iloc[0]['nome']}",
-                showarrow=False,
-                font=dict(size=10, color='black')
-            )
-            current_x += spacing_x
-        
-        # Saída
-        fig.add_trace(go.Scatter(
-            x=[current_x], y=[0],
-            mode='markers+text',
-            marker=dict(size=15, color='blue', symbol='arrow-right'),
-            text=['Y(s)'],
-            textposition='top center',
-            textfont=dict(size=14, color='blue'),
-            showlegend=False,
-            hoverinfo='skip'
-        ))
-        
-        # Linhas de conexão
-        for i in range(int(current_x / spacing_x)):
-            x_start = i * spacing_x - (1 if i == 0 else 0) + (block_width if i > 0 else 0)
-            x_end = (i + 1) * spacing_x if i < int(current_x / spacing_x) - 1 else current_x
-            fig.add_shape(
-                type="line",
-                x0=x_start, y0=0,
-                x1=x_end, y1=0,
-                line=dict(color='black', width=2)
-            )
-    
-    else:  # Malha Fechada
-        y_feedback = -1.5
-        current_x = 0
-        
-        # Entrada e somador
-        fig.add_trace(go.Scatter(
-            x=[-1], y=[0],
-            mode='markers+text',
-            marker=dict(size=15, color='green', symbol='arrow-right'),
-            text=['R(s)'],
-            textposition='top center',
-            textfont=dict(size=14, color='green'),
-            showlegend=False,
-            hoverinfo='skip'
-        ))
-        
-        # Somador (círculo)
-        fig.add_shape(
-            type="circle",
-            x0=current_x - 0.2, y0=-0.2,
-            x1=current_x + 0.2, y1=0.2,
-            fillcolor='white',
-            line=dict(color='black', width=2)
-        )
-        fig.add_annotation(
-            x=current_x - 0.15, y=0.15,
-            text="+",
-            showarrow=False,
-            font=dict(size=16, color='black')
-        )
-        fig.add_annotation(
-            x=current_x - 0.15, y=-0.15,
-            text="-",
-            showarrow=False,
-            font=dict(size=16, color='black')
-        )
-        
-        current_x += spacing_x
-        
-        # Ganho K (se aplicável)
-        if ganho_k != 1.0:
-            fig.add_shape(
-                type="rect",
-                x0=current_x, y0=-block_height/2,
-                x1=current_x + block_width, y1=block_height/2,
-                fillcolor=cores['Ganho'],
-                line=dict(color='black', width=2)
-            )
-            fig.add_annotation(
-                x=current_x + block_width/2, y=0,
-                text=f"K = {ganho_k:.2f}",
-                showarrow=False,
-                font=dict(size=12, color='black', family='Arial Black')
-            )
-            current_x += spacing_x
-        
-        # Controlador
-        controlador = df[df['tipo'] == 'Controlador']
-        if not controlador.empty:
-            fig.add_shape(
-                type="rect",
-                x0=current_x, y0=-block_height/2,
-                x1=current_x + block_width, y1=block_height/2,
-                fillcolor=cores['Controlador'],
-                line=dict(color='black', width=2)
-            )
-            fig.add_annotation(
-                x=current_x + block_width/2, y=0,
-                text=f"C(s)<br>{controlador.iloc[0]['nome']}",
-                showarrow=False,
-                font=dict(size=10, color='black')
-            )
-            current_x += spacing_x
-        
-        # Planta
-        planta = df[df['tipo'] == 'Planta']
-        planta_x = current_x
-        if not planta.empty:
-            fig.add_shape(
-                type="rect",
-                x0=current_x, y0=-block_height/2,
-                x1=current_x + block_width, y1=block_height/2,
-                fillcolor=cores['Planta'],
-                line=dict(color='black', width=2)
-            )
-            fig.add_annotation(
-                x=current_x + block_width/2, y=0,
-                text=f"G(s)<br>{planta.iloc[0]['nome']}",
-                showarrow=False,
-                font=dict(size=10, color='black')
-            )
-            current_x += spacing_x
-        
-        # Ponto de saída
-        output_x = current_x
-        fig.add_trace(go.Scatter(
-            x=[output_x], y=[0],
-            mode='markers',
-            marker=dict(size=8, color='black'),
-            showlegend=False,
-            hoverinfo='skip'
-        ))
-        
-        # Saída
-        fig.add_trace(go.Scatter(
-            x=[output_x + 0.5], y=[0],
-            mode='markers+text',
-            marker=dict(size=15, color='blue', symbol='arrow-right'),
-            text=['Y(s)'],
-            textposition='top center',
-            textfont=dict(size=14, color='blue'),
-            showlegend=False,
-            hoverinfo='skip'
-        ))
-        
-        # Sensor (na realimentação)
-        sensor = df[df['tipo'] == 'Sensor']
-        feedback_x = planta_x + block_width/2
-        
-        if not sensor.empty:
-            fig.add_shape(
-                type="rect",
-                x0=feedback_x - block_width/2, y0=y_feedback - block_height/2,
-                x1=feedback_x + block_width/2, y1=y_feedback + block_height/2,
-                fillcolor=cores['Sensor'],
-                line=dict(color='black', width=2)
-            )
-            fig.add_annotation(
-                x=feedback_x, y=y_feedback,
-                text=f"H(s)<br>{sensor.iloc[0]['nome']}",
-                showarrow=False,
-                font=dict(size=10, color='black')
-            )
-        else:
-            # Sensor unitário
-            fig.add_annotation(
-                x=feedback_x, y=y_feedback,
-                text="H(s) = 1",
-                showarrow=False,
-                font=dict(size=10, color='gray')
-            )
-        
-        # Linhas de conexão (malha direta)
-        fig.add_shape(
-            type="line",
-            x0=-1, y0=0,
-            x1=-0.2, y1=0,
-            line=dict(color='black', width=2)
-        )
-        
-        for i in range(1, int(current_x / spacing_x)):
-            x_start = (i - 1) * spacing_x + block_width + (spacing_x if ganho_k == 1.0 and i == 1 else 0)
-            x_end = i * spacing_x + (spacing_x if ganho_k == 1.0 and i == 1 else 0)
-            fig.add_shape(
-                type="line",
-                x0=x_start, y0=0,
-                x1=x_end, y1=0,
-                line=dict(color='black', width=2)
-            )
-        
-        # Linha de saída
-        fig.add_shape(
-            type="line",
-            x0=current_x - spacing_x + block_width, y0=0,
-            x1=output_x + 0.5, y1=0,
-            line=dict(color='black', width=2)
-        )
-        
-        # Linha de realimentação (vertical e horizontal)
-        fig.add_shape(
-            type="line",
-            x0=output_x, y0=0,
-            x1=output_x, y1=y_feedback,
-            line=dict(color='black', width=2)
-        )
-        fig.add_shape(
-            type="line",
-            x0=output_x, y0=y_feedback,
-            x1=feedback_x + block_width/2, y1=y_feedback,
-            line=dict(color='black', width=2)
-        )
-        fig.add_shape(
-            type="line",
-            x0=feedback_x - block_width/2, y0=y_feedback,
-            x1=0.2, y1=y_feedback,
-            line=dict(color='black', width=2)
-        )
-        fig.add_shape(
-            type="line",
-            x0=0.2, y0=y_feedback,
-            x1=0.2, y1=-0.2,
-            line=dict(color='black', width=2)
-        )
-    
-    # Configurações finais do layout
-    fig.update_layout(
-        title={
-            'text': f"Diagrama de Blocos - {tipo_malha}",
-            'x': 0.5,
-            'xanchor': 'center',
-            'font': {'size': 18, 'color': '#2C3E50', 'family': 'Arial Black'}
-        },
-        showlegend=False,
-        xaxis=dict(
-            showgrid=False,
-            showticklabels=False,
-            zeroline=False,
-            range=[-2, current_x + 1] if tipo_malha == "Malha Aberta" else [-2, output_x + 1]
-        ),
-        yaxis=dict(
-            showgrid=False,
-            showticklabels=False,
-            zeroline=False,
-            range=[-2.5, 1] if tipo_malha == "Malha Fechada" else [-1, 1],
-            scaleanchor="x",
-            scaleratio=1
-        ),
-        plot_bgcolor='white',
-        height=400 if tipo_malha == "Malha Aberta" else 500,
-        margin=dict(l=20, r=20, t=60, b=20)
-    )
-    
-    return fig
-
-# =====================================================
-# FUNÇÕES DE TRANSFERÊNCIA
-# =====================================================
-
-def converter_para_tf(numerador_str, denominador_str):
-    """Converte strings de numerador e denominador em uma função de transferência"""
-    s = sp.Symbol('s')
-    num = parse_expr(numerador_str.replace('^', '**'), local_dict={'s': s})
-    den = parse_expr(denominador_str.replace('^', '**'), local_dict={'s': s})
-    
-    num, den = sp.fraction(sp.together(num / den))
-    num_coeffs = [float(c) for c in sp.Poly(num, s).all_coeffs()]
-    den_coeffs = [float(c) for c in sp.Poly(den, s).all_coeffs()]
-    
-    if den_coeffs and den_coeffs[0] != 1:
-        fator = den_coeffs[0]
-        num_coeffs = [c / fator for c in num_coeffs]
-        den_coeffs = [c / fator for c in den_coeffs]
-    
-    return TransferFunction(num_coeffs, den_coeffs), (num, den)
-
-def tipo_do_sistema(G):
-    """Determina o tipo do sistema (número de integradores)"""
-    G_min = ctrl.minreal(G, verbose=False)
-    polos = ctrl.poles(G_min)
-    tipo = sum(1 for p in polos if np.isclose(np.real_if_close(p), 0.0, atol=1e-3))
-    return tipo
-
-def constantes_de_erro(G):
-    """Calcula as constantes de erro (Kp, Kv, Ka)"""
-    s = ctrl.tf('s')
-    G_min = ctrl.minreal(G, verbose=False)
-    tipo = tipo_do_sistema(G_min)
-    
-    Kp = Kv = Ka = np.inf
-    try:
-        if tipo == 0:
-            Kp = ctrl.dcgain(G_min)
-        elif tipo == 1:
-            Kv = ctrl.dcgain(s * G_min)
-        elif tipo >= 2:
-            Ka = ctrl.dcgain(s**2 * G_min)
-    except Exception:
-        pass
-    
-    if tipo == 0:
-        Kv = Ka = np.inf
-    elif tipo == 1:
-        Kp = 0
-        Ka = np.inf
-    elif tipo >= 2:
-        Kp = Kv = 0
-    
-    return tipo, Kp, Kv, Ka
-
-def calcular_malha_fechada(planta, controlador=None, sensor=None):
-    """Calcula a função de transferência de malha fechada"""
-    if controlador is None:
-        controlador = TransferFunction([1], [1])
-    if sensor is None:
-        sensor = TransferFunction([1], [1])
-    
-    G = controlador * planta
-    H = sensor
-    return ctrl.feedback(G, H)
-
-# =====================================================
-# ANÁLISE DE SISTEMAS
-# =====================================================
-
-def calcular_desempenho(tf):
-    """Calcula métricas de desempenho do sistema"""
-    den = tf.den[0][0]
-    ordem = len(den) - 1
-    polos = ctrl.poles(tf)
-    gm, pm, wg, wp = margin(tf)
-    gm_db = 20 * np.log10(gm) if gm != np.inf and gm > 0 else np.inf
-    
-    resultado = {
-        'Margem de ganho': f"{formatar_numero(gm)} ({'∞' if gm == np.inf else f'{formatar_numero(gm_db)} dB'})",
-        'Margem de fase': f"{formatar_numero(pm)}°",
-        'Freq. cruz. fase': f"{formatar_numero(wg)} rad/s",
-        'Freq. cruz. ganho': f"{formatar_numero(wp)} rad/s"
-    }
-    
-    if ordem == 1:
-        return _desempenho_ordem1(polos, resultado)
-    elif ordem == 2:
-        return _desempenho_ordem2(polos, resultado)
-    elif ordem >= 3:
-        return _desempenho_ordem_superior(polos, ordem, resultado)
-
-def _desempenho_ordem1(polos, resultado):
-    """Calcula desempenho para sistemas de 1ª ordem"""
-    tau = -1 / polos[0].real
-    resultado.update({
-        'Tipo': '1ª Ordem',
-        'Const. tempo (τ)': f"{formatar_numero(tau)} s",
-        'Temp. subida (Tr)': f"{formatar_numero(2.2 * tau)} s",
-        'Temp. acomodação (Ts)': f"{formatar_numero(4 * tau)} s",
-        'Freq. natural (ωn)': f"{formatar_numero(1/tau)} rad/s",
-        'Fator amortec. (ζ)': "1.0"
-    })
-    return resultado
-
-def _desempenho_ordem2(polos, resultado):
-    """Calcula desempenho para sistemas de 2ª ordem"""
-    wn = np.sqrt(np.prod(np.abs(polos))).real
-    zeta = -np.real(polos[0]) / wn
-    wd = wn * np.sqrt(1 - zeta**2) if zeta < 1 else 0
-    Mp = np.exp(-zeta * np.pi / np.sqrt(1 - zeta**2)) * 100 if zeta < 1 and zeta > 0 else 0
-    Tr = (np.pi - np.arccos(zeta)) / wd if zeta < 1 and wd > 0 else float('inf')
-    Tp = np.pi / wd if wd > 0 else float('inf')
-    Ts = 4 / (zeta * wn) if zeta * wn > 0 else float('inf')
-    
-    resultado.update({
-        'Tipo': '2ª Ordem',
-        'Freq. natural (ωn)': f"{formatar_numero(wn)} rad/s",
-        'Fator amortec. (ζ)': f"{formatar_numero(zeta)}",
-        'Freq. amortec. (ωd)': f"{formatar_numero(wd)} rad/s",
-        'Sobressinal (Mp)': f"{formatar_numero(Mp)}%",
-        'Temp. subida (Tr)': f"{formatar_numero(Tr)} s",
-        'Temp. pico (Tp)': f"{formatar_numero(Tp)} s",
-        'Temp. acomodação (Ts)': f"{formatar_numero(Ts)} s"
-    })
-    return resultado
-
-def _desempenho_ordem_superior(polos, ordem, resultado):
-    """Calcula desempenho para sistemas de ordem superior"""
-    polos_ordenados = sorted(polos, key=lambda p: np.real(p), reverse=True)
-    polo_dominante = None
-    par_dominante = None
-    
-    for i in range(len(polos_ordenados) - 1):
-        p1, p2 = polos_ordenados[i], polos_ordenados[i+1]
-        if np.isclose(p1.real, p2.real, atol=1e-2) and np.isclose(p1.imag, -p2.imag, atol=1e-2):
-            par_dominante = (p1, p2)
-            break
-    
-    if par_dominante:
-        sigma = -np.real(par_dominante[0])
-        omega_d = np.abs(np.imag(par_dominante[0]))
-        wn = np.sqrt(sigma**2 + omega_d**2)
-        zeta = sigma / wn if wn > 0 else 0
-    else:
-        polo_dominante = polos_ordenados[0]
-        wn = np.abs(polo_dominante)
-        zeta = -np.real(polo_dominante) / wn if wn != 0 else 0
-        omega_d = wn * np.sqrt(1 - zeta**2) if zeta < 1 else 0
-    
-    Mp = np.exp(-zeta * np.pi / np.sqrt(1 - zeta**2)) * 100 if zeta < 1 and zeta > 0 else 0
-    Tr = (np.pi - np.arccos(zeta)) / omega_d if zeta < 1 and omega_d > 0 else float('inf')
-    Tp = np.pi / omega_d if omega_d > 0 else float('inf')
-    Ts = 4 / (zeta * wn) if zeta * wn > 0 else float('inf')
-    
-    resultado.update({
-        'Tipo': f'{ordem}ª Ordem (Par dominante)' if par_dominante else f'{ordem}ª Ordem (Polo dominante)',
-        'Freq. natural (ωn)': f"{formatar_numero(wn)} rad/s",
-        'Fator amortec. (ζ)': f"{formatar_numero(zeta)}",
-        'Freq. amortec. (ωd)': f"{formatar_numero(omega_d)} rad/s",
-        'Sobressinal (Mp)': f"{formatar_numero(Mp)} %",
-        'Temp. subida (Tr)': f"{formatar_numero(Tr)} s",
-        'Temp. pico (Tp)': f"{formatar_numero(Tp)} s",
-        'Temp. acomodação (Ts)': f"{formatar_numero(Ts)} s",
-        'Observação': 'Cálculo baseado no par dominante' if par_dominante else 'Cálculo baseado no polo dominante'
-    })
-    return resultado
-
-def estimar_tempo_final_simulacao(tf):
-    """Estima o tempo final para simulação baseado nos polos do sistema"""
-    polos = ctrl.poles(tf)
-    if len(polos) == 0:
-        return 50.0
-    if any(np.real(p) > 1e-6 for p in polos):
-        return 20.0
-    partes_reais_estaveis = [np.real(p) for p in polos if np.real(p) < -1e-6]
-    if not partes_reais_estaveis:
-        return 100.0
-    sigma_dominante = max(partes_reais_estaveis)
-    ts_estimado = 4 / abs(sigma_dominante)
-    tempo_final = ts_estimado * 1.5
-    return np.clip(tempo_final, a_min=10, a_max=500)
-
-# =====================================================
-# FUNÇÕES DE PLOTAGEM
-# =====================================================
-
-def configurar_linhas_interativas(fig):
-    """Adiciona suporte para desenhar linhas horizontais e verticais em gráficos"""
-    fig.update_layout(
-        dragmode='zoom',
-        newshape=dict(
-            line=dict(color='green', width=2, dash='dash')
-        ),
-        modebar_add=[
-            'drawline',
-            'drawopenpath',
-            'drawclosedpath',
-            'drawcircle',
-            'drawrect',
-            'eraseshape'
-        ]
-    )
-    return fig
-
-def plot_polos_zeros(tf, fig=None):
-    """Diagrama de Polos e Zeros interativo"""
-    zeros = ctrl.zeros(tf)
-    polos = ctrl.poles(tf)
-    
-    if fig is None:
-        fig = go.Figure()
-    
-    if len(zeros) > 0:
-        fig.add_trace(go.Scatter(
-            x=np.real(zeros),
-            y=np.imag(zeros),
-            mode='markers',
-            marker=dict(symbol='circle', size=12, color='blue'),
-            name='Zeros',
-            hovertemplate='Zero<br>Real: %{x:.3f}<br>Imaginário: %{y:.3f}<extra></extra>'
-        ))
-    
-    if len(polos) > 0:
-        fig.add_trace(go.Scatter(
-            x=np.real(polos),
-            y=np.imag(polos),
-            mode='markers',
-            marker=dict(symbol='x', size=12, color='red'),
-            name='Polos',
-            hovertemplate='Polo<br>Real: %{x:.3f}<br>Imaginário: %{y:.3f}<extra></extra>'
-        ))
-    
-    fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.7)
-    fig.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.7)
-    
-    fig.update_layout(
-        title='Diagrama de Polos e Zeros (Interativo)',
-        xaxis_title='Parte Real',
-        yaxis_title='Parte Imaginária',
-        showlegend=True,
-        hovermode='closest'
-    )
-    
-    fig = configurar_linhas_interativas(fig)
-    return fig
-
-def _gerar_sinal_entrada(entrada, t):
-    """Gera sinais de entrada para simulação"""
-    sinais = {
-        'Degrau': np.ones_like(t),
-        'Rampa': t,
-        'Senoidal': np.sin(2*np.pi*t),
-        'Impulso': np.concatenate([[1], np.zeros(len(t)-1)]),
-        'Parabólica': t**2
-    }
-    return sinais[entrada]
-
-def plot_resposta_temporal(sistema, entrada):
-    """Resposta temporal interativa"""
-    tempo_final = estimar_tempo_final_simulacao(sistema)
-    t = np.linspace(0, tempo_final, 1000)
-    u = _gerar_sinal_entrada(entrada, t)
-    
-    if entrada == 'Degrau':
-        t_out, y = step_response(sistema, t)
-    else:
-        t_out, y, _ = forced_response(sistema, t, u, return_x=True)
-    
-    fig = go.Figure()
-    
-    fig.add_trace(go.Scatter(
-        x=t_out,
-        y=u[:len(t_out)],
-        mode='lines',
-        line=dict(dash='dash', color='blue'),
-        name='Entrada',
-        hovertemplate='Tempo: %{x:.2f}s<br>Entrada: %{y:.3f}<extra></extra>'
-    ))
-    
-    fig.add_trace(go.Scatter(
-        x=t_out,
-        y=y,
-        mode='lines',
-        line=dict(color='red'),
-        name='Saída',
-        hovertemplate='Tempo: %{x:.2f}s<br>Saída: %{y:.3f}<extra></extra>'
-    ))
-    
-    fig.update_layout(
-        title=f'Resposta Temporal - Entrada: {entrada}',
-        xaxis_title='Tempo (s)',
-        yaxis_title='Amplitude',
-        showlegend=True,
-        hovermode='x unified'
-    )
-    
-    fig = configurar_linhas_interativas(fig)
-    return fig, t_out, y
-
-def plot_bode(sistema, tipo='both'):
-    """Diagrama de Bode interativo"""
-    numerator = sistema.num[0][0]
-    denominator = sistema.den[0][0]
-    sys = signal.TransferFunction(numerator, denominator)
-    w = np.logspace(-3, 3, 1000)
-    w, mag, phase = signal.bode(sys, w)
-    
-    if tipo == 'both':
-        fig = make_subplots(
-            rows=2, cols=1,
-            subplot_titles=('Diagrama de Bode - Magnitude', 'Diagrama de Bode - Fase'),
-            vertical_spacing=0.1
-        )
-        
-        fig.add_trace(
-            go.Scatter(
-                x=w, y=mag,
-                mode='lines',
-                line=dict(color='blue', width=3),
-                name='Magnitude',
-                hovertemplate='Freq: %{x:.2f} rad/s<br>Magnitude: %{y:.2f} dB<extra></extra>',
-                showlegend=False
-            ),
-            row=1, col=1
-        )
-        
-        fig.add_trace(
-            go.Scatter(
-                x=w, y=phase,
-                mode='lines',
-                line=dict(color='red', width=3),
-                name='Fase',
-                hovertemplate='Freq: %{x:.2f} rad/s<br>Fase: %{y:.2f}°<extra></extra>',
-                showlegend=False
-            ),
-            row=2, col=1
-        )
-        
-        fig.update_xaxes(title_text="Frequência (rad/s)", type="log", row=1, col=1)
-        fig.update_xaxes(title_text="Frequência (rad/s)", type="log", row=2, col=1)
-        fig.update_yaxes(title_text="Magnitude (dB)", row=1, col=1)
-        fig.update_yaxes(title_text="Fase (deg)", row=2, col=1)
-        
-        fig.update_layout(height=700, title_text="Diagrama de Bode")
-        
-    elif tipo == 'magnitude':
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=w, y=mag,
-            mode='lines',
-            line=dict(color='blue', width=3),
-            name='Magnitude',
-            hovertemplate='Freq: %{x:.2f} rad/s<br>Magnitude: %{y:.2f} dB<extra></extra>'
-        ))
-        fig.update_layout(
-            title='Diagrama de Bode - Magnitude',
-            xaxis_title="Frequência (rad/s)",
-            yaxis_title="Magnitude (dB)",
-            xaxis_type='log'
-        )
-    else:
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=w, y=phase,
-            mode='lines',
-            line=dict(color='red', width=3),
-            name='Fase',
-            hovertemplate='Freq: %{x:.2f} rad/s<br>Fase: %{y:.2f}°<extra></extra>'
-        ))
-        fig.update_layout(
-            title='Diagrama de Bode - Fase',
-            xaxis_title="Frequência (rad/s)",
-            yaxis_title="Fase (deg)",
-            xaxis_type='log'
-        )
-    
-    fig = configurar_linhas_interativas(fig)
-    return fig
-
-def plot_lgr(sistema):
-    """Lugar Geométrico das Raízes interativo"""
-    rlist, klist = root_locus(sistema, plot=False)
-    
-    fig = go.Figure()
-    
-    for i, r in enumerate(rlist.T):
-        fig.add_trace(go.Scatter(
-            x=np.real(r),
-            y=np.imag(r),
-            mode='lines',
-            line=dict(color='blue', width=1),
-            name=f'Ramo {i+1}',
-            showlegend=False,
-            hovertemplate='Real: %{x:.3f}<br>Imaginário: %{y:.3f}<extra></extra>'
-        ))
-    
-    zeros = ctrl.zeros(sistema)
-    polos = ctrl.poles(sistema)
-    
-    if len(zeros) > 0:
-        fig.add_trace(go.Scatter(
-            x=np.real(zeros),
-            y=np.imag(zeros),
-            mode='markers',
-            marker=dict(symbol='circle', size=10, color='green'),
-            name='Zeros',
-            hovertemplate='Zero<br>Real: %{x:.3f}<br>Imaginário: %{y:.3f}<extra></extra>'
-        ))
-    
-    if len(polos) > 0:
-        fig.add_trace(go.Scatter(
-            x=np.real(polos),
-            y=np.imag(polos),
-            mode='markers',
-            marker=dict(symbol='x', size=12, color='red'),
-            name='Polos',
-            hovertemplate='Polo<br>Real: %{x:.3f}<br>Imaginário: %{y:.3f}<extra></extra>'
-        ))
-    
-    fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.7)
-    fig.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.7)
-    
-    fig.update_layout(
-        title='Lugar Geométrico das Raízes (LGR)',
-        xaxis_title='Parte Real',
-        yaxis_title='Parte Imaginária',
-        showlegend=True,
-        hovermode='closest'
-    )
-    
-    fig = configurar_linhas_interativas(fig)
-    return fig
-
-def plot_nyquist(sistema):
-    """Diagrama de Nyquist interativo"""
-    sistema_scipy = signal.TransferFunction(sistema.num[0][0], sistema.den[0][0])
-    w = np.logspace(-2, 2, 1000)
-    _, H = signal.freqresp(sistema_scipy, w)
-    
-    fig = go.Figure()
-    
-    fig.add_trace(go.Scatter(
-        x=H.real,
-        y=H.imag,
-        mode='lines',
-        line=dict(color='blue', width=2),
-        name='Nyquist',
-        hovertemplate='Real: %{x:.3f}<br>Imaginário: %{y:.3f}<extra></extra>'
-    ))
-    
-    fig.add_trace(go.Scatter(
-        x=H.real,
-        y=-H.imag,
-        mode='lines',
-        line=dict(dash='dash', color='gray', width=1),
-        name='Reflexo simétrico',
-        hovertemplate='Real: %{x:.3f}<br>Imaginário: %{y:.3f}<extra></extra>'
-    ))
-    
-    fig.add_trace(go.Scatter(
-        x=[-1],
-        y=[0],
-        mode='markers',
-        marker=dict(symbol='circle', size=12, color='red'),
-        name='Ponto crítico (-1,0)',
-        hovertemplate='Ponto Crítico<br>Real: -1<br>Imaginário: 0<extra></extra>'
-    ))
-    
-    fig.add_hline(y=0, line_color="black", line_width=1)
-    fig.add_vline(x=0, line_color="black", line_width=1)
-    
-    fig.update_layout(
-        title='Diagrama de Nyquist',
-        xaxis_title='Parte Real',
-        yaxis_title='Parte Imaginária',
-        showlegend=True,
-        hovermode='closest'
-    )
-    
-    fig = configurar_linhas_interativas(fig)
-    
-    polos = ctrl.poles(sistema)
-    polos_spd = sum(1 for p in polos if np.real(p) > 0)
-    voltas = 0
-    Z = polos_spd + voltas
-    
-    return fig, polos_spd, voltas, Z
-
-# =====================================================
-# GERENCIAMENTO DE BLOCOS
-# =====================================================
-
-def inicializar_blocos():
-    """Inicializa o estado dos blocos se não existir"""
-    if 'blocos' not in st.session_state:
-        st.session_state.blocos = pd.DataFrame(columns=['nome', 'tipo', 'numerador', 'denominador', 'tf', 'tf_simbolico'])
-
-def adicionar_bloco(nome, tipo, numerador, denominador):
-    """Adiciona um novo bloco ao sistema"""
-    try:
-        tf, tf_symb = converter_para_tf(numerador, denominador)
-        novo = pd.DataFrame([{
-            'nome': nome,
-            'tipo': tipo,
-            'numerador': numerador,
-            'denominador': denominador,
-            'tf': tf,
-            'tf_simbolico': tf_symb
-        }])
-        st.session_state.blocos = pd.concat([st.session_state.blocos, novo], ignore_index=True)
-        return True, f"Bloco {nome} adicionado."
-    except Exception as e:
-        return False, f"Erro na conversão: {e}"
-
-def remover_bloco(nome):
-    """Remove um bloco pelo nome"""
-    st.session_state.blocos = st.session_state.blocos[st.session_state.blocos['nome'] != nome]
-    return f"Bloco {nome} excluído."
-
-def obter_bloco_por_tipo(tipo):
-    """Obtém o primeiro bloco de um tipo específico"""
-    df = st.session_state.blocos
-    if any(df['tipo'] == tipo):
-        return df[df['tipo'] == tipo].iloc[0]['tf']
-    return None
-
-# =====================================================
-# APLICAÇÃO PRINCIPAL
-# =====================================================
-
-def main():
-    st.set_page_config(page_title="Modelagem de Sistemas", layout="wide")
-    st.title("📉 Modelagem e Análise de Sistemas de Controle")
-    
-    inicializar_blocos()
-    
-    if 'calculo_erro_habilitado' not in st.session_state:
-        st.session_state.calculo_erro_habilitado = False
-    
-    if 'mostrar_ajuda' not in st.session_state:
-        st.session_state.mostrar_ajuda = False
-    
-    if 'mostrar_diagrama' not in st.session_state:
-        st.session_state.mostrar_diagrama = True
-    
-    # Sidebar
-    with st.sidebar:
-        st.header("🧱 Adicionar Blocos")
-        nome = st.text_input("Nome", value="G1")
-        tipo = st.selectbox("Tipo", ['Planta', 'Controlador', 'Sensor', 'Outro'])
-        numerador = st.text_input("Numerador", placeholder="ex: 4*s")
-        denominador = st.text_input("Denominador", placeholder="ex: s^2 + 2*s + 3")
-        
-        if st.button("➕ Adicionar"):
-            sucesso, mensagem = adicionar_bloco(nome, tipo, numerador, denominador)
-            if sucesso:
-                st.success(mensagem)
-            else:
-                st.error(mensagem)
-        
-        if not st.session_state.blocos.empty:
-            st.header("🗑️ Excluir Blocos")
-            excluir = st.selectbox("Selecionar", st.session_state.blocos['nome'])
-            if st.button("❌ Excluir"):
-                mensagem = remover_bloco(excluir)
-                st.success(mensagem)
-        
-        st.header("⚙️ Configurações")
-        if st.button("🔢 Habilitar Cálculo de Erro" if not st.session_state.calculo_erro_habilitado else "❌ Desabilitar Cálculo de Erro"):
-            st.session_state.calculo_erro_habilitado = not st.session_state.calculo_erro_habilitado
-            st.rerun()
-        
-        if st.button("📊 Mostrar Diagrama" if not st.session_state.mostrar_diagrama else "📊 Ocultar Diagrama"):
-            st.session_state.mostrar_diagrama = not st.session_state.mostrar_diagrama
-            st.rerun()
-    
-    # Cálculo de Erro
-    if st.session_state.calculo_erro_habilitado:
-        st.subheader("📊 Cálculo de Erro Estacionário")
-        col1, col2 = st.columns(2)
-        with col1:
-            num_erro = st.text_input("Numerador", value="", key="num_erro")
-        with col2:
-            den_erro = st.text_input("Denominador", value="", key="den_erro")
-        
-        btn_col1, btn_col2 = st.columns(2)
-        with btn_col1:
-            if st.button("🔍 Calcular Erro Estacionário"):
-                try:
-                    G, _ = converter_para_tf(num_erro, den_erro)
-                    tipo, Kp, Kv, Ka = constantes_de_erro(G)
-                    
-                    df = pd.DataFrame([{"Tipo": tipo, "Kp": Kp, "Kv": Kv, "Ka": Ka}])
-                    st.subheader("📊 Resultado")
-                    st.dataframe(
-                        df.style.format({
-                            "Kp": lambda x: formatar_numero(x),
-                            "Kv": lambda x: formatar_numero(x),
-                            "Ka": lambda x: formatar_numero(x)
-                        }),
-                        height=120,
-                        use_container_width=True
-                    )
-                except Exception as e:
-                    st.error(f"Erro: {str(e)}")
-        
-        with btn_col2:
-            if st.button("🗑️ Remover Planta", key="remover_planta"):
-                if not st.session_state.blocos.empty:
-                    st.session_state.blocos = st.session_state.blocos[st.session_state.blocos['tipo'] != 'Planta']
-                    st.success("Plantas removidas com sucesso!")
-                else:
-                    st.warning("Nenhuma planta para remover")
-    else:
-        st.info("💡 Use o botão 'Habilitar Cálculo de Erro' na aba ao lado esquerdo para ativar esta funcionalidade")
-    
-    # Configuração da Simulação
-    col1, col2 = st.columns([2, 1])
-    
-    with col2:
-        st.subheader("🔍 Tipo de Sistema")
-        tipo_malha = st.selectbox("Tipo:", ["Malha Aberta", "Malha Fechada"])
-        usar_ganho = st.checkbox("Adicionar ganho K ajustável", value=False)
-        
-        if usar_ganho:
-            K = st.slider(
-                "Ganho K",
-                min_value=0.1,
-                max_value=100.0,
-                value=1.0,
-                step=0.1,
-                key="ganho_k_slider",
-                help="Ajuste o ganho K do sistema"
-            )
-            st.info(f"✅ Ganho K aplicado: {K:.2f}")
-        else:
-            K = 1.0
-        
-        st.subheader("📊 Análises desejadas")
-        analise_opcoes = ANALYSIS_OPTIONS["malha_fechada" if tipo_malha == "Malha Fechada" else "malha_aberta"]
-        analises = st.multiselect("Escolha:", analise_opcoes, default=analise_opcoes[0])
-        entrada = st.selectbox("Sinal de Entrada", INPUT_SIGNALS)
-    
-    # Diagrama de Blocos (NOVA FUNCIONALIDADE)
-    if st.session_state.mostrar_diagrama and not st.session_state.blocos.empty:
-        st.markdown("---")
-        st.subheader("🔷 Diagrama de Blocos do Sistema")
-        
-        try:
-            fig_diagrama = criar_diagrama_blocos(tipo_malha, K)
-            st.plotly_chart(fig_diagrama, use_container_width=True)
+        function adicionarBloco(tipo, config) {
+            const container = document.getElementById("canvas-container");
+            const bloco = document.createElement("div");
+            bloco.className = "bloco";
+            bloco.id = "bloco-" + blocoIdCounter;
             
-            # Mostrar lista de blocos ativos
-            with st.expander("📋 Blocos Ativos no Sistema", expanded=False):
-                blocos_display = st.session_state.blocos[['nome', 'tipo', 'numerador', 'denominador']].copy()
-                st.dataframe(blocos_display, use_container_width=True, hide_index=True)
-                
-        except Exception as e:
-            st.error(f"Erro ao gerar diagrama: {e}")
-    
-    # Simulação Principal
-    with col1:
-        st.subheader("📈 Resultados da Simulação")
-        
-        col_sim, col_ajuda = st.columns([2, 1])
-        
-        with col_sim:
-            if st.button("▶️ Executar Simulação", use_container_width=True):
-                try:
-                    df = st.session_state.blocos
-                    if df.empty:
-                        st.warning("Adicione blocos primeiro.")
-                        st.stop()
-                    
-                    planta = obter_bloco_por_tipo('Planta')
-                    controlador = obter_bloco_por_tipo('Controlador')
-                    sensor = obter_bloco_por_tipo('Sensor')
-                    
-                    if planta is None:
-                        st.error("Adicione pelo menos um bloco do tipo Planta.")
-                        st.stop()
-                    
-                    ganho_tf = TransferFunction([K], [1])
-                    
-                    if tipo_malha == "Malha Aberta":
-                        sistema = ganho_tf * planta
-                        st.info(f"🔧 Sistema em Malha Aberta com K = {K:.2f}")
-                    else:
-                        planta_com_ganho = ganho_tf * planta
-                        sistema = calcular_malha_fechada(planta_com_ganho, controlador, sensor)
-                        st.info(f"🔧 Sistema em Malha Fechada com K = {K:.2f}")
-                    
-                    for analise in analises:
-                        st.markdown(f"### 🔎 {analise}")
-                        
-                        if analise == 'Resposta no tempo':
-                            fig, t_out, y = plot_resposta_temporal(sistema, entrada)
-                            st.plotly_chart(fig, use_container_width=True)
-                            st.caption("💡 Use as ferramentas de desenho na barra superior")
-                        
-                        elif analise == 'Desempenho':
-                            desempenho = calcular_desempenho(sistema)
-                            for chave, valor in desempenho.items():
-                                st.markdown(f"**{chave}:** {valor}")
-                        
-                        elif analise == 'Diagrama De Bode Magnitude':
-                            fig = plot_bode(sistema, 'magnitude')
-                            st.plotly_chart(fig, use_container_width=True)
-                        
-                        elif analise == 'Diagrama De Bode Fase':
-                            fig = plot_bode(sistema, 'fase')
-                            st.plotly_chart(fig, use_container_width=True)
-                        
-                        elif analise == 'Diagrama de Polos e Zeros':
-                            fig = plot_polos_zeros(sistema)
-                            st.plotly_chart(fig, use_container_width=True)
-                        
-                        elif analise == 'LGR':
-                            fig = plot_lgr(sistema)
-                            st.plotly_chart(fig, use_container_width=True)
-                        
-                        elif analise == 'Nyquist':
-                            fig, polos_spd, voltas, Z = plot_nyquist(sistema)
-                            st.markdown(f"**Polos no semiplano direito (P):** {polos_spd}")
-                            st.markdown(f"**Voltas no -1 (N):** {voltas}")
-                            st.markdown(f"**Z = N + P = {Z} → {'✅ Estável' if Z == 0 else '❌ Instável'}**")
-                            st.plotly_chart(fig, use_container_width=True)
-                
-                except Exception as e:
-                    st.error(f"Erro durante a simulação: {e}")
-                    import traceback
-                    st.code(traceback.format_exc())
-        
-        with col_ajuda:
-            if st.button("❓ Ajuda", use_container_width=True):
-                st.session_state.mostrar_ajuda = True
-    
-    # Modal de Ajuda
-    if st.session_state.mostrar_ajuda:
-        with st.container():
-            st.markdown("---")
-            st.subheader("🎯 Guia de Uso - Sistema de Análise de Controle")
+            const blocoData = {
+                id: blocoIdCounter,
+                tipo: tipo,
+                x: 100 + Math.random() * 200,
+                y: 100 + Math.random() * 200,
+                config: config
+            };
             
-            col_guide1, col_guide2 = st.columns(2)
+            blocos.push(blocoData);
             
-            with col_guide1:
-                st.markdown("### 📋 Passo a Passo")
-                st.markdown("""
-                1. **🧱 Adicionar Blocos**: Na barra lateral, adicione pelo menos um bloco do tipo **Planta**
-                2. **🔧 Configurar**: Escolha o tipo de sistema (Malha Aberta/Fechada)
-                3. **📊 Visualizar Diagrama**: O diagrama de blocos é gerado automaticamente
-                4. **📊 Selecionar Análises**: Escolha quais gráficos e análises deseja ver
-                5. **🎛️ Ajustar Parâmetros**: Use o ganho K se necessário
-                6. **▶️ Executar**: Clique em "Executar Simulação" para ver os resultados
-                7. **✏️ Desenhar**: Use as ferramentas de desenho nos gráficos
-                """)
-                
-                st.markdown("### 🔍 Exemplos de Funções de Transferência")
-                st.markdown("""
-                - **1ª Ordem**: `1/(s+1)`
-                - **2ª Ordem**: `1/(s^2 + 2*s + 1)`
-                - **Integrador**: `1/s`
-                - **Sistema com zero**: `(s+1)/(s^2 + 2*s + 2)`
-                """)
+            bloco.style.left = blocoData.x + "px";
+            bloco.style.top = blocoData.y + "px";
             
-            with col_guide2:
-                st.markdown("### 🔍 Tipos de Análise")
-                st.markdown("""
-                - **Resposta no tempo**: Comportamento temporal do sistema
-                - **Desempenho**: Métricas como sobressinal, tempo de acomodação
-                - **Diagrama de Bode**: Resposta em frequência
-                - **Polos e Zeros**: Estabilidade do sistema
-                - **LGR**: Lugar Geométrico das Raízes
-                - **Nyquist**: Análise de estabilidade
-                """)
-                
-                st.markdown("### 🔷 Diagrama de Blocos (NOVO)")
-                st.markdown("""
-                - **Visualização automática** do sistema
-                - **Cores diferentes** para cada tipo de bloco
-                - **Atualização dinâmica** conforme você adiciona blocos
-                - **Representa** tanto malha aberta quanto fechada
-                """)
-                
-                st.markdown("### ⚠️ Dicas Importantes")
-                st.markdown("""
-                - Sempre comece adicionando uma **Planta**
-                - Use **Controlador** para sistemas em malha fechada
-                - O **Sensor** é opcional (padrão = 1)
-                - Verifique se a função de transferência está correta
-                """)
+            let nomeDisplay = config.nome || tipo;
+            let tfDisplay = config.tf || "";
             
-            if st.button("✅ Entendi, Fechar Ajuda"):
-                st.session_state.mostrar_ajuda = False
-                st.rerun()
-    
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### 💡 Dica Rápida")
-    st.sidebar.info("""
-    Comece adicionando uma **Planta** e
-    execute a simulação para ver os
-    resultados básicos.
-    
-    🔷 **Novidade**: Diagrama de blocos
-    visual gerado automaticamente!
-    
-    ✏️ Todos os gráficos possuem
-    ferramentas de desenho!
-    """)
+            bloco.innerHTML = `
+                <div class="bloco-tipo">${tipo}</div>
+                <div class="bloco-nome">${nomeDisplay}</div>
+                ${tfDisplay ? '<div class="bloco-tf">' + tfDisplay + "</div>" : ""}
+                <div class="porta porta-entrada" data-bloco="${blocoIdCounter}" data-tipo="entrada"></div>
+                <div class="porta porta-saida" data-bloco="${blocoIdCounter}" data-tipo="saida"></div>
+            `;
+            
+            container.appendChild(bloco);
+            
+            bloco.addEventListener("mousedown", iniciarArrastar);
+            bloco.addEventListener("click", selecionarBloco);
+            
+            const portas = bloco.querySelectorAll(".porta");
+            portas.forEach(porta => {
+                porta.addEventListener("click", clickPorta);
+            });
+            
+            blocoIdCounter++;
+            salvarEstado();
+        }
 
-if __name__ == "__main__":
-    main()
+        function adicionarBlocoTransferencia() {
+            const num = prompt("Numerador (ex: 1, s+1):", "1");
+            if (num === null) return;
+            const den = prompt("Denominador (ex: s+1, s^2+2*s+1):", "s+1");
+            if (den === null) return;
+            adicionarBloco("Transferência", {
+                nome: "G" + blocoIdCounter,
+                numerador: num,
+                denominador: den,
+                tf: num + " / " + den
+            });
+        }
+
+        function adicionarBlocoSomador() {
+            adicionarBloco("Somador", {nome: "Σ" + blocoIdCounter});
+        }
+
+        function adicionarBlocoGanho() {
+            const ganho = prompt("Valor do ganho K:", "1");
+            if (ganho === null) return;
+            adicionarBloco("Ganho", {nome: "K=" + ganho, valor: ganho, tf: ganho});
+        }
+
+        function adicionarBlocoIntegrador() {
+            adicionarBloco("Integrador", {nome: "∫", tf: "1/s"});
+        }
+
+        function adicionarBlocoAtraso() {
+            const atraso = prompt("Tempo de atraso τ:", "1");
+            if (atraso === null) return;
+            adicionarBloco("Atraso", {nome: "τ=" + atraso, tf: "e^{ -" + atraso + "s}"});
+        }
+
+        function adicionarBlocoFeedback() {
+            adicionarBloco("Feedback", {nome: "H" + blocoIdCounter});
+        }
+
+        function iniciarArrastar(e) {
+            if (e.target.classList.contains("porta")) return;
+            e.stopPropagation();
+            arrastandoBloco = e.currentTarget;
+            const rect = arrastandoBloco.getBoundingClientRect();
+            const container = document.getElementById("canvas-container").getBoundingClientRect();
+            offsetX = e.clientX - rect.left;
+            offsetY = e.clientY - rect.top;
+            
+            document.addEventListener("mousemove", arrastar);
+            document.addEventListener("mouseup", pararArrastar);
+        }
+
+        function arrastar(e) {
+            if (arrastandoBloco) {
+                const container = document.getElementById("canvas-container").getBoundingClientRect();
+                let x = e.clientX - container.left - offsetX;
+                let y = e.clientY - container.top - offsetY;
+                
+                x = Math.max(0, Math.min(x, container.width - arrastandoBloco.offsetWidth));
+                y = Math.max(0, Math.min(y, container.height - arrastandoBloco.offsetHeight));
+                
+                arrastandoBloco.style.left = x + "px";
+                arrastandoBloco.style.top = y + "px";
+                
+                const blocoId = parseInt(arrastandoBloco.id.split("-")[1]);
+                const bloco = blocos.find(b => b.id === blocoId);
+                if (bloco) {
+                    bloco.x = x;
+                    bloco.y = y;
+                }
+                
+                redesenharConexoes();
+            }
+        }
+
+        function pararArrastar() {
+            arrastandoBloco = null;
+            document.removeEventListener("mousemove", arrastar);
+            document.removeEventListener("mouseup", pararArrastar);
+            salvarEstado();
+        }
+
+        function selecionarBloco(e) {
+            if (e.target.classList.contains("porta")) return;
+            e.stopPropagation();
+            
+            document.querySelectorAll(".bloco").forEach(b => b.classList.remove("selecionado"));
+            e.currentTarget.classList.add("selecionado");
+            blocoSelecionado = parseInt(e.currentTarget.id.split("-")[1]);
+        }
+
+        function clickPorta(e) {
+            e.stopPropagation();
+            const blocoId = parseInt(e.target.dataset.bloco);
+            const tipoPorta = e.target.dataset.tipo;
+            
+            if (!portaSelecionada) {
+                portaSelecionada = {blocoId: blocoId, tipo: tipoPorta};
+                e.target.style.background = "#FFC107";
+            } else {
+                if (portaSelecionada.tipo === "saida" && tipoPorta === "entrada") {
+                    conexoes.push({
+                        origem: portaSelecionada.blocoId,
+                        destino: blocoId
+                    });
+                    redesenharConexoes();
+                } else if (portaSelecionada.tipo === "entrada" && tipoPorta === "saida") {
+                    conexoes.push({
+                        origem: blocoId,
+                        destino: portaSelecionada.blocoId
+                    });
+                    redesenharConexoes();
+                } else {
+                    alert("Conecte saída → entrada");
+                }
+                
+                document.querySelectorAll(".porta").forEach(p => p.style.background = "#4CAF50");
+                portaSelecionada = null;
+                salvarEstado();
+            }
+        }
+
+        function redesenharConexoes() {
+            const svg = document.getElementById("conexoes-svg");
+            svg.innerHTML = "";
+            
+            conexoes.forEach(conexao => {
+                const blocoOrigem = document.getElementById("bloco-" + conexao.origem);
+                const blocoDestino = document.getElementById("bloco-" + conexao.destino);
+                
+                if (blocoOrigem && blocoDestino) {
+                    const rectOrigem = blocoOrigem.getBoundingClientRect();
+                    const rectDestino = blocoDestino.getBoundingClientRect();
+                    const container = document.getElementById("canvas-container").getBoundingClientRect();
+                    
+                    const x1 = rectOrigem.right - container.left;
+                    const y1 = rectOrigem.top + rectOrigem.height/2 - container.top;
+                    const x2 = rectDestino.left - container.left;
+                    const y2 = rectDestino.top + rectDestino.height/2 - container.top;
+                    
+                    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                    const dx = x2 - x1;
+                    const curva = Math.abs(dx) / 2;
+                    const d = "M " + x1 + " " + y1 + " C " + (x1 + curva) + " " + y1 + ", " + (x2 - curva) + " " + y2 + ", " + x2 + " " + y2;
+                    
+                    path.setAttribute("d", d);
+                    path.setAttribute("stroke", "#667eea");
+                    path.setAttribute("stroke-width", "3");
+                    path.setAttribute("fill", "none");
+                    path.setAttribute("marker-end", "url(#arrowhead)");
+                    
+                    svg.appendChild(path);
+                }
+            });
+            
+            const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+            const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+            marker.setAttribute("id", "arrowhead");
+            marker.setAttribute("markerWidth", "10");
+            marker.setAttribute("markerHeight", "10");
+            marker.setAttribute("refX", "9");
+            marker.setAttribute("refY", "3");
+            marker.setAttribute("orient", "auto");
+            const polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+            polygon.setAttribute("points", "0 0, 10 3, 0 6");
+            polygon.setAttribute("fill", "#667eea");
+            marker.appendChild(polygon);
+            defs.appendChild(marker);
+            svg.appendChild(defs);
+        }
+
+        function removerSelecionado() {
+            if (blocoSelecionado !== null) {
+                const blocoEl = document.getElementById("bloco-" + blocoSelecionado);
+                if (blocoEl) {
+                    blocoEl.remove();
+                    blocos = blocos.filter(b => b.id !== blocoSelecionado);
+                    conexoes = conexoes.filter(c => c.origem !== blocoSelecionado && c.destino !== blocoSelecionado);
+                    redesenharConexoes();
+                    blocoSelecionado = null;
+                    salvarEstado();
+                }
+            } else {
+                alert("Selecione um bloco primeiro!");
+            }
+        }
+
+        function limparDiagrama() {
+            if (confirm("Deseja limpar todo o diagrama?")) {
+                blocos = [];
+                conexoes = [];
+                blocoSelecionado = null;
+                document.getElementById("canvas-container").innerHTML = '<svg id="conexoes-svg"></svg><div id="info-panel"><strong>📊 Instruções:</strong><div>• Clique nos botões para adicionar</div><div>• Arraste blocos para mover</div><div>• Clique nas portas verdes para conectar</div><div>• Clique no bloco para selecionar</div></div>';
+                salvarEstado();
+            }
+        }
+
+        function salvarEstado() {
+            window.parent.postMessage({
+                type: "salvar_diagrama",
+                blocos: blocos,
+                conexoes: conexoes,
+                contador: blocoIdCounter
+            }, "*");
+        }
+
+        // Inicializar blocos existentes
+        blocos.forEach(blocoData => {
+            const container = document.getElementById("canvas-container");
+            const bloco = document.createElement("div");
+            bloco.className = "bloco";
+            bloco.id = "bloco-" + blocoData.id;
+            bloco.style.left = blocoData.x + "px";
+            bloco.style.top = blocoData.y + "px";
+            
+            let nomeDisplay = blocoData.config.nome || blocoData.tipo;
+            let tfDisplay = blocoData.config.tf || "";
+            
+            bloco.innerHTML = `
+                <div class="bloco-tipo">${blocoData.tipo}</div>
+                <div class="bloco-nome">${nomeDisplay}</div>
+                ${tfDisplay ? '<div class="bloco-tf">' + tfDisplay + "</div>" : ""}
+                <div class="porta porta-entrada" data-bloco="${blocoData.id}" data-tipo="entrada"></div>
+                <div class="porta porta-saida" data-bloco="${blocoData.id}" data-tipo="saida"></div>
+            `;
+            
+            container.appendChild(bloco);
+            bloco.addEventListener("mousedown", iniciarArrastar);
+            bloco.addEventListener("click", selecionarBloco);
+            
+            const portas = bloco.querySelectorAll(".porta");
+            portas.forEach(porta => {
+                porta.addEventListener("click", clickPorta);
+            });
+        });
+
+        redesenharConexoes();
+        
+        // Adicionar evento de mensagem para comunicação com Streamlit
+        window.addEventListener("message", function(event) {
+            if (event.data.type === "load_diagram") {
+                // Receber dados do Streamlit
+                blocos = event.data.blocos;
+                conexoes = event.data.conexoes;
+                blocoIdCounter = event.data.contador;
+                
+                // Redesenhar
+                document.querySelectorAll(".bloco").forEach(b => b.remove());
+                redesenharConexoes();
+            }
+        });
+    </script>
+</body>
+</html>'''
+    
+    # Substituir os marcadores de posição
+    html_code = html_template.replace("BLOCOS_DATA", blocos_data)\
+                             .replace("CONEXOES_DATA", conexoes_data)\
+                             .replace("CONTADOR", str(contador))
+    
+    return html_code
