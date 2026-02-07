@@ -43,8 +43,8 @@ def default_node(node_type: str, x: int, y: int, label: str, params: dict):
     )
 
 def get_nodes_edges(state: StreamlitFlowState):
-    nodes = state.nodes or []
-    edges = state.edges or []
+    nodes = getattr(state, "nodes", None) or []
+    edges = getattr(state, "edges", None) or []
     nd = {n.id: n for n in nodes}
     ed = [(e.source, e.target) for e in edges]
     return nd, ed
@@ -131,7 +131,6 @@ def bode_plot(G, wmin=1e-2, wmax=1e2):
     w = np.logspace(np.log10(wmin), np.log10(wmax), 600)
     mag, phase, omega = ctrl.bode_plot(G, w, plot=False)
 
-    # mag pode vir como array 3D em algumas versões; achatamos
     mag = np.array(mag).squeeze()
     phase = np.array(phase).squeeze()
     omega = np.array(omega).squeeze()
@@ -155,7 +154,6 @@ def bode_plot(G, wmin=1e-2, wmax=1e2):
     return fig1, fig2
 
 def pz_data(G):
-    # Compatível com várias versões do python-control
     try:
         poles = ctrl.poles(G)
     except Exception:
@@ -189,11 +187,6 @@ def pz_plot(poles, zeros):
     return fig
 
 def time_response(G, kind="Degrau", tmax=10.0, n=2000, amp=1.0, freq_hz=1.0, duty=0.5):
-    """
-    Resposta no tempo:
-      - Degrau, Impulso, Rampa, Seno, Pulso
-    Retorna figura.
-    """
     t = np.linspace(0, float(tmax), int(n))
 
     if kind == "Degrau":
@@ -213,7 +206,6 @@ def time_response(G, kind="Degrau", tmax=10.0, n=2000, amp=1.0, freq_hz=1.0, dut
         tout, y, _ = ctrl.forced_response(G, T=t, U=u)
 
     elif kind == "Pulso":
-        # Pulso quadrado (freq em Hz) com duty cycle
         period = 1.0 / max(float(freq_hz), 1e-9)
         u = amp * (((t % period) / period) < float(duty)).astype(float)
         tout, y, _ = ctrl.forced_response(G, T=t, U=u)
@@ -236,7 +228,7 @@ def time_response(G, kind="Degrau", tmax=10.0, n=2000, amp=1.0, freq_hz=1.0, dut
 
 
 # ============================================================
-# Inicializa estado do diagrama
+# Inicializa estado do diagrama (COM FIX DE VERSÃO)
 # ============================================================
 if "flow_state" not in st.session_state:
     nodes = []
@@ -267,7 +259,18 @@ if "flow_state" not in st.session_state:
         StreamlitFlowEdge(id="e2", source=g0.id, target="OUT", animated=True),
     ]
 
-    st.session_state.flow_state = StreamlitFlowState(key="flow", nodes=nodes, edges=edges)
+    # Criação compatível com versões diferentes do streamlit-flow-component
+    try:
+        st.session_state.flow_state = StreamlitFlowState(key="flow", nodes=nodes, edges=edges)
+    except TypeError:
+        try:
+            st.session_state.flow_state = StreamlitFlowState(nodes, edges, key="flow")
+        except TypeError:
+            st.session_state.flow_state = StreamlitFlowState(nodes, edges)
+            try:
+                st.session_state.flow_state.key = "flow"
+            except Exception:
+                pass
 
 
 # ============================================================
@@ -362,7 +365,16 @@ left, right = st.columns([1.25, 1])
 
 with left:
     st.subheader("Diagrama")
-    st.session_state.flow_state = streamlit_flow("flow", st.session_state.flow_state)
+
+    # Renderiza e captura estado atualizado (COM FIX DE VERSÃO)
+    try:
+        st.session_state.flow_state = streamlit_flow("flow", st.session_state.flow_state)
+    except TypeError:
+        st.session_state.flow_state = streamlit_flow(
+            "flow",
+            st.session_state.flow_state.nodes,
+            st.session_state.flow_state.edges
+        )
 
     with st.expander("Estado (debug)"):
         st.json(
@@ -410,7 +422,7 @@ with right:
         st.stop()
 
     # -------------------------
-    # Resposta no tempo (inclui degrau)
+    # Resposta no tempo
     # -------------------------
     try:
         if entrada == "Custom":
@@ -437,11 +449,9 @@ with right:
             plt.legend()
             plt.title("Resposta no tempo — Custom")
             st.pyplot(fig_time, clear_figure=True)
-
         else:
             fig_time = time_response(G, kind=entrada, tmax=tmax, amp=amp, freq_hz=freq_hz, duty=duty)
             st.pyplot(fig_time, clear_figure=True)
-
     except Exception as e:
         st.error(f"Erro na resposta no tempo: {e}")
         st.stop()
