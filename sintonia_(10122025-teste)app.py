@@ -1836,32 +1836,47 @@ def main():
     #  MODO EDITOR VISUAL
     # ══════════════════════════════════════════
     if st.session_state.modo_editor == 'visual':
-        st.subheader("🎨 Editor Visual de Diagrama de Blocos")
 
-        # ── Editor HTML ──
+        # ── Editor HTML (canvas) ──
         html_editor = criar_editor_visual_html()
         components.html(html_editor, height=650, scrolling=False)
 
-        st.markdown("---")
+        # ══════════════════════════════════════════
+        #  PAINEL DE CONFIGURAÇÃO ABAIXO DO CANVAS
+        # ══════════════════════════════════════════
+        st.markdown("""
+        <div style="background: linear-gradient(90deg, #1a1d29 0%, #252839 100%);
+                    border: 1px solid #363a50; border-radius: 10px;
+                    padding: 18px 22px; margin: 8px 0 0 0;">
+            <span style="color: #8b90b0; font-size: 13px; letter-spacing: .5px; text-transform: uppercase;">
+                ⚙️ Configuração do Sistema — Adicione blocos, configure a análise e processe
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
 
-        # ── Sidebar: Configuração manual de blocos para processar ──
-        with st.sidebar:
-            st.header("📦 Blocos do Sistema Visual")
-            st.info("Como o editor roda em iframe, insira os blocos abaixo para processar a análise.")
+        # ── ROW 1: Adicionar blocos ──
+        st.markdown("#### ➕ Adicionar Bloco ao Sistema")
+        add_c1, add_c2, add_c3, add_c4, add_c5 = st.columns([1.2, 1.5, 1.2, 1.2, 0.8])
 
-            st.markdown("#### Adicionar Bloco ao Cálculo")
+        with add_c1:
             v_nome = st.text_input("Nome", value=f"G{st.session_state.visual_counter}", key="v_nome")
-            v_tipo = st.selectbox("Tipo", ['Planta (direto)', 'Controlador (direto)', 'Sensor (feedback)', 'Ganho'], key="v_tipo")
-            
-            if v_tipo == 'Ganho':
+        with add_c2:
+            v_tipo = st.selectbox("Tipo / Papel", ['Planta (caminho direto)', 'Controlador (caminho direto)', 'Sensor (feedback)', 'Ganho K'], key="v_tipo")
+        with add_c3:
+            if 'Ganho' in v_tipo:
                 v_ganho = st.number_input("Valor K", value=1.0, step=0.1, key="v_ganho")
             else:
-                v_num = st.text_input("Numerador", value="1", key="v_num")
-                v_den = st.text_input("Denominador", value="s+1", key="v_den")
-
-            if st.button("➕ Adicionar Bloco Visual", use_container_width=True):
+                v_num = st.text_input("Numerador", value="1", key="v_num", placeholder="ex: 4*s, s+2")
+        with add_c4:
+            if 'Ganho' not in v_tipo:
+                v_den = st.text_input("Denominador", value="s+1", key="v_den", placeholder="ex: s^2+2*s+1")
+            else:
+                st.markdown("")  # spacer
+        with add_c5:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("➕ Adicionar", use_container_width=True, key="btn_add_visual"):
                 try:
-                    if v_tipo == 'Ganho':
+                    if 'Ganho' in v_tipo:
                         n_str = str(v_ganho)
                         d_str = "1"
                     else:
@@ -1869,65 +1884,98 @@ def main():
                         d_str = v_den
 
                     tf_obj, _ = converter_para_tf(n_str, d_str)
+                    role_map = {
+                        'Planta (caminho direto)': 'planta',
+                        'Controlador (caminho direto)': 'controlador',
+                        'Sensor (feedback)': 'sensor',
+                        'Ganho K': 'ganho'
+                    }
                     bloco = {
                         'id': st.session_state.visual_counter,
-                        'type': 'tf' if 'Planta' in v_tipo else ('tf' if 'Controlador' in v_tipo else ('sensor' if 'Sensor' in v_tipo else 'gain')),
-                        'role': 'planta' if 'Planta' in v_tipo else ('controlador' if 'Controlador' in v_tipo else ('sensor' if 'Sensor' in v_tipo else 'ganho')),
+                        'role': role_map.get(v_tipo, 'planta'),
                         'name': v_nome,
                         'num': n_str,
                         'den': d_str,
-                        'value': str(v_ganho) if v_tipo == 'Ganho' else None,
-                        'x': 100, 'y': 100
+                        'value': str(v_ganho) if 'Ganho' in v_tipo else None,
                     }
                     st.session_state.visual_blocos.append(bloco)
                     st.session_state.visual_counter += 1
-                    st.success(f"Bloco {v_nome} adicionado!")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Erro: {e}")
+                    st.error(f"Erro na função de transferência: {e}")
 
-            # List current blocks
-            if st.session_state.visual_blocos:
-                st.markdown("#### Blocos Cadastrados")
-                for i, b in enumerate(st.session_state.visual_blocos):
-                    role_label = b.get('role', b.get('type', ''))
-                    col_a, col_b = st.columns([3, 1])
-                    with col_a:
-                        disp = f"**{b['name']}** ({role_label})"
-                        if b.get('num') and b.get('den'):
-                            disp += f" — {b['num']}/{b['den']}"
-                        st.markdown(disp)
-                    with col_b:
-                        if st.button("🗑️", key=f"del_vb_{i}"):
-                            st.session_state.visual_blocos.pop(i)
-                            st.rerun()
+        # ── ROW 2: Blocos cadastrados ──
+        if st.session_state.visual_blocos:
+            st.markdown("#### 📦 Blocos no Sistema")
+            role_colors = {
+                'planta': '🟦', 'controlador': '🟪',
+                'sensor': '🟥', 'ganho': '🟨'
+            }
+            cols_per_row = 4
+            blocos_list = st.session_state.visual_blocos
+            rows_needed = (len(blocos_list) + cols_per_row - 1) // cols_per_row
 
-                if st.button("🗑️ Limpar Todos", key="clear_visual_blocks"):
-                    st.session_state.visual_blocos = []
-                    st.rerun()
+            for row_i in range(rows_needed):
+                cols = st.columns(cols_per_row)
+                for col_j in range(cols_per_row):
+                    idx = row_i * cols_per_row + col_j
+                    if idx < len(blocos_list):
+                        b = blocos_list[idx]
+                        with cols[col_j]:
+                            role_label = b.get('role', '')
+                            icon = role_colors.get(role_label, '⬜')
+                            tf_str = f"{b['num']} / {b['den']}" if b.get('num') and b.get('den') else ""
+                            st.markdown(f"""
+                            <div style="background:#1e2235; border:1px solid #363a50; border-radius:8px;
+                                        padding:10px 12px; margin-bottom:4px;">
+                                <div style="font-size:12px; color:#6b7094; text-transform:uppercase;">{icon} {role_label}</div>
+                                <div style="font-weight:700; color:#fff; font-size:14px;">{b['name']}</div>
+                                <div style="font-family:monospace; font-size:11px; color:#88aacc; margin-top:3px;">{tf_str}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            if st.button("🗑️", key=f"del_vb_{idx}", use_container_width=True):
+                                st.session_state.visual_blocos.pop(idx)
+                                st.rerun()
 
-            st.markdown("---")
-            st.markdown("### ⚙️ Tipo de Análise")
+            if st.button("🗑️ Limpar Todos os Blocos", key="clear_visual_blocks"):
+                st.session_state.visual_blocos = []
+                st.rerun()
+
+        # ── ROW 3: Configuração de análise ──
+        st.markdown("---")
+        st.markdown("#### ⚙️ Configuração da Análise")
+        cfg_c1, cfg_c2, cfg_c3 = st.columns([1, 1, 2])
+
+        with cfg_c1:
             v_malha = st.selectbox("Tipo de malha:", ["Malha Aberta", "Malha Fechada"], key="v_malha")
+        with cfg_c2:
             v_entrada = st.selectbox("Sinal de Entrada:", INPUT_SIGNALS, key="v_entrada")
+        with cfg_c3:
             v_analises = st.multiselect(
-                "Análises:",
+                "Análises desejadas:",
                 ANALYSIS_OPTIONS["malha_fechada" if v_malha == "Malha Fechada" else "malha_aberta"],
                 default=["Resposta no tempo", "Desempenho"],
                 key="v_analises"
             )
 
-        # ── Processar e mostrar resultados ──
-        st.subheader("📊 Análise do Sistema")
+        # ── BOTÃO PROCESSAR ──
+        st.markdown("")
+        processar = st.button(
+            "⚡ PROCESSAR SISTEMA",
+            type="primary",
+            use_container_width=True,
+            key="proc_visual"
+        )
 
-        if st.button("⚡ Processar Sistema", type="primary", use_container_width=True, key="proc_visual"):
+        # ── RESULTADOS ──
+        if processar:
             vis_blocos = st.session_state.visual_blocos
             if not vis_blocos:
-                st.warning("Adicione blocos na barra lateral para processar.")
+                st.warning("Adicione pelo menos um bloco antes de processar.")
                 st.stop()
 
             try:
-                # Build TFs from sidebar blocks
+                # Build TFs from blocks
                 plantas = []
                 controladores = []
                 sensores = []
@@ -1948,7 +1996,7 @@ def main():
                     st.error("Adicione pelo menos uma Planta ou Controlador.")
                     st.stop()
 
-                # Combine
+                # Combine transfer functions
                 G = plantas[0] if plantas else TransferFunction([1], [1])
                 for p in plantas[1:]:
                     G = G * p
@@ -1965,16 +2013,25 @@ def main():
 
                 if v_malha == "Malha Aberta":
                     sistema = G_open
-                    st.info(f"🔧 **Malha Aberta:** G(s) = C(s)·P(s)")
                 else:
                     sistema = ctrl.feedback(G_open, H)
-                    st.info(f"🔧 **Malha Fechada:** T(s) = C·G / (1 + C·G·H)")
 
-                st.markdown(f"**G aberta:** `{G_open}`")
-                if v_malha == "Malha Fechada":
-                    st.markdown(f"**T fechada:** `{sistema}`")
+                # ── Info do sistema ──
+                st.markdown("---")
+                st.markdown("### 📊 Resultados da Análise")
 
-                # Run analyses
+                info_c1, info_c2 = st.columns(2)
+                with info_c1:
+                    if v_malha == "Malha Aberta":
+                        st.info(f"🔧 **Malha Aberta:** G(s) = C(s)·P(s)")
+                    else:
+                        st.info(f"🔧 **Malha Fechada:** T(s) = C·G / (1 + C·G·H)")
+                with info_c2:
+                    st.markdown(f"**G(s) aberta:** `{G_open}`")
+                    if v_malha == "Malha Fechada":
+                        st.markdown(f"**T(s) fechada:** `{sistema}`")
+
+                # ── Exibir análises ──
                 for analise in v_analises:
                     st.markdown(f"### 🔎 {analise}")
 
@@ -1984,8 +2041,11 @@ def main():
 
                     elif analise == 'Desempenho':
                         desempenho = calcular_desempenho(sistema)
-                        for chave, valor in desempenho.items():
-                            st.markdown(f"**{chave}:** {valor}")
+                        perf_cols = st.columns(3)
+                        items = list(desempenho.items())
+                        for idx_d, (chave, valor) in enumerate(items):
+                            with perf_cols[idx_d % 3]:
+                                st.metric(label=chave, value=valor)
 
                     elif analise == 'Diagrama De Bode Magnitude':
                         fig = plot_bode(sistema, 'magnitude')
@@ -2005,13 +2065,37 @@ def main():
 
                     elif analise == 'Nyquist':
                         fig, polos_spd, voltas, Z = plot_nyquist(G_open)
-                        st.markdown(f"**Polos SPD (P):** {polos_spd}")
-                        st.markdown(f"**Voltas (N):** {voltas}")
-                        st.markdown(f"**Z = {Z} → {'✅ Estável' if Z == 0 else '❌ Instável'}**")
+                        ny_c1, ny_c2, ny_c3 = st.columns(3)
+                        with ny_c1:
+                            st.metric("Polos SPD (P)", polos_spd)
+                        with ny_c2:
+                            st.metric("Voltas (N)", voltas)
+                        with ny_c3:
+                            st.metric("Z = P + N", f"{Z} — {'Estável' if Z == 0 else 'Instável'}")
                         st.plotly_chart(fig, use_container_width=True)
 
             except Exception as e:
                 st.error(f"Erro durante processamento: {e}")
+
+        # ── Sidebar info (minimal) ──
+        with st.sidebar:
+            st.markdown("### 📊 Status do Editor")
+            st.metric("Blocos cadastrados", len(st.session_state.visual_blocos))
+            roles_count = {}
+            for b in st.session_state.visual_blocos:
+                r = b.get('role', 'outro')
+                roles_count[r] = roles_count.get(r, 0) + 1
+            for r, c in roles_count.items():
+                st.caption(f"{r.capitalize()}: {c}")
+            st.markdown("---")
+            st.markdown("### 💡 Como usar")
+            st.markdown("""
+            1. **Canvas:** monte o diagrama visualmente (drag & drop)
+            2. **Abaixo:** cadastre os blocos com suas funções de transferência
+            3. **Configure** o tipo de malha e análises
+            4. **Clique** em ⚡ Processar Sistema
+            5. **Resultados** aparecem logo abaixo
+            """)
 
         return
 
