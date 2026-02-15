@@ -16,8 +16,6 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit.components.v1 as components
 import json
-import os
-from collections import deque
 
 # =====================================================
 # CONFIGURAÇÕES E CONSTANTES
@@ -33,19 +31,6 @@ ANALYSIS_OPTIONS = {
 INPUT_SIGNALS = ['Degrau', 'Rampa', 'Senoidal', 'Impulso', 'Parabólica']
 
 # =====================================================
-# COMPONENTE VISUAL (bidirecional)
-# =====================================================
-
-_VISUAL_EDITOR_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "visual_blocks_frontend")
-visual_blocks_editor = components.declare_component("visual_blocks_editor", path=_VISUAL_EDITOR_DIR)
-
-def editor_visual_component(model_json="", key=None, height=700):
-    """Componente bidirecional do editor visual de blocos.
-    Envia o modelo atual para o JS e recebe o modelo atualizado."""
-    component_value = visual_blocks_editor(model=model_json, key=key, default=None, height=height)
-    return component_value
-
-# =====================================================
 # FUNÇÕES AUXILIARES
 # =====================================================
 
@@ -58,14 +43,6 @@ def formatar_numero(valor):
     else:
         return f"{valor:.3f}"
 
-def format_poly(coeffs):
-    """Formata coeficientes de polinômio como string LaTeX"""
-    s = sp.Symbol('s')
-    if len(coeffs) == 0:
-        return "0"
-    poly = sum(float(c) * s**(len(coeffs)-1-i) for i, c in enumerate(coeffs))
-    return sp.latex(sp.nsimplify(poly, rational=False))
-
 # =====================================================
 # FUNÇÕES DE TRANSFERÊNCIA
 # =====================================================
@@ -75,16 +52,16 @@ def converter_para_tf(numerador_str, denominador_str):
     s = sp.Symbol('s')
     num = parse_expr(numerador_str.replace('^', '**'), local_dict={'s': s})
     den = parse_expr(denominador_str.replace('^', '**'), local_dict={'s': s})
-
+    
     num, den = sp.fraction(sp.together(num / den))
     num_coeffs = [float(c) for c in sp.Poly(num, s).all_coeffs()]
     den_coeffs = [float(c) for c in sp.Poly(den, s).all_coeffs()]
-
+    
     if den_coeffs and den_coeffs[0] != 1:
         fator = den_coeffs[0]
         num_coeffs = [c / fator for c in num_coeffs]
         den_coeffs = [c / fator for c in den_coeffs]
-
+    
     return TransferFunction(num_coeffs, den_coeffs), (num, den)
 
 def tipo_do_sistema(G):
@@ -99,7 +76,7 @@ def constantes_de_erro(G):
     s = ctrl.tf('s')
     G_min = ctrl.minreal(G, verbose=False)
     tipo = tipo_do_sistema(G_min)
-
+    
     Kp = Kv = Ka = np.inf
     try:
         if tipo == 0:
@@ -110,7 +87,7 @@ def constantes_de_erro(G):
             Ka = ctrl.dcgain(s**2 * G_min)
     except Exception:
         pass
-
+    
     if tipo == 0:
         Kv = Ka = np.inf
     elif tipo == 1:
@@ -118,7 +95,7 @@ def constantes_de_erro(G):
         Ka = np.inf
     elif tipo >= 2:
         Kp = Kv = 0
-
+    
     return tipo, Kp, Kv, Ka
 
 def calcular_malha_fechada(planta, controlador=None, sensor=None):
@@ -127,7 +104,7 @@ def calcular_malha_fechada(planta, controlador=None, sensor=None):
         controlador = TransferFunction([1], [1])
     if sensor is None:
         sensor = TransferFunction([1], [1])
-
+    
     G = controlador * planta
     H = sensor
     return ctrl.feedback(G, H)
@@ -143,14 +120,14 @@ def calcular_desempenho(tf):
     polos = ctrl.poles(tf)
     gm, pm, wg, wp = margin(tf)
     gm_db = 20 * np.log10(gm) if gm != np.inf and gm > 0 else np.inf
-
+    
     resultado = {
         'Margem de ganho': f"{formatar_numero(gm)} ({'∞' if gm == np.inf else f'{formatar_numero(gm_db)} dB'})",
         'Margem de fase': f"{formatar_numero(pm)}°",
         'Freq. cruz. fase': f"{formatar_numero(wg)} rad/s",
         'Freq. cruz. ganho': f"{formatar_numero(wp)} rad/s"
     }
-
+    
     if ordem == 1:
         return _desempenho_ordem1(polos, resultado)
     elif ordem == 2:
@@ -180,7 +157,7 @@ def _desempenho_ordem2(polos, resultado):
     Tr = (np.pi - np.arccos(zeta)) / wd if zeta < 1 and wd > 0 else float('inf')
     Tp = np.pi / wd if wd > 0 else float('inf')
     Ts = 4 / (zeta * wn) if zeta * wn > 0 else float('inf')
-
+    
     resultado.update({
         'Tipo': '2ª Ordem',
         'Freq. natural (ωn)': f"{formatar_numero(wn)} rad/s",
@@ -198,13 +175,13 @@ def _desempenho_ordem_superior(polos, ordem, resultado):
     polos_ordenados = sorted(polos, key=lambda p: np.real(p), reverse=True)
     polo_dominante = None
     par_dominante = None
-
+    
     for i in range(len(polos_ordenados) - 1):
         p1, p2 = polos_ordenados[i], polos_ordenados[i+1]
         if np.isclose(p1.real, p2.real, atol=1e-2) and np.isclose(p1.imag, -p2.imag, atol=1e-2):
             par_dominante = (p1, p2)
             break
-
+    
     if par_dominante:
         sigma = -np.real(par_dominante[0])
         omega_d = np.abs(np.imag(par_dominante[0]))
@@ -215,12 +192,12 @@ def _desempenho_ordem_superior(polos, ordem, resultado):
         wn = np.abs(polo_dominante)
         zeta = -np.real(polo_dominante) / wn if wn != 0 else 0
         omega_d = wn * np.sqrt(1 - zeta**2) if zeta < 1 else 0
-
+    
     Mp = np.exp(-zeta * np.pi / np.sqrt(1 - zeta**2)) * 100 if zeta < 1 and zeta > 0 else 0
     Tr = (np.pi - np.arccos(zeta)) / omega_d if zeta < 1 and omega_d > 0 else float('inf')
     Tp = np.pi / omega_d if omega_d > 0 else float('inf')
     Ts = 4 / (zeta * wn) if zeta * wn > 0 else float('inf')
-
+    
     resultado.update({
         'Tipo': f'{ordem}ª Ordem (Par dominante)' if par_dominante else f'{ordem}ª Ordem (Polo dominante)',
         'Freq. natural (ωn)': f"{formatar_numero(wn)} rad/s",
@@ -275,10 +252,10 @@ def plot_polos_zeros(tf, fig=None):
     """Diagrama de Polos e Zeros interativo"""
     zeros = ctrl.zeros(tf)
     polos = ctrl.poles(tf)
-
+    
     if fig is None:
         fig = go.Figure()
-
+    
     if len(zeros) > 0:
         fig.add_trace(go.Scatter(
             x=np.real(zeros),
@@ -288,7 +265,7 @@ def plot_polos_zeros(tf, fig=None):
             name='Zeros',
             hovertemplate='Zero<br>Real: %{x:.3f}<br>Imaginário: %{y:.3f}<extra></extra>'
         ))
-
+    
     if len(polos) > 0:
         fig.add_trace(go.Scatter(
             x=np.real(polos),
@@ -298,10 +275,10 @@ def plot_polos_zeros(tf, fig=None):
             name='Polos',
             hovertemplate='Polo<br>Real: %{x:.3f}<br>Imaginário: %{y:.3f}<extra></extra>'
         ))
-
+    
     fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.7)
     fig.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.7)
-
+    
     fig.update_layout(
         title='Diagrama de Polos e Zeros (Interativo)',
         xaxis_title='Parte Real',
@@ -309,7 +286,7 @@ def plot_polos_zeros(tf, fig=None):
         showlegend=True,
         hovermode='closest'
     )
-
+    
     fig = configurar_linhas_interativas(fig)
     return fig
 
@@ -329,14 +306,14 @@ def plot_resposta_temporal(sistema, entrada):
     tempo_final = estimar_tempo_final_simulacao(sistema)
     t = np.linspace(0, tempo_final, 1000)
     u = _gerar_sinal_entrada(entrada, t)
-
+    
     if entrada == 'Degrau':
         t_out, y = step_response(sistema, t)
     else:
         t_out, y, _ = forced_response(sistema, t, u, return_x=True)
-
+    
     fig = go.Figure()
-
+    
     fig.add_trace(go.Scatter(
         x=t_out,
         y=u[:len(t_out)],
@@ -345,7 +322,7 @@ def plot_resposta_temporal(sistema, entrada):
         name='Entrada',
         hovertemplate='Tempo: %{x:.2f}s<br>Entrada: %{y:.3f}<extra></extra>'
     ))
-
+    
     fig.add_trace(go.Scatter(
         x=t_out,
         y=y,
@@ -354,7 +331,7 @@ def plot_resposta_temporal(sistema, entrada):
         name='Saída',
         hovertemplate='Tempo: %{x:.2f}s<br>Saída: %{y:.3f}<extra></extra>'
     ))
-
+    
     fig.update_layout(
         title=f'Resposta Temporal - Entrada: {entrada}',
         xaxis_title='Tempo (s)',
@@ -362,7 +339,7 @@ def plot_resposta_temporal(sistema, entrada):
         showlegend=True,
         hovermode='x unified'
     )
-
+    
     fig = configurar_linhas_interativas(fig)
     return fig, t_out, y
 
@@ -373,14 +350,14 @@ def plot_bode(sistema, tipo='both'):
     sys = signal.TransferFunction(numerator, denominator)
     w = np.logspace(-3, 3, 1000)
     w, mag, phase = signal.bode(sys, w)
-
+    
     if tipo == 'both':
         fig = make_subplots(
             rows=2, cols=1,
             subplot_titles=('Diagrama de Bode - Magnitude', 'Diagrama de Bode - Fase'),
             vertical_spacing=0.1
         )
-
+        
         fig.add_trace(
             go.Scatter(
                 x=w, y=mag,
@@ -392,7 +369,7 @@ def plot_bode(sistema, tipo='both'):
             ),
             row=1, col=1
         )
-
+        
         fig.add_trace(
             go.Scatter(
                 x=w, y=phase,
@@ -404,14 +381,14 @@ def plot_bode(sistema, tipo='both'):
             ),
             row=2, col=1
         )
-
+        
         fig.update_xaxes(title_text="Frequência (rad/s)", type="log", row=1, col=1)
         fig.update_xaxes(title_text="Frequência (rad/s)", type="log", row=2, col=1)
         fig.update_yaxes(title_text="Magnitude (dB)", row=1, col=1)
         fig.update_yaxes(title_text="Fase (deg)", row=2, col=1)
-
+        
         fig.update_layout(height=700, title_text="Diagrama de Bode")
-
+        
     elif tipo == 'magnitude':
         fig = go.Figure()
         fig.add_trace(go.Scatter(
@@ -442,16 +419,16 @@ def plot_bode(sistema, tipo='both'):
             yaxis_title="Fase (deg)",
             xaxis_type='log'
         )
-
+    
     fig = configurar_linhas_interativas(fig)
     return fig
 
 def plot_lgr(sistema):
     """Lugar Geométrico das Raízes interativo"""
     rlist, klist = root_locus(sistema, plot=False)
-
+    
     fig = go.Figure()
-
+    
     for i, r in enumerate(rlist.T):
         fig.add_trace(go.Scatter(
             x=np.real(r),
@@ -462,10 +439,10 @@ def plot_lgr(sistema):
             showlegend=False,
             hovertemplate='Real: %{x:.3f}<br>Imaginário: %{y:.3f}<extra></extra>'
         ))
-
+    
     zeros = ctrl.zeros(sistema)
     polos = ctrl.poles(sistema)
-
+    
     if len(zeros) > 0:
         fig.add_trace(go.Scatter(
             x=np.real(zeros),
@@ -475,7 +452,7 @@ def plot_lgr(sistema):
             name='Zeros',
             hovertemplate='Zero<br>Real: %{x:.3f}<br>Imaginário: %{y:.3f}<extra></extra>'
         ))
-
+    
     if len(polos) > 0:
         fig.add_trace(go.Scatter(
             x=np.real(polos),
@@ -485,10 +462,10 @@ def plot_lgr(sistema):
             name='Polos',
             hovertemplate='Polo<br>Real: %{x:.3f}<br>Imaginário: %{y:.3f}<extra></extra>'
         ))
-
+    
     fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.7)
     fig.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.7)
-
+    
     fig.update_layout(
         title='Lugar Geométrico das Raízes (LGR)',
         xaxis_title='Parte Real',
@@ -496,7 +473,7 @@ def plot_lgr(sistema):
         showlegend=True,
         hovermode='closest'
     )
-
+    
     fig = configurar_linhas_interativas(fig)
     return fig
 
@@ -505,9 +482,9 @@ def plot_nyquist(sistema):
     sistema_scipy = signal.TransferFunction(sistema.num[0][0], sistema.den[0][0])
     w = np.logspace(-2, 2, 1000)
     _, H = signal.freqresp(sistema_scipy, w)
-
+    
     fig = go.Figure()
-
+    
     fig.add_trace(go.Scatter(
         x=H.real,
         y=H.imag,
@@ -516,7 +493,7 @@ def plot_nyquist(sistema):
         name='Nyquist',
         hovertemplate='Real: %{x:.3f}<br>Imaginário: %{y:.3f}<extra></extra>'
     ))
-
+    
     fig.add_trace(go.Scatter(
         x=H.real,
         y=-H.imag,
@@ -525,7 +502,7 @@ def plot_nyquist(sistema):
         name='Reflexo simétrico',
         hovertemplate='Real: %{x:.3f}<br>Imaginário: %{y:.3f}<extra></extra>'
     ))
-
+    
     fig.add_trace(go.Scatter(
         x=[-1],
         y=[0],
@@ -534,10 +511,10 @@ def plot_nyquist(sistema):
         name='Ponto crítico (-1,0)',
         hovertemplate='Ponto Crítico<br>Real: -1<br>Imaginário: 0<extra></extra>'
     ))
-
+    
     fig.add_hline(y=0, line_color="black", line_width=1)
     fig.add_vline(x=0, line_color="black", line_width=1)
-
+    
     fig.update_layout(
         title='Diagrama de Nyquist',
         xaxis_title='Parte Real',
@@ -545,26 +522,32 @@ def plot_nyquist(sistema):
         showlegend=True,
         hovermode='closest'
     )
-
+    
     fig = configurar_linhas_interativas(fig)
-
+    
     polos = ctrl.poles(sistema)
     polos_spd = sum(1 for p in polos if np.real(p) > 0)
     voltas = 0
     Z = polos_spd + voltas
-
+    
     return fig, polos_spd, voltas, Z
 
 # =====================================================
-# GERENCIAMENTO DE BLOCOS (modo clássico)
+# GERENCIAMENTO DE BLOCOS
 # =====================================================
 
 def inicializar_blocos():
     """Inicializa o estado dos blocos se não existir"""
     if 'blocos' not in st.session_state:
         st.session_state.blocos = pd.DataFrame(columns=['nome', 'tipo', 'numerador', 'denominador', 'tf', 'tf_simbolico'])
-    if 'visual_model' not in st.session_state:
-        st.session_state.visual_model = {"nodes": [], "edges": []}
+    if 'visual_blocos' not in st.session_state:
+        st.session_state.visual_blocos = []
+    if 'visual_conexoes' not in st.session_state:
+        st.session_state.visual_conexoes = []
+    if 'visual_counter' not in st.session_state:
+        st.session_state.visual_counter = 1
+    if 'visual_sistema_json' not in st.session_state:
+        st.session_state.visual_sistema_json = ""
 
 def adicionar_bloco(nome, tipo, numerador, denominador):
     """Adiciona um novo bloco ao sistema"""
@@ -596,403 +579,1234 @@ def obter_bloco_por_tipo(tipo):
     return None
 
 # =====================================================
-# PROCESSADOR DE DIAGRAMA VISUAL
+# EDITOR VISUAL DE DIAGRAMA DE BLOCOS
 # =====================================================
 
-def node_to_tf(node):
-    """Converte um nó do diagrama visual em TransferFunction"""
-    t = node.get('type', '')
-    p = node.get('params', {})
+def criar_editor_visual_html():
+    """Cria o editor visual de diagrama de blocos com drag-and-drop completo"""
+    
+    blocos_init = json.dumps(st.session_state.visual_blocos)
+    conexoes_init = json.dumps(st.session_state.visual_conexoes)
+    counter_init = st.session_state.visual_counter
 
-    if t == 'tf':
-        tf_obj, _ = converter_para_tf(p.get('num', '1'), p.get('den', '1'))
-        return tf_obj
-    elif t == 'gain':
-        k = float(p.get('k', '1'))
-        return TransferFunction([k], [1])
-    elif t == 'int':
-        return TransferFunction([1], [1, 0])
-    elif t == 'der':
-        return TransferFunction([1, 0], [1])
-    elif t == 'pid':
-        kp = float(p.get('kp', '1'))
-        ki = float(p.get('ki', '0'))
-        kd = float(p.get('kd', '0'))
-        if ki == 0:
-            return TransferFunction([kd, kp], [1])
-        return TransferFunction([kd, kp, ki], [1, 0])
-    elif t in ('input', 'output', 'branch'):
-        return TransferFunction([1], [1])
-    elif t == 'sat':
-        return TransferFunction([1], [1])
-    else:
-        return TransferFunction([1], [1])
-
-def _build_adjacency(nodes_dict, edges):
-    """Constrói listas de adjacência do grafo"""
-    adj_out = {nid: [] for nid in nodes_dict}
-    adj_in = {nid: [] for nid in nodes_dict}
-    for e in edges:
-        src, dst = e.get('src'), e.get('dst')
-        if src in nodes_dict and dst in nodes_dict:
-            adj_out[src].append((dst, e.get('dstPort', 'in0'), e))
-            adj_in[dst].append((src, e.get('dstPort', 'in0'), e))
-    return adj_out, adj_in
-
-def _topological_sort(nodes_dict, edges):
-    """Ordenação topológica do grafo (retorna None se há ciclo)"""
-    in_degree = {nid: 0 for nid in nodes_dict}
-    adj = {nid: [] for nid in nodes_dict}
-    for e in edges:
-        src, dst = e.get('src'), e.get('dst')
-        if src in nodes_dict and dst in nodes_dict:
-            adj[src].append(dst)
-            in_degree[dst] += 1
-
-    queue = deque([nid for nid, deg in in_degree.items() if deg == 0])
-    result = []
-    while queue:
-        nid = queue.popleft()
-        result.append(nid)
-        for neighbor in adj[nid]:
-            in_degree[neighbor] -= 1
-            if in_degree[neighbor] == 0:
-                queue.append(neighbor)
-
-    if len(result) != len(nodes_dict):
-        return None  # Ciclo detectado
-    return result
-
-def _trace_forward_path(start_id, end_id, adj_out, nodes_dict, node_tfs, exclude_types=None):
-    """Traça caminho de start_id a end_id multiplicando TFs.
-    Retorna (TransferFunction, [path_ids]) ou (None, [])"""
-    if exclude_types is None:
-        exclude_types = set()
-
-    queue = deque([(start_id, [start_id])])
-    visited = {start_id}
-
-    while queue:
-        current, path = queue.popleft()
-        if current == end_id:
-            result_tf = TransferFunction([1], [1])
-            for nid in path:
-                ntype = nodes_dict[nid].get('type', '')
-                if ntype not in ('input', 'output', 'branch', 'sum') and ntype not in exclude_types:
-                    result_tf = result_tf * node_tfs.get(nid, TransferFunction([1], [1]))
-            return result_tf, path
-
-        for (neighbor, port, edge) in adj_out.get(current, []):
-            if neighbor not in visited:
-                visited.add(neighbor)
-                queue.append((neighbor, path + [neighbor]))
-
-    return None, []
-
-def _detect_canonical_feedback(model, nodes_dict, edges, adj_out, adj_in, node_tfs):
-    """Detecta o padrão canônico de malha fechada:
-    Input -> Sum -> [G forward] -> Output
-               ^                     |
-               +------ [H] <--------+
-    Retorna (G_forward, H_feedback, sign) ou None"""
-
-    input_nodes = [n for n in nodes_dict.values() if n.get('type') == 'input']
-    output_nodes = [n for n in nodes_dict.values() if n.get('type') == 'output']
-    sum_nodes = [n for n in nodes_dict.values() if n.get('type') == 'sum']
-
-    if not sum_nodes:
-        return None
-    if len(sum_nodes) != 1:
-        return None  # Só tratamos 1 somador por enquanto
-
-    sum_node = sum_nodes[0]
-    sum_id = sum_node['id']
-    signs = sum_node.get('params', {}).get('signs', '+ -').strip().split()
-
-    # Encontrar saída do somador -> caminho direto até output
-    sum_outputs = adj_out.get(sum_id, [])
-    if not sum_outputs:
-        return None
-
-    # Determinar nó de destino (output ou último nó)
-    end_id = None
-    if output_nodes:
-        end_id = output_nodes[0]['id']
-    else:
-        # Sem nó output explícito: encontrar nó terminal (sem saídas)
-        for nid in nodes_dict:
-            if nodes_dict[nid].get('type') not in ('input', 'sum', 'branch'):
-                if not adj_out.get(nid, []) or all(
-                    nodes_dict.get(dst, {}).get('type') == 'sum' for dst, _, _ in adj_out.get(nid, [])
-                ):
-                    end_id = nid
-        if end_id is None:
-            return None
-
-    # Traçar caminho direto: Sum -> ... -> Output
-    G_forward, forward_path = _trace_forward_path(sum_id, end_id, adj_out, nodes_dict, node_tfs)
-    if G_forward is None:
-        return None
-
-    # Procurar caminho de realimentação: algum nó no forward_path envia sinal de volta ao Sum
-    # Verificar entradas do somador que não vêm do input
-    sum_inputs = adj_in.get(sum_id, [])
-
-    feedback_tf = None
-    feedback_sign = -1
-
-    for idx, (src_id, port, edge) in enumerate(sum_inputs):
-        # Se a fonte desta entrada é um nó no caminho direto ou alcançável a partir dele,
-        # é o caminho de realimentação
-        src_node = nodes_dict.get(src_id, {})
-        if src_node.get('type') == 'input':
-            continue  # Entrada de referência, não feedback
-
-        # É um nó de feedback: traçar o caminho de feedback
-        # Encontrar de onde vem: do branch/output até este src
-        # O feedback pode ser um único bloco ou uma cadeia
-
-        # Verificar se o src é um branch ou está no forward path
-        # Caso simples: src é um branch que vem do forward path
-        if src_id in node_tfs and src_node.get('type') not in ('input', 'sum'):
-            feedback_tf = node_tfs.get(src_id, TransferFunction([1], [1]))
-            if src_node.get('type') in ('branch',):
-                feedback_tf = TransferFunction([1], [1])
-
-        # Determinar o sinal desta entrada do somador
-        # Mapear port para index
-        port_str = port if port else 'in0'
-        try:
-            port_idx = int(port_str.replace('in', ''))
-        except (ValueError, AttributeError):
-            port_idx = idx
-
-        if port_idx < len(signs):
-            feedback_sign = -1 if signs[port_idx] == '-' else 1
-
-    if feedback_tf is None:
-        # Sem realimentação encontrada - pode ser que o feedback é unitário
-        # Verificar se há alguma conexão de volta ao somador que não seja do input
-        has_non_input_feedback = False
-        for (src_id, port, edge) in sum_inputs:
-            if nodes_dict.get(src_id, {}).get('type') != 'input':
-                has_non_input_feedback = True
-                # Realimentação unitária (direto de um branch)
-                feedback_tf = TransferFunction([1], [1])
-                break
-
-        if not has_non_input_feedback:
-            # Sem realimentação - é um sistema em malha aberta passando pelo somador
-            return None
-
-    return G_forward, feedback_tf, feedback_sign
-
-def processar_diagrama_visual(model):
-    """Processa o diagrama visual e calcula o sistema equivalente.
-
-    Retorna:
-        (G_open_loop, G_closed_loop, details_dict) ou (None, None, "mensagem de erro")
-    """
-    if not model or not model.get('nodes'):
-        return None, None, "Nenhum bloco no diagrama. Adicione blocos e conecte-os."
-
-    nodes = model['nodes']
-    edges = model.get('edges', [])
-
-    # Filtrar nós válidos
-    nodes_dict = {n['id']: n for n in nodes}
-
-    # Converter todos os nós para TFs
-    node_tfs = {}
-    for nid, node in nodes_dict.items():
-        try:
-            tf_val = node_to_tf(node)
-            if tf_val is not None:
-                node_tfs[nid] = tf_val
-        except Exception as e:
-            return None, None, f"Erro ao converter bloco '{node.get('label', nid)}': {e}"
-
-    # Construir adjacência
-    adj_out, adj_in = _build_adjacency(nodes_dict, edges)
-
-    # Contar blocos reais (excluindo input/output/branch)
-    blocos_reais = [n for n in nodes if n.get('type') not in ('input', 'output', 'branch', 'sum')]
-
-    if not blocos_reais:
-        return None, None, "Nenhum bloco de transferência no diagrama."
-
-    # ---- Estratégia 1: Detectar malha fechada canônica ----
-    result = _detect_canonical_feedback(model, nodes_dict, edges, adj_out, adj_in, node_tfs)
-    if result is not None:
-        G_forward, H_feedback, fb_sign = result
-        G_open = G_forward
-        try:
-            G_closed = ctrl.feedback(G_forward, H_feedback, sign=fb_sign)
-        except Exception:
-            G_closed = G_forward
-
-        desc = f"Malha fechada detectada ({len(blocos_reais)} blocos)"
-        if fb_sign == -1:
-            desc += " - realimentação negativa"
-        else:
-            desc += " - realimentação positiva"
-
-        return G_open, G_closed, {
-            'forward': G_forward,
-            'feedback': H_feedback,
-            'open_loop': G_open,
-            'closed_loop': G_closed,
-            'description': desc,
-            'tipo': 'malha_fechada'
-        }
-
-    # ---- Estratégia 2: Série simples (sem feedback) ----
-    topo_order = _topological_sort(nodes_dict, edges)
-    if topo_order is not None:
-        # Sem ciclo - multiplicar TFs na ordem topológica
-        result_tf = TransferFunction([1], [1])
-        count = 0
-        for nid in topo_order:
-            ntype = nodes_dict[nid].get('type', '')
-            if ntype not in ('input', 'output', 'branch', 'sum') and nid in node_tfs:
-                result_tf = result_tf * node_tfs[nid]
-                count += 1
-
-        if count == 0:
-            return None, None, "Nenhum bloco de transferência processável."
-
-        G_open = result_tf
-        try:
-            G_closed = ctrl.feedback(result_tf, 1)
-        except Exception:
-            G_closed = result_tf
-
-        return G_open, G_closed, {
-            'forward': result_tf,
-            'feedback': None,
-            'open_loop': G_open,
-            'closed_loop': G_closed,
-            'description': f"Sistema em série com {count} blocos (sem realimentação)",
-            'tipo': 'malha_aberta'
-        }
-
-    # ---- Estratégia 3: Fallback - multiplicar todos ----
-    result_tf = TransferFunction([1], [1])
-    count = 0
-    for node in nodes:
-        ntype = node.get('type', '')
-        if ntype not in ('input', 'output', 'branch', 'sum') and node['id'] in node_tfs:
-            result_tf = result_tf * node_tfs[node['id']]
-            count += 1
-
-    if count == 0:
-        return None, None, "Não foi possível processar o diagrama."
-
-    G_open = result_tf
-    try:
-        G_closed = ctrl.feedback(result_tf, 1)
-    except Exception:
-        G_closed = result_tf
-
-    return G_open, G_closed, {
-        'forward': result_tf,
-        'feedback': None,
-        'open_loop': G_open,
-        'closed_loop': G_closed,
-        'description': f"Sistema com {count} blocos (topologia com ciclo - aproximação em série)",
-        'tipo': 'malha_aberta'
+    html_code = """
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+    <meta charset="UTF-8">
+    <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        background: #0f1117;
+        color: #e0e0e0;
+        overflow: hidden;
     }
 
-# =====================================================
-# FUNÇÕES DE EXIBIÇÃO
-# =====================================================
+    /* ── TOOLBAR ── */
+    .toolbar {
+        background: #1a1d29;
+        border-bottom: 1px solid #2d3044;
+        padding: 8px 14px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        min-height: 48px;
+    }
+    .toolbar .sep {
+        width: 1px; height: 28px; background: #2d3044; margin: 0 4px;
+    }
+    .tbtn {
+        display: inline-flex; align-items: center; gap: 5px;
+        background: #252839; color: #c8cad8;
+        border: 1px solid #363a50; border-radius: 6px;
+        padding: 6px 12px; font-size: 12px;
+        cursor: pointer; transition: all .15s;
+        white-space: nowrap;
+    }
+    .tbtn:hover { background: #2f3349; border-color: #5568d3; color: #fff; }
+    .tbtn.primary { background: #4a5acf; border-color: #5568d3; color: #fff; }
+    .tbtn.primary:hover { background: #5b6be0; }
+    .tbtn.danger { background: #4a2030; border-color: #8b3050; color: #ff8fa3; }
+    .tbtn.danger:hover { background: #5a2840; }
+    .tbtn .ico { font-size: 14px; }
 
-def mostrar_tf_equivalente(G_open, G_closed, details):
-    """Exibe as funções de transferência equivalentes e informações do sistema"""
-    if isinstance(details, str):
-        st.error(details)
-        return
+    .toolbar-label {
+        font-size: 11px; color: #6b7094; margin-right: 2px;
+        text-transform: uppercase; letter-spacing: .5px;
+    }
 
-    desc = details.get('description', '')
-    if desc:
-        st.info(f"**Topologia detectada:** {desc}")
+    /* ── CANVAS ── */
+    #canvas-wrap {
+        position: relative;
+        width: 100%;
+        height: 540px;
+        background:
+            radial-gradient(circle at 50% 50%, #141722 0%, #0f1117 100%);
+        overflow: hidden;
+        cursor: default;
+    }
+    #canvas-wrap::before {
+        content: '';
+        position: absolute; inset: 0;
+        background-image:
+            radial-gradient(circle, #1e2235 1px, transparent 1px);
+        background-size: 24px 24px;
+        opacity: .5;
+        pointer-events: none;
+    }
 
-    col_tf1, col_tf2 = st.columns(2)
+    /* ── SVG CONNECTIONS ── */
+    #svg-connections {
+        position: absolute; inset: 0;
+        width: 100%; height: 100%;
+        pointer-events: none;
+        z-index: 1;
+    }
+    #svg-connections path {
+        fill: none;
+        stroke-width: 2.5;
+        pointer-events: visibleStroke;
+        cursor: pointer;
+    }
+    #svg-connections path:hover {
+        stroke-width: 4;
+    }
+    .conn-line { stroke: #5568d3; }
+    .conn-feedback { stroke: #e8a035; stroke-dasharray: 8 4; }
+    .conn-temp { stroke: #88dd55; stroke-dasharray: 4 4; opacity: .7; }
 
-    with col_tf1:
-        st.markdown("**G(s) - Malha Aberta:**")
-        if G_open is not None:
-            try:
-                num_str = format_poly(G_open.num[0][0])
-                den_str = format_poly(G_open.den[0][0])
-                st.latex(f"G(s) = \\frac{{{num_str}}}{{{den_str}}}")
-            except Exception:
-                st.code(str(G_open))
+    /* ── BLOCKS ── */
+    .block {
+        position: absolute;
+        z-index: 10;
+        border-radius: 10px;
+        cursor: grab;
+        user-select: none;
+        transition: box-shadow .15s;
+        min-width: 130px;
+    }
+    .block:active { cursor: grabbing; }
+    .block.selected {
+        box-shadow: 0 0 0 2px #fbbf24, 0 0 24px rgba(251,191,36,.25) !important;
+    }
+    .block-inner {
+        padding: 10px 14px;
+        border-radius: 10px;
+        position: relative;
+    }
 
-    with col_tf2:
-        st.markdown("**T(s) - Malha Fechada:**")
-        if G_closed is not None:
-            try:
-                num_str = format_poly(G_closed.num[0][0])
-                den_str = format_poly(G_closed.den[0][0])
-                st.latex(f"T(s) = \\frac{{{num_str}}}{{{den_str}}}")
-            except Exception:
-                st.code(str(G_closed))
+    /* Block type styles */
+    .block-tf .block-inner {
+        background: linear-gradient(135deg, #1e3a5f 0%, #1a2744 100%);
+        border: 1px solid #2a5a8f;
+        box-shadow: 0 4px 16px rgba(30,58,95,.4);
+    }
+    .block-gain .block-inner {
+        background: linear-gradient(135deg, #2d1f4e 0%, #1f1635 100%);
+        border: 1px solid #5a3d8f;
+        box-shadow: 0 4px 16px rgba(90,61,143,.3);
+    }
+    .block-sum .block-inner {
+        background: linear-gradient(135deg, #1f4a3a 0%, #152e28 100%);
+        border: 1px solid #2d8a6a;
+        box-shadow: 0 4px 16px rgba(45,138,106,.3);
+        min-width: 60px;
+        width: 60px; height: 60px;
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .block-int .block-inner {
+        background: linear-gradient(135deg, #4a3a1f 0%, #352e15 100%);
+        border: 1px solid #8a7a2d;
+        box-shadow: 0 4px 16px rgba(138,122,45,.3);
+    }
+    .block-sensor .block-inner {
+        background: linear-gradient(135deg, #4a1f2d 0%, #351520 100%);
+        border: 1px solid #8a2d4a;
+        box-shadow: 0 4px 16px rgba(138,45,74,.3);
+    }
+    .block-input .block-inner {
+        background: linear-gradient(135deg, #1a3a1a 0%, #0f250f 100%);
+        border: 1px solid #2d8a2d;
+        box-shadow: 0 4px 16px rgba(45,138,45,.3);
+        min-width: 80px;
+    }
+    .block-output .block-inner {
+        background: linear-gradient(135deg, #3a1a1a 0%, #250f0f 100%);
+        border: 1px solid #8a2d2d;
+        box-shadow: 0 4px 16px rgba(138,45,45,.3);
+        min-width: 80px;
+    }
 
-    # Informações do sistema
-    if G_open is not None:
-        try:
-            tipo, Kp, Kv, Ka = constantes_de_erro(G_open)
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Tipo do Sistema", str(tipo))
-            with col2:
-                st.metric("Kp", formatar_numero(Kp))
-            with col3:
-                st.metric("Kv", formatar_numero(Kv))
-            with col4:
-                st.metric("Ka", formatar_numero(Ka))
-        except Exception:
-            pass
+    .block-label {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: .8px;
+        opacity: .6;
+        margin-bottom: 3px;
+    }
+    .block-name {
+        font-weight: 700;
+        font-size: 14px;
+        color: #fff;
+    }
+    .block-tf-display {
+        font-family: 'Courier New', monospace;
+        font-size: 11px;
+        margin-top: 5px;
+        padding: 4px 8px;
+        background: rgba(0,0,0,.3);
+        border-radius: 4px;
+        color: #a0b8d8;
+        text-align: center;
+    }
+    .block-tf-display .tf-num {
+        border-bottom: 1px solid #5580aa;
+        padding-bottom: 2px;
+        margin-bottom: 2px;
+    }
 
-def executar_analises(sistema, analises, entrada):
-    """Executa e exibe todas as análises selecionadas para um sistema.
-    Função compartilhada entre modo clássico e visual."""
-    for analise in analises:
-        st.markdown(f"### {analise}")
+    /* ── PORTS ── */
+    .port {
+        position: absolute;
+        width: 14px; height: 14px;
+        border-radius: 50%;
+        cursor: crosshair;
+        z-index: 20;
+        transition: all .15s;
+    }
+    .port::after {
+        content: '';
+        position: absolute; inset: 3px;
+        border-radius: 50%;
+        background: currentColor;
+    }
+    .port-in {
+        left: -7px; top: 50%; transform: translateY(-50%);
+        border: 2px solid #44bb88;
+        color: #44bb88;
+        background: #0f1117;
+    }
+    .port-out {
+        right: -7px; top: 50%; transform: translateY(-50%);
+        border: 2px solid #5588dd;
+        color: #5588dd;
+        background: #0f1117;
+    }
+    .port:hover {
+        transform: translateY(-50%) scale(1.5);
+        box-shadow: 0 0 10px currentColor;
+    }
+    .port.connecting {
+        transform: translateY(-50%) scale(1.4);
+        box-shadow: 0 0 12px #fbbf24;
+        border-color: #fbbf24;
+        color: #fbbf24;
+    }
 
-        if analise == 'Resposta no tempo':
-            fig, t_out, y = plot_resposta_temporal(sistema, entrada)
-            st.plotly_chart(fig, use_container_width=True)
+    /* Sum block ports */
+    .block-sum .port-in {
+        left: -7px; top: 50%; transform: translateY(-50%);
+    }
+    .block-sum .port-in.port-in-2 {
+        left: 50%; top: calc(100% + 1px);
+        transform: translateX(-50%) translateY(-50%);
+    }
+    .block-sum .port-out {
+        right: -7px; top: 50%; transform: translateY(-50%);
+    }
+    .block-sum .port-in.port-in-2:hover {
+        transform: translateX(-50%) translateY(-50%) scale(1.5);
+    }
+    .block-sum .port-in.port-in-2.connecting {
+        transform: translateX(-50%) translateY(-50%) scale(1.4);
+    }
 
-        elif analise == 'Desempenho':
-            desempenho = calcular_desempenho(sistema)
-            if desempenho:
-                for chave, valor in desempenho.items():
-                    st.markdown(f"**{chave}:** {valor}")
+    /* ── SUM SIGN LABELS ── */
+    .sum-sign {
+        position: absolute;
+        font-size: 14px; font-weight: 700;
+        color: #60ddaa;
+        pointer-events: none;
+    }
+    .sum-sign.sign-left { left: -18px; top: 50%; transform: translateY(-50%); }
+    .sum-sign.sign-bottom { left: 50%; bottom: -20px; transform: translateX(-50%); }
 
-        elif analise == 'Diagrama De Bode Magnitude':
-            fig = plot_bode(sistema, 'magnitude')
-            st.plotly_chart(fig, use_container_width=True)
+    /* ── CONTEXT MENU ── */
+    .ctx-menu {
+        position: absolute; z-index: 1000;
+        background: #1e2235;
+        border: 1px solid #363a50;
+        border-radius: 8px;
+        padding: 4px;
+        box-shadow: 0 8px 32px rgba(0,0,0,.6);
+        min-width: 180px;
+        display: none;
+    }
+    .ctx-item {
+        padding: 7px 12px;
+        font-size: 12px;
+        cursor: pointer;
+        border-radius: 5px;
+        display: flex; align-items: center; gap: 8px;
+        color: #c0c4d8;
+        transition: background .1s;
+    }
+    .ctx-item:hover { background: #2a2f48; color: #fff; }
+    .ctx-item.ctx-danger { color: #ff8fa3; }
+    .ctx-item.ctx-danger:hover { background: #3a1a25; }
+    .ctx-sep { height: 1px; background: #2d3044; margin: 3px 8px; }
 
-        elif analise == 'Diagrama De Bode Fase':
-            fig = plot_bode(sistema, 'fase')
-            st.plotly_chart(fig, use_container_width=True)
+    /* ── MODAL ── */
+    .modal-overlay {
+        position: fixed; inset: 0; z-index: 2000;
+        background: rgba(0,0,0,.6);
+        display: none; align-items: center; justify-content: center;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-box {
+        background: #1a1d29;
+        border: 1px solid #363a50;
+        border-radius: 12px;
+        padding: 24px;
+        min-width: 340px;
+        box-shadow: 0 20px 60px rgba(0,0,0,.8);
+    }
+    .modal-title {
+        font-size: 16px; font-weight: 700; color: #fff;
+        margin-bottom: 16px;
+    }
+    .modal-field {
+        margin-bottom: 12px;
+    }
+    .modal-field label {
+        display: block; font-size: 11px;
+        text-transform: uppercase; letter-spacing: .5px;
+        color: #6b7094; margin-bottom: 4px;
+    }
+    .modal-field input, .modal-field select {
+        width: 100%; padding: 8px 10px;
+        background: #252839; border: 1px solid #363a50;
+        border-radius: 6px; color: #e0e0e0;
+        font-size: 13px; outline: none;
+    }
+    .modal-field input:focus, .modal-field select:focus {
+        border-color: #5568d3;
+    }
+    .modal-actions {
+        display: flex; gap: 8px; justify-content: flex-end;
+        margin-top: 18px;
+    }
 
-        elif analise == 'Diagrama de Polos e Zeros':
-            fig = plot_polos_zeros(sistema)
-            st.plotly_chart(fig, use_container_width=True)
+    /* ── STATUS BAR ── */
+    .status-bar {
+        background: #1a1d29;
+        border-top: 1px solid #2d3044;
+        padding: 5px 14px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 11px;
+        color: #6b7094;
+    }
+    .status-bar .tag {
+        background: #252839;
+        border: 1px solid #2d3044;
+        border-radius: 4px;
+        padding: 1px 8px;
+        margin-left: 8px;
+    }
 
-        elif analise == 'LGR':
-            fig = plot_lgr(sistema)
-            st.plotly_chart(fig, use_container_width=True)
+    /* ── OUTPUT BOX ── */
+    #output-box {
+        display: none;
+        position: absolute;
+        bottom: 40px; left: 14px; right: 14px;
+        background: #141722;
+        border: 1px solid #2d3044;
+        border-radius: 8px;
+        padding: 12px 16px;
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+        color: #88ddaa;
+        max-height: 120px;
+        overflow-y: auto;
+        z-index: 100;
+    }
+    </style>
+    </head>
+    <body>
 
-        elif analise == 'Nyquist':
-            fig, polos_spd, voltas, Z = plot_nyquist(sistema)
-            st.markdown(f"**Polos SPD (P):** {polos_spd}")
-            st.markdown(f"**Voltas (N):** {voltas}")
-            st.markdown(f"**Z = {Z} → {'Estável' if Z == 0 else 'Instável'}**")
-            st.plotly_chart(fig, use_container_width=True)
+    <!-- TOOLBAR -->
+    <div class="toolbar">
+        <span class="toolbar-label">Inserir:</span>
+        <button class="tbtn" onclick="openAddBlock('tf')">
+            <span class="ico">𝑓</span> Função Transferência
+        </button>
+        <button class="tbtn" onclick="openAddBlock('gain')">
+            <span class="ico">K</span> Ganho
+        </button>
+        <button class="tbtn" onclick="addSumBlock()">
+            <span class="ico">Σ</span> Somador
+        </button>
+        <button class="tbtn" onclick="openAddBlock('int')">
+            <span class="ico">∫</span> Integrador
+        </button>
+        <button class="tbtn" onclick="openAddBlock('sensor')">
+            <span class="ico">H</span> Sensor
+        </button>
+        <div class="sep"></div>
+        <button class="tbtn" onclick="addIOBlock('input')">
+            <span class="ico">▶</span> Entrada R(s)
+        </button>
+        <button class="tbtn" onclick="addIOBlock('output')">
+            <span class="ico">◼</span> Saída Y(s)
+        </button>
+        <div class="sep"></div>
+        <button class="tbtn danger" onclick="deleteSelected()">
+            <span class="ico">✕</span> Remover
+        </button>
+        <button class="tbtn danger" onclick="clearAll()">
+            <span class="ico">↺</span> Limpar
+        </button>
+        <div class="sep"></div>
+        <button class="tbtn primary" onclick="exportSystem()">
+            <span class="ico">⚡</span> Exportar Sistema
+        </button>
+    </div>
+
+    <!-- CANVAS -->
+    <div id="canvas-wrap"
+         oncontextmenu="return false;"
+         onclick="onCanvasClick(event)">
+        <svg id="svg-connections">
+            <defs>
+                <marker id="arrow" markerWidth="8" markerHeight="8"
+                        refX="7" refY="3" orient="auto">
+                    <polygon points="0 0, 8 3, 0 6" fill="#5568d3"/>
+                </marker>
+                <marker id="arrow-fb" markerWidth="8" markerHeight="8"
+                        refX="7" refY="3" orient="auto">
+                    <polygon points="0 0, 8 3, 0 6" fill="#e8a035"/>
+                </marker>
+                <marker id="arrow-temp" markerWidth="8" markerHeight="8"
+                        refX="7" refY="3" orient="auto">
+                    <polygon points="0 0, 8 3, 0 6" fill="#88dd55"/>
+                </marker>
+            </defs>
+        </svg>
+        <div id="output-box"></div>
+    </div>
+
+    <!-- CONTEXT MENU -->
+    <div class="ctx-menu" id="ctx-menu">
+        <div class="ctx-item" onclick="editBlock()">✏️ Editar</div>
+        <div class="ctx-item" onclick="duplicateBlock()">📋 Duplicar</div>
+        <div class="ctx-sep"></div>
+        <div class="ctx-item" onclick="toggleFeedback()">🔄 Marcar conexão como feedback</div>
+        <div class="ctx-sep"></div>
+        <div class="ctx-item ctx-danger" onclick="deleteSelected()">🗑️ Remover</div>
+    </div>
+
+    <!-- MODAL -->
+    <div class="modal-overlay" id="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-title" id="modal-title">Adicionar Bloco</div>
+            <div id="modal-body"></div>
+            <div class="modal-actions">
+                <button class="tbtn" onclick="closeModal()">Cancelar</button>
+                <button class="tbtn primary" onclick="confirmModal()">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- STATUS BAR -->
+    <div class="status-bar">
+        <div>
+            Blocos: <span class="tag" id="st-blocks">0</span>
+            Conexões: <span class="tag" id="st-conns">0</span>
+        </div>
+        <div id="st-hint">Clique direito nos blocos para opções</div>
+    </div>
+
+    <script>
+    // ═══════════════════════════════════════
+    //  STATE
+    // ═══════════════════════════════════════
+    let blocks = """ + blocos_init + """;
+    let connections = """ + conexoes_init + """;
+    let idCounter = """ + str(counter_init) + """;
+    let selectedId = null;
+    let dragging = null;
+    let dragOff = {x:0, y:0};
+    let connectingPort = null; // {blockId, portType, portIndex, el}
+    let tempLine = null;
+    let modalCallback = null;
+    let modalType = null;
+
+    // ═══════════════════════════════════════
+    //  INIT
+    // ═══════════════════════════════════════
+    function init() {
+        blocks.forEach(b => renderBlock(b));
+        drawConnections();
+        updateStatus();
+    }
+
+    // ═══════════════════════════════════════
+    //  BLOCK RENDERING
+    // ═══════════════════════════════════════
+    function renderBlock(b) {
+        const el = document.createElement('div');
+        el.className = 'block block-' + b.type;
+        el.id = 'block-' + b.id;
+        el.style.left = b.x + 'px';
+        el.style.top = b.y + 'px';
+
+        let inner = '';
+        if (b.type === 'sum') {
+            inner = `<div class="block-inner">
+                <div class="block-name" style="font-size:22px;">Σ</div>
+                <div class="port port-in" data-block="${b.id}" data-port="in" data-idx="0"></div>
+                <div class="port port-in port-in-2" data-block="${b.id}" data-port="in" data-idx="1"></div>
+                <div class="port port-out" data-block="${b.id}" data-port="out" data-idx="0"></div>
+                <div class="sum-sign sign-left">${b.sign1 || '+'}</div>
+                <div class="sum-sign sign-bottom">${b.sign2 || '−'}</div>
+            </div>`;
+        } else if (b.type === 'input') {
+            inner = `<div class="block-inner">
+                <div class="block-label">ENTRADA</div>
+                <div class="block-name">${b.name || 'R(s)'}</div>
+                <div class="port port-out" data-block="${b.id}" data-port="out" data-idx="0"></div>
+            </div>`;
+        } else if (b.type === 'output') {
+            inner = `<div class="block-inner">
+                <div class="block-label">SAÍDA</div>
+                <div class="block-name">${b.name || 'Y(s)'}</div>
+                <div class="port port-in" data-block="${b.id}" data-port="in" data-idx="0"></div>
+            </div>`;
+        } else {
+            const labels = {tf:'FUNÇÃO TRANSF.', gain:'GANHO', int:'INTEGRADOR', sensor:'SENSOR'};
+            let tfHtml = '';
+            if (b.num && b.den) {
+                tfHtml = `<div class="block-tf-display">
+                    <div class="tf-num">${b.num}</div>
+                    <div class="tf-den">${b.den}</div>
+                </div>`;
+            } else if (b.value !== undefined) {
+                tfHtml = `<div class="block-tf-display">${b.value}</div>`;
+            }
+            inner = `<div class="block-inner">
+                <div class="block-label">${labels[b.type] || b.type}</div>
+                <div class="block-name">${b.name}</div>
+                ${tfHtml}
+                <div class="port port-in" data-block="${b.id}" data-port="in" data-idx="0"></div>
+                <div class="port port-out" data-block="${b.id}" data-port="out" data-idx="0"></div>
+            </div>`;
+        }
+
+        el.innerHTML = inner;
+        document.getElementById('canvas-wrap').appendChild(el);
+
+        // Events
+        el.addEventListener('mousedown', e => startDrag(e, b.id));
+        el.addEventListener('contextmenu', e => showCtx(e, b.id));
+
+        el.querySelectorAll('.port').forEach(p => {
+            p.addEventListener('mousedown', e => {
+                e.stopPropagation();
+                startConnect(e, p);
+            });
+        });
+    }
+
+    // ═══════════════════════════════════════
+    //  DRAG & DROP
+    // ═══════════════════════════════════════
+    function startDrag(e, id) {
+        if (e.target.classList.contains('port')) return;
+        if (e.button === 2) return;
+        e.preventDefault();
+        selectBlock(id);
+        dragging = id;
+        const el = document.getElementById('block-' + id);
+        const rect = el.getBoundingClientRect();
+        dragOff.x = e.clientX - rect.left;
+        dragOff.y = e.clientY - rect.top;
+    }
+
+    document.addEventListener('mousemove', e => {
+        if (dragging !== null) {
+            const wrap = document.getElementById('canvas-wrap').getBoundingClientRect();
+            const el = document.getElementById('block-' + dragging);
+            let x = e.clientX - wrap.left - dragOff.x;
+            let y = e.clientY - wrap.top - dragOff.y;
+            x = Math.max(0, Math.min(x, wrap.width - el.offsetWidth));
+            y = Math.max(0, Math.min(y, wrap.height - el.offsetHeight));
+            el.style.left = x + 'px';
+            el.style.top = y + 'px';
+            const b = blocks.find(bl => bl.id === dragging);
+            if (b) { b.x = x; b.y = y; }
+            drawConnections();
+        }
+        if (connectingPort && tempLine) {
+            const wrap = document.getElementById('canvas-wrap').getBoundingClientRect();
+            const mx = e.clientX - wrap.left;
+            const my = e.clientY - wrap.top;
+            const start = getPortPos(connectingPort.blockId, connectingPort.portType, connectingPort.portIndex);
+            const d = makePath(start.x, start.y, mx, my);
+            tempLine.setAttribute('d', d);
+        }
+    });
+
+    document.addEventListener('mouseup', e => {
+        if (dragging !== null) {
+            dragging = null;
+            saveState();
+        }
+        if (connectingPort) {
+            // Check if mouse is over a port
+            const target = document.elementFromPoint(e.clientX, e.clientY);
+            if (target && target.classList.contains('port')) {
+                finishConnect(target);
+            } else {
+                cancelConnect();
+            }
+        }
+    });
+
+    // ═══════════════════════════════════════
+    //  CONNECTIONS
+    // ═══════════════════════════════════════
+    function startConnect(e, portEl) {
+        e.stopPropagation();
+        e.preventDefault();
+        const blockId = parseInt(portEl.dataset.block);
+        const portType = portEl.dataset.port;
+        const portIdx = parseInt(portEl.dataset.idx || 0);
+
+        connectingPort = {blockId, portType, portIndex: portIdx, el: portEl};
+        portEl.classList.add('connecting');
+
+        // Create temp line
+        const svg = document.getElementById('svg-connections');
+        tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        tempLine.classList.add('conn-temp');
+        tempLine.setAttribute('marker-end', 'url(#arrow-temp)');
+        svg.appendChild(tempLine);
+    }
+
+    function finishConnect(targetEl) {
+        const tBlockId = parseInt(targetEl.dataset.block);
+        const tPortType = targetEl.dataset.port;
+        const tPortIdx = parseInt(targetEl.dataset.idx || 0);
+
+        if (connectingPort.blockId === tBlockId) {
+            cancelConnect();
+            return;
+        }
+
+        let fromId, fromPort, fromIdx, toId, toPort, toIdx;
+
+        if (connectingPort.portType === 'out' && tPortType === 'in') {
+            fromId = connectingPort.blockId;
+            fromPort = 'out';
+            fromIdx = connectingPort.portIndex;
+            toId = tBlockId;
+            toPort = 'in';
+            toIdx = tPortIdx;
+        } else if (connectingPort.portType === 'in' && tPortType === 'out') {
+            fromId = tBlockId;
+            fromPort = 'out';
+            fromIdx = tPortIdx;
+            toId = connectingPort.blockId;
+            toPort = 'in';
+            toIdx = connectingPort.portIndex;
+        } else {
+            cancelConnect();
+            return;
+        }
+
+        // Check duplicate
+        const dup = connections.find(c =>
+            c.from === fromId && c.fromIdx === fromIdx &&
+            c.to === toId && c.toIdx === toIdx
+        );
+        if (!dup) {
+            connections.push({
+                from: fromId, fromPort, fromIdx,
+                to: toId, toPort, toIdx,
+                feedback: false
+            });
+        }
+
+        cancelConnect();
+        drawConnections();
+        saveState();
+    }
+
+    function cancelConnect() {
+        if (connectingPort) {
+            connectingPort.el.classList.remove('connecting');
+            connectingPort = null;
+        }
+        if (tempLine) {
+            tempLine.remove();
+            tempLine = null;
+        }
+    }
+
+    function getPortPos(blockId, portType, portIdx) {
+        const el = document.getElementById('block-' + blockId);
+        const wrap = document.getElementById('canvas-wrap').getBoundingClientRect();
+        if (!el) return {x:0, y:0};
+
+        const selector = `.port[data-block="${blockId}"][data-port="${portType}"]` +
+                          (portIdx > 0 ? `.port-in-2` : `:not(.port-in-2)`);
+        let portEl = el.querySelector(selector);
+        if (!portEl) {
+            portEl = el.querySelector(`.port[data-block="${blockId}"][data-port="${portType}"]`);
+        }
+        if (!portEl) {
+            const rect = el.getBoundingClientRect();
+            return {
+                x: rect.left + (portType === 'out' ? rect.width : 0) - wrap.left,
+                y: rect.top + rect.height/2 - wrap.top
+            };
+        }
+
+        const pr = portEl.getBoundingClientRect();
+        return {
+            x: pr.left + pr.width/2 - wrap.left,
+            y: pr.top + pr.height/2 - wrap.top
+        };
+    }
+
+    function makePath(x1, y1, x2, y2) {
+        const dx = Math.abs(x2 - x1);
+        const cp = Math.max(dx * 0.4, 40);
+        return `M ${x1} ${y1} C ${x1+cp} ${y1}, ${x2-cp} ${y2}, ${x2} ${y2}`;
+    }
+
+    function drawConnections() {
+        const svg = document.getElementById('svg-connections');
+        // Keep defs, remove paths
+        svg.querySelectorAll('path').forEach(p => p.remove());
+
+        connections.forEach((c, ci) => {
+            const from = getPortPos(c.from, 'out', c.fromIdx || 0);
+            const to = getPortPos(c.to, 'in', c.toIdx || 0);
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+
+            if (c.feedback) {
+                // Route feedback: go down then back
+                const midY = Math.max(from.y, to.y) + 60;
+                const d = `M ${from.x} ${from.y} L ${from.x+30} ${from.y}
+                           Q ${from.x+30} ${midY} ${(from.x+to.x)/2} ${midY}
+                           Q ${to.x-30} ${midY} ${to.x-30} ${to.y}
+                           L ${to.x} ${to.y}`;
+                path.setAttribute('d', d);
+                path.classList.add('conn-feedback');
+                path.setAttribute('marker-end', 'url(#arrow-fb)');
+            } else {
+                path.setAttribute('d', makePath(from.x, from.y, to.x, to.y));
+                path.classList.add('conn-line');
+                path.setAttribute('marker-end', 'url(#arrow)');
+            }
+
+            path.style.pointerEvents = 'visibleStroke';
+            path.addEventListener('contextmenu', e => {
+                e.preventDefault();
+                e.stopPropagation();
+                selectedConnIdx = ci;
+                showConnCtx(e, ci);
+            });
+
+            svg.appendChild(path);
+        });
+        updateStatus();
+    }
+
+    let selectedConnIdx = null;
+
+    function showConnCtx(e, ci) {
+        selectedConnIdx = ci;
+        const menu = document.getElementById('ctx-menu');
+        menu.innerHTML = `
+            <div class="ctx-item" onclick="toggleConnFeedback(${ci})">🔄 ${connections[ci].feedback ? 'Conexão normal' : 'Marcar como feedback'}</div>
+            <div class="ctx-sep"></div>
+            <div class="ctx-item ctx-danger" onclick="deleteConn(${ci})">🗑️ Remover conexão</div>
+        `;
+        menu.style.display = 'block';
+        menu.style.left = e.clientX + 'px';
+        menu.style.top = e.clientY + 'px';
+    }
+
+    function toggleConnFeedback(ci) {
+        connections[ci].feedback = !connections[ci].feedback;
+        drawConnections();
+        hideCtx();
+        saveState();
+    }
+
+    function deleteConn(ci) {
+        connections.splice(ci, 1);
+        drawConnections();
+        hideCtx();
+        saveState();
+    }
+
+    // ═══════════════════════════════════════
+    //  SELECTION
+    // ═══════════════════════════════════════
+    function selectBlock(id) {
+        document.querySelectorAll('.block').forEach(b => b.classList.remove('selected'));
+        selectedId = id;
+        const el = document.getElementById('block-' + id);
+        if (el) el.classList.add('selected');
+    }
+
+    function onCanvasClick(e) {
+        if (e.target.id === 'canvas-wrap' || e.target.id === 'svg-connections') {
+            document.querySelectorAll('.block').forEach(b => b.classList.remove('selected'));
+            selectedId = null;
+        }
+        hideCtx();
+    }
+
+    // ═══════════════════════════════════════
+    //  CONTEXT MENU
+    // ═══════════════════════════════════════
+    function showCtx(e, id) {
+        e.preventDefault();
+        e.stopPropagation();
+        selectBlock(id);
+        const menu = document.getElementById('ctx-menu');
+        const b = blocks.find(bl => bl.id === id);
+        let items = '';
+        if (b && b.type !== 'input' && b.type !== 'output') {
+            items += `<div class="ctx-item" onclick="editBlock()">✏️ Editar</div>`;
+        }
+        items += `<div class="ctx-item" onclick="duplicateBlock()">📋 Duplicar</div>`;
+        items += `<div class="ctx-sep"></div>`;
+        items += `<div class="ctx-item ctx-danger" onclick="deleteSelected()">🗑️ Remover</div>`;
+        menu.innerHTML = items;
+        menu.style.display = 'block';
+        menu.style.left = e.clientX + 'px';
+        menu.style.top = e.clientY + 'px';
+    }
+
+    function hideCtx() {
+        document.getElementById('ctx-menu').style.display = 'none';
+    }
+    document.addEventListener('click', e => {
+        if (!e.target.closest('.ctx-menu')) hideCtx();
+    });
+
+    // ═══════════════════════════════════════
+    //  BLOCK OPERATIONS
+    // ═══════════════════════════════════════
+    function openAddBlock(type) {
+        modalType = type;
+        const title = {tf:'Função de Transferência', gain:'Ganho', int:'Integrador', sensor:'Sensor'}[type];
+        document.getElementById('modal-title').textContent = 'Adicionar ' + title;
+
+        let body = '';
+        body += `<div class="modal-field"><label>Nome</label>
+                  <input id="m-name" value="${type === 'int' ? '1/s' : (type === 'sensor' ? 'H(s)' : (type === 'gain' ? 'K' : 'G' + idCounter))}"></div>`;
+
+        if (type === 'tf' || type === 'sensor') {
+            body += `<div class="modal-field"><label>Numerador (ex: s+1, 4*s)</label>
+                      <input id="m-num" value="1" placeholder="1"></div>`;
+            body += `<div class="modal-field"><label>Denominador (ex: s^2+2*s+1)</label>
+                      <input id="m-den" value="s+1" placeholder="s+1"></div>`;
+        } else if (type === 'gain') {
+            body += `<div class="modal-field"><label>Valor do ganho K</label>
+                      <input id="m-val" value="1" type="number" step="any"></div>`;
+        }
+
+        document.getElementById('modal-body').innerHTML = body;
+        document.getElementById('modal-overlay').classList.add('active');
+
+        modalCallback = () => {
+            const name = document.getElementById('m-name').value || type;
+            const wrap = document.getElementById('canvas-wrap').getBoundingClientRect();
+
+            const b = {
+                id: idCounter++,
+                type: type,
+                name: name,
+                x: 80 + Math.random() * (wrap.width - 250),
+                y: 60 + Math.random() * (wrap.height - 180)
+            };
+
+            if (type === 'tf' || type === 'sensor') {
+                b.num = document.getElementById('m-num').value || '1';
+                b.den = document.getElementById('m-den').value || '1';
+            } else if (type === 'gain') {
+                b.value = document.getElementById('m-val').value || '1';
+                b.num = b.value;
+                b.den = '1';
+            } else if (type === 'int') {
+                b.num = '1';
+                b.den = 's';
+            }
+
+            blocks.push(b);
+            renderBlock(b);
+            saveState();
+        };
+    }
+
+    function addSumBlock() {
+        const wrap = document.getElementById('canvas-wrap').getBoundingClientRect();
+        const b = {
+            id: idCounter++,
+            type: 'sum',
+            name: 'Σ',
+            x: 80 + Math.random() * (wrap.width - 200),
+            y: 60 + Math.random() * (wrap.height - 180),
+            sign1: '+',
+            sign2: '−'
+        };
+        blocks.push(b);
+        renderBlock(b);
+        saveState();
+    }
+
+    function addIOBlock(ioType) {
+        const wrap = document.getElementById('canvas-wrap').getBoundingClientRect();
+        const b = {
+            id: idCounter++,
+            type: ioType,
+            name: ioType === 'input' ? 'R(s)' : 'Y(s)',
+            x: ioType === 'input' ? 30 : wrap.width - 140,
+            y: wrap.height / 2 - 30
+        };
+        blocks.push(b);
+        renderBlock(b);
+        saveState();
+    }
+
+    function editBlock() {
+        hideCtx();
+        if (selectedId === null) return;
+        const b = blocks.find(bl => bl.id === selectedId);
+        if (!b || b.type === 'input' || b.type === 'output') return;
+
+        modalType = 'edit';
+        document.getElementById('modal-title').textContent = 'Editar ' + b.name;
+
+        let body = `<div class="modal-field"><label>Nome</label>
+                     <input id="m-name" value="${b.name}"></div>`;
+
+        if (b.type === 'tf' || b.type === 'sensor') {
+            body += `<div class="modal-field"><label>Numerador</label>
+                      <input id="m-num" value="${b.num || '1'}"></div>`;
+            body += `<div class="modal-field"><label>Denominador</label>
+                      <input id="m-den" value="${b.den || '1'}"></div>`;
+        } else if (b.type === 'gain') {
+            body += `<div class="modal-field"><label>Valor K</label>
+                      <input id="m-val" value="${b.value || '1'}" type="number" step="any"></div>`;
+        } else if (b.type === 'sum') {
+            body += `<div class="modal-field"><label>Sinal entrada principal</label>
+                      <select id="m-s1"><option ${b.sign1==='+' ? 'selected' : ''}>+</option>
+                      <option ${b.sign1==='−' ? 'selected' : ''}>−</option></select></div>`;
+            body += `<div class="modal-field"><label>Sinal entrada feedback</label>
+                      <select id="m-s2"><option ${b.sign2==='+' ? 'selected' : ''}>+</option>
+                      <option ${b.sign2==='−' ? 'selected' : ''}>−</option></select></div>`;
+        }
+
+        document.getElementById('modal-body').innerHTML = body;
+        document.getElementById('modal-overlay').classList.add('active');
+
+        modalCallback = () => {
+            b.name = document.getElementById('m-name').value || b.name;
+
+            if (b.type === 'tf' || b.type === 'sensor') {
+                b.num = document.getElementById('m-num').value || '1';
+                b.den = document.getElementById('m-den').value || '1';
+            } else if (b.type === 'gain') {
+                b.value = document.getElementById('m-val').value || '1';
+                b.num = b.value;
+                b.den = '1';
+            } else if (b.type === 'sum') {
+                b.sign1 = document.getElementById('m-s1').value;
+                b.sign2 = document.getElementById('m-s2').value;
+            }
+
+            // Re-render
+            const el = document.getElementById('block-' + b.id);
+            if (el) el.remove();
+            renderBlock(b);
+            drawConnections();
+            saveState();
+        };
+    }
+
+    function duplicateBlock() {
+        hideCtx();
+        if (selectedId === null) return;
+        const orig = blocks.find(bl => bl.id === selectedId);
+        if (!orig) return;
+        const b = {...orig, id: idCounter++, x: orig.x + 30, y: orig.y + 30};
+        blocks.push(b);
+        renderBlock(b);
+        saveState();
+    }
+
+    function deleteSelected() {
+        hideCtx();
+        if (selectedId === null) return;
+        const el = document.getElementById('block-' + selectedId);
+        if (el) el.remove();
+        blocks = blocks.filter(b => b.id !== selectedId);
+        connections = connections.filter(c => c.from !== selectedId && c.to !== selectedId);
+        selectedId = null;
+        drawConnections();
+        saveState();
+    }
+
+    function clearAll() {
+        if (!confirm('Limpar todo o diagrama?')) return;
+        blocks.forEach(b => {
+            const el = document.getElementById('block-' + b.id);
+            if (el) el.remove();
+        });
+        blocks = [];
+        connections = [];
+        selectedId = null;
+        drawConnections();
+        saveState();
+    }
+
+    // ═══════════════════════════════════════
+    //  MODAL
+    // ═══════════════════════════════════════
+    function closeModal() {
+        document.getElementById('modal-overlay').classList.remove('active');
+        modalCallback = null;
+    }
+
+    function confirmModal() {
+        if (modalCallback) modalCallback();
+        closeModal();
+    }
+
+    // Enter key in modal
+    document.getElementById('modal-overlay').addEventListener('keydown', e => {
+        if (e.key === 'Enter') confirmModal();
+        if (e.key === 'Escape') closeModal();
+    });
+
+    // ═══════════════════════════════════════
+    //  EXPORT SYSTEM
+    // ═══════════════════════════════════════
+    function exportSystem() {
+        const data = {blocks, connections};
+        const json = JSON.stringify(data);
+
+        // Send to Streamlit
+        const outputBox = document.getElementById('output-box');
+        outputBox.style.display = 'block';
+        outputBox.textContent = '✅ Sistema exportado! Clique em "Processar" no Streamlit.';
+
+        // Use Streamlit component communication
+        if (window.parent) {
+            window.parent.postMessage({
+                type: 'streamlit:setComponentValue',
+                value: json
+            }, '*');
+        }
+
+        // Also store in a hidden element for Streamlit to read
+        let hiddenEl = document.getElementById('export-data');
+        if (!hiddenEl) {
+            hiddenEl = document.createElement('div');
+            hiddenEl.id = 'export-data';
+            hiddenEl.style.display = 'none';
+            document.body.appendChild(hiddenEl);
+        }
+        hiddenEl.textContent = json;
+
+        setTimeout(() => { outputBox.style.display = 'none'; }, 3000);
+    }
+
+    // ═══════════════════════════════════════
+    //  STATUS
+    // ═══════════════════════════════════════
+    function updateStatus() {
+        document.getElementById('st-blocks').textContent = blocks.length;
+        document.getElementById('st-conns').textContent = connections.length;
+    }
+
+    function saveState() {
+        updateStatus();
+        // Send state to parent
+        const data = {blocks, connections, counter: idCounter};
+        if (window.parent) {
+            window.parent.postMessage({
+                type: 'diagram_state',
+                data: JSON.stringify(data)
+            }, '*');
+        }
+    }
+
+    // ═══════════════════════════════════════
+    //  KEYBOARD
+    // ═══════════════════════════════════════
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+            if (selectedId !== null && !document.getElementById('modal-overlay').classList.contains('active')) {
+                deleteSelected();
+            }
+        }
+        if (e.key === 'Escape') {
+            cancelConnect();
+            closeModal();
+        }
+    });
+
+    // Init
+    init();
+    </script>
+    </body>
+    </html>
+    """
+    return html_code
+
+
+def processar_diagrama_visual():
+    """Processa os blocos do editor visual e calcula o sistema equivalente"""
+    blocos = st.session_state.visual_blocos
+    conexoes = st.session_state.visual_conexoes
+
+    if not blocos:
+        return None, None, "Nenhum bloco no diagrama. Adicione blocos no editor visual."
+
+    try:
+        # Build transfer functions for each block
+        tfs = {}
+        for b in blocos:
+            bid = b['id']
+            btype = b.get('type', '')
+
+            if btype in ('tf', 'sensor'):
+                num_str = b.get('num', '1')
+                den_str = b.get('den', '1')
+                tf, _ = converter_para_tf(num_str, den_str)
+                tfs[bid] = tf
+            elif btype == 'gain':
+                val = float(b.get('value', 1))
+                tfs[bid] = TransferFunction([val], [1])
+            elif btype == 'int':
+                tfs[bid] = TransferFunction([1], [1, 0])
+            elif btype == 'sum':
+                tfs[bid] = 'sum'
+            elif btype in ('input', 'output'):
+                tfs[bid] = TransferFunction([1], [1])
+
+        # Strategy: Try to detect standard feedback topology
+        # Look for: Input -> Sum -> [Forward path blocks] -> Output
+        #                     ^                              |
+        #                     |--- [Feedback path] <---------|
+
+        # Find forward path (non-feedback connections)
+        fwd_conns = [c for c in conexoes if not c.get('feedback', False)]
+        fb_conns = [c for c in conexoes if c.get('feedback', False)]
+
+        # Build adjacency from forward connections
+        adj = {}
+        for c in fwd_conns:
+            adj.setdefault(c['from'], []).append(c['to'])
+
+        # Try to find a linear path through forward connections
+        def find_path(start_candidates):
+            for start in start_candidates:
+                visited = set()
+                path = [start]
+                visited.add(start)
+                current = start
+                while current in adj:
+                    nexts = [n for n in adj[current] if n not in visited]
+                    if not nexts:
+                        break
+                    current = nexts[0]
+                    path.append(current)
+                    visited.add(current)
+                if len(path) > 1:
+                    return path
+            return []
+
+        # Find input blocks
+        input_blocks = [b['id'] for b in blocos if b.get('type') == 'input']
+        sum_blocks = [b['id'] for b in blocos if b.get('type') == 'sum']
+
+        path = find_path(input_blocks if input_blocks else sum_blocks if sum_blocks else [blocos[0]['id']])
+
+        if not path:
+            # Fallback: multiply all non-sum, non-IO blocks in series
+            series_tfs = [tfs[b['id']] for b in blocos
+                         if b.get('type') not in ('sum', 'input', 'output') and b['id'] in tfs]
+            if not series_tfs:
+                return None, None, "Não foi possível calcular o sistema."
+
+            G_open = series_tfs[0]
+            for t in series_tfs[1:]:
+                G_open = G_open * t
+            return G_open, ctrl.feedback(G_open, TransferFunction([1], [1])), \
+                   f"Sistema série: {len(series_tfs)} blocos"
+
+        # Collect forward-path TFs (skip sum, input, output)
+        fwd_tfs = []
+        for bid in path:
+            if bid in tfs and tfs[bid] != 'sum' and \
+               not any(b['id'] == bid and b.get('type') in ('input', 'output') for b in blocos):
+                fwd_tfs.append(tfs[bid])
+
+        if not fwd_tfs:
+            return None, None, "Nenhuma função de transferência encontrada no caminho direto."
+
+        # Compute open-loop forward path
+        G_forward = fwd_tfs[0]
+        for t in fwd_tfs[1:]:
+            G_forward = G_forward * t
+
+        # Compute feedback path
+        if fb_conns:
+            fb_path_ids = set()
+            for c in fb_conns:
+                fb_path_ids.add(c['from'])
+                fb_path_ids.add(c['to'])
+
+            fb_tfs = []
+            for bid in fb_path_ids:
+                if bid in tfs and tfs[bid] != 'sum' and \
+                   not any(b['id'] == bid and b.get('type') in ('input', 'output', 'sum') for b in blocos):
+                    fb_tfs.append(tfs[bid])
+
+            if fb_tfs:
+                H = fb_tfs[0]
+                for t in fb_tfs[1:]:
+                    H = H * t
+            else:
+                H = TransferFunction([1], [1])
+
+            G_closed = ctrl.feedback(G_forward, H)
+            info = f"Malha aberta: G(s) = {G_forward}\nFeedback: H(s) = {H}\nMalha fechada: T(s) = {G_closed}"
+        else:
+            H = TransferFunction([1], [1])
+            G_closed = ctrl.feedback(G_forward, H)
+            info = f"G(s) = {G_forward} (feedback unitário)"
+
+        return G_forward, G_closed, info
+
+    except Exception as e:
+        return None, None, f"Erro ao processar: {str(e)}"
+
 
 # =====================================================
 # APLICAÇÃO PRINCIPAL
@@ -1000,171 +1814,219 @@ def executar_analises(sistema, analises, entrada):
 
 def main():
     st.set_page_config(page_title="Modelagem de Sistemas", layout="wide")
-    st.title("Modelagem e Análise de Sistemas de Controle")
+    st.title("📉 Modelagem e Análise de Sistemas de Controle")
 
     inicializar_blocos()
 
     if 'calculo_erro_habilitado' not in st.session_state:
         st.session_state.calculo_erro_habilitado = False
-
-    if 'mostrar_ajuda' not in st.session_state:
-        st.session_state.mostrar_ajuda = False
-
     if 'modo_editor' not in st.session_state:
         st.session_state.modo_editor = 'classico'
 
-    # Seletor de modo
-    st.sidebar.header("Modo de Trabalho")
+    # ── Sidebar: Modo de trabalho ──
+    st.sidebar.header("🎛️ Modo de Trabalho")
     modo = st.sidebar.radio(
         "Escolha o modo:",
         ['Clássico (Lista)', 'Editor Visual (Xcos)'],
-        index=0 if st.session_state.modo_editor == 'classico' else 1,
-        help="Clássico: adicionar blocos por formulário\nEditor Visual: arrastar e conectar blocos graficamente"
+        index=0 if st.session_state.modo_editor == 'classico' else 1
     )
+    st.session_state.modo_editor = 'visual' if 'Visual' in modo else 'classico'
 
-    if modo == 'Editor Visual (Xcos)':
-        st.session_state.modo_editor = 'visual'
-    else:
-        st.session_state.modo_editor = 'classico'
-
-    # =====================================================
-    # MODO EDITOR VISUAL
-    # =====================================================
+    # ══════════════════════════════════════════
+    #  MODO EDITOR VISUAL
+    # ══════════════════════════════════════════
     if st.session_state.modo_editor == 'visual':
-        st.subheader("Editor Visual de Diagrama de Blocos")
+        st.subheader("🎨 Editor Visual de Diagrama de Blocos")
 
-        # Renderizar componente bidirecional
-        current_model_json = json.dumps(st.session_state.visual_model)
-        result = editor_visual_component(model_json=current_model_json, key="visual_editor")
+        # ── Editor HTML ──
+        html_editor = criar_editor_visual_html()
+        components.html(html_editor, height=650, scrolling=False)
 
-        # Receber estado atualizado do JS
-        if result is not None:
-            try:
-                updated_model = json.loads(result) if isinstance(result, str) else result
-                if isinstance(updated_model, dict) and 'nodes' in updated_model:
-                    st.session_state.visual_model = updated_model
-            except (json.JSONDecodeError, TypeError):
-                pass
+        st.markdown("---")
 
-        # Sidebar: configurações de análise para modo visual
+        # ── Sidebar: Configuração manual de blocos para processar ──
         with st.sidebar:
-            st.markdown("---")
-            st.header("Configurações de Análise")
+            st.header("📦 Blocos do Sistema Visual")
+            st.info("Como o editor roda em iframe, insira os blocos abaixo para processar a análise.")
 
-            tipo_malha_visual = st.selectbox(
-                "Tipo de Análise:",
-                ["Malha Aberta", "Malha Fechada"],
-                key="tipo_malha_visual"
-            )
-
-            usar_ganho_visual = st.checkbox(
-                "Adicionar ganho K ajustável",
-                value=False,
-                key="ganho_visual_check"
-            )
-
-            if usar_ganho_visual:
-                K_visual = st.slider(
-                    "Ganho K", 0.1, 100.0, 1.0, 0.1,
-                    key="ganho_k_visual"
-                )
+            st.markdown("#### Adicionar Bloco ao Cálculo")
+            v_nome = st.text_input("Nome", value=f"G{st.session_state.visual_counter}", key="v_nome")
+            v_tipo = st.selectbox("Tipo", ['Planta (direto)', 'Controlador (direto)', 'Sensor (feedback)', 'Ganho'], key="v_tipo")
+            
+            if v_tipo == 'Ganho':
+                v_ganho = st.number_input("Valor K", value=1.0, step=0.1, key="v_ganho")
             else:
-                K_visual = 1.0
+                v_num = st.text_input("Numerador", value="1", key="v_num")
+                v_den = st.text_input("Denominador", value="s+1", key="v_den")
 
-            analise_opcoes_visual = ANALYSIS_OPTIONS[
-                "malha_fechada" if tipo_malha_visual == "Malha Fechada" else "malha_aberta"
-            ]
-            analises_visual = st.multiselect(
-                "Análises:",
-                analise_opcoes_visual,
-                default=[analise_opcoes_visual[0]],
-                key="analises_visual"
-            )
+            if st.button("➕ Adicionar Bloco Visual", use_container_width=True):
+                try:
+                    if v_tipo == 'Ganho':
+                        n_str = str(v_ganho)
+                        d_str = "1"
+                    else:
+                        n_str = v_num
+                        d_str = v_den
 
-            entrada_visual = st.selectbox(
-                "Sinal de Entrada",
-                INPUT_SIGNALS,
-                key="entrada_visual"
-            )
+                    tf_obj, _ = converter_para_tf(n_str, d_str)
+                    bloco = {
+                        'id': st.session_state.visual_counter,
+                        'type': 'tf' if 'Planta' in v_tipo else ('tf' if 'Controlador' in v_tipo else ('sensor' if 'Sensor' in v_tipo else 'gain')),
+                        'role': 'planta' if 'Planta' in v_tipo else ('controlador' if 'Controlador' in v_tipo else ('sensor' if 'Sensor' in v_tipo else 'ganho')),
+                        'name': v_nome,
+                        'num': n_str,
+                        'den': d_str,
+                        'value': str(v_ganho) if v_tipo == 'Ganho' else None,
+                        'x': 100, 'y': 100
+                    }
+                    st.session_state.visual_blocos.append(bloco)
+                    st.session_state.visual_counter += 1
+                    st.success(f"Bloco {v_nome} adicionado!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro: {e}")
+
+            # List current blocks
+            if st.session_state.visual_blocos:
+                st.markdown("#### Blocos Cadastrados")
+                for i, b in enumerate(st.session_state.visual_blocos):
+                    role_label = b.get('role', b.get('type', ''))
+                    col_a, col_b = st.columns([3, 1])
+                    with col_a:
+                        disp = f"**{b['name']}** ({role_label})"
+                        if b.get('num') and b.get('den'):
+                            disp += f" — {b['num']}/{b['den']}"
+                        st.markdown(disp)
+                    with col_b:
+                        if st.button("🗑️", key=f"del_vb_{i}"):
+                            st.session_state.visual_blocos.pop(i)
+                            st.rerun()
+
+                if st.button("🗑️ Limpar Todos", key="clear_visual_blocks"):
+                    st.session_state.visual_blocos = []
+                    st.rerun()
 
             st.markdown("---")
-            st.header("Estatísticas")
-            model = st.session_state.visual_model
-            st.metric("Blocos", len(model.get('nodes', [])))
-            st.metric("Conexões", len(model.get('edges', [])))
+            st.markdown("### ⚙️ Tipo de Análise")
+            v_malha = st.selectbox("Tipo de malha:", ["Malha Aberta", "Malha Fechada"], key="v_malha")
+            v_entrada = st.selectbox("Sinal de Entrada:", INPUT_SIGNALS, key="v_entrada")
+            v_analises = st.multiselect(
+                "Análises:",
+                ANALYSIS_OPTIONS["malha_fechada" if v_malha == "Malha Fechada" else "malha_aberta"],
+                default=["Resposta no tempo", "Desempenho"],
+                key="v_analises"
+            )
 
-        # Botões de ação
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            processar = st.button("Processar Diagrama", type="primary", use_container_width=True)
-        with col2:
-            if st.button("Exportar Diagrama", use_container_width=True):
-                diagrama_json = json.dumps(st.session_state.visual_model, indent=2)
-                st.download_button(
-                    label="Baixar JSON",
-                    data=diagrama_json,
-                    file_name="diagrama_blocos.json",
-                    mime="application/json"
-                )
+        # ── Processar e mostrar resultados ──
+        st.subheader("📊 Análise do Sistema")
 
-        # Processar e analisar
-        if processar:
+        if st.button("⚡ Processar Sistema", type="primary", use_container_width=True, key="proc_visual"):
+            vis_blocos = st.session_state.visual_blocos
+            if not vis_blocos:
+                st.warning("Adicione blocos na barra lateral para processar.")
+                st.stop()
+
             try:
-                model = st.session_state.visual_model
-                G_open, G_closed, details = processar_diagrama_visual(model)
+                # Build TFs from sidebar blocks
+                plantas = []
+                controladores = []
+                sensores = []
 
-                if G_open is None:
-                    error_msg = details if isinstance(details, str) else "Erro ao processar diagrama."
-                    st.error(error_msg)
+                for b in vis_blocos:
+                    tf_obj, _ = converter_para_tf(b['num'], b['den'])
+                    role = b.get('role', '')
+                    if role == 'planta':
+                        plantas.append(tf_obj)
+                    elif role == 'controlador':
+                        controladores.append(tf_obj)
+                    elif role == 'sensor':
+                        sensores.append(tf_obj)
+                    elif role == 'ganho':
+                        plantas.append(tf_obj)
+
+                if not plantas and not controladores:
+                    st.error("Adicione pelo menos uma Planta ou Controlador.")
+                    st.stop()
+
+                # Combine
+                G = plantas[0] if plantas else TransferFunction([1], [1])
+                for p in plantas[1:]:
+                    G = G * p
+
+                C = controladores[0] if controladores else TransferFunction([1], [1])
+                for c in controladores[1:]:
+                    C = C * c
+
+                H = sensores[0] if sensores else TransferFunction([1], [1])
+                for s_tf in sensores[1:]:
+                    H = H * s_tf
+
+                G_open = C * G
+
+                if v_malha == "Malha Aberta":
+                    sistema = G_open
+                    st.info(f"🔧 **Malha Aberta:** G(s) = C(s)·P(s)")
                 else:
-                    st.success("Diagrama processado com sucesso!")
+                    sistema = ctrl.feedback(G_open, H)
+                    st.info(f"🔧 **Malha Fechada:** T(s) = C·G / (1 + C·G·H)")
 
-                    # Mostrar TF equivalente
-                    mostrar_tf_equivalente(G_open, G_closed, details)
+                st.markdown(f"**G aberta:** `{G_open}`")
+                if v_malha == "Malha Fechada":
+                    st.markdown(f"**T fechada:** `{sistema}`")
 
-                    st.markdown("---")
+                # Run analyses
+                for analise in v_analises:
+                    st.markdown(f"### 🔎 {analise}")
 
-                    # Selecionar sistema para análise
-                    ganho_tf = TransferFunction([K_visual], [1])
+                    if analise == 'Resposta no tempo':
+                        fig, t_out, y = plot_resposta_temporal(sistema, v_entrada)
+                        st.plotly_chart(fig, use_container_width=True)
 
-                    if tipo_malha_visual == "Malha Aberta":
-                        sistema = ganho_tf * G_open
-                    else:
-                        if isinstance(details, dict) and details.get('tipo') == 'malha_fechada':
-                            # Já é malha fechada, aplicar ganho
-                            G_fwd = details.get('forward', G_open)
-                            H_fb = details.get('feedback', TransferFunction([1], [1]))
-                            try:
-                                sistema = ctrl.feedback(ganho_tf * G_fwd, H_fb)
-                            except Exception:
-                                sistema = G_closed
-                        else:
-                            # Sistema sem feedback detectado - usar feedback unitário
-                            try:
-                                sistema = ctrl.feedback(ganho_tf * G_open, 1)
-                            except Exception:
-                                sistema = G_closed
+                    elif analise == 'Desempenho':
+                        desempenho = calcular_desempenho(sistema)
+                        for chave, valor in desempenho.items():
+                            st.markdown(f"**{chave}:** {valor}")
 
-                    # Executar análises selecionadas
-                    executar_analises(sistema, analises_visual, entrada_visual)
+                    elif analise == 'Diagrama De Bode Magnitude':
+                        fig = plot_bode(sistema, 'magnitude')
+                        st.plotly_chart(fig, use_container_width=True)
+
+                    elif analise == 'Diagrama De Bode Fase':
+                        fig = plot_bode(sistema, 'fase')
+                        st.plotly_chart(fig, use_container_width=True)
+
+                    elif analise == 'Diagrama de Polos e Zeros':
+                        fig = plot_polos_zeros(sistema)
+                        st.plotly_chart(fig, use_container_width=True)
+
+                    elif analise == 'LGR':
+                        fig = plot_lgr(G_open)
+                        st.plotly_chart(fig, use_container_width=True)
+
+                    elif analise == 'Nyquist':
+                        fig, polos_spd, voltas, Z = plot_nyquist(G_open)
+                        st.markdown(f"**Polos SPD (P):** {polos_spd}")
+                        st.markdown(f"**Voltas (N):** {voltas}")
+                        st.markdown(f"**Z = {Z} → {'✅ Estável' if Z == 0 else '❌ Instável'}**")
+                        st.plotly_chart(fig, use_container_width=True)
 
             except Exception as e:
-                st.error(f"Erro durante o processamento: {e}")
+                st.error(f"Erro durante processamento: {e}")
 
         return
 
-    # =====================================================
-    # MODO CLÁSSICO (código original)
-    # =====================================================
+    # ══════════════════════════════════════════
+    #  MODO CLÁSSICO (original preservado)
+    # ══════════════════════════════════════════
 
     with st.sidebar:
-        st.header("Adicionar Blocos")
+        st.header("🧱 Adicionar Blocos")
         nome = st.text_input("Nome", value="G1")
         tipo = st.selectbox("Tipo", ['Planta', 'Controlador', 'Sensor', 'Outro'])
         numerador = st.text_input("Numerador", placeholder="ex: 4*s")
         denominador = st.text_input("Denominador", placeholder="ex: s^2 + 2*s + 3")
 
-        if st.button("Adicionar"):
+        if st.button("➕ Adicionar"):
             sucesso, mensagem = adicionar_bloco(nome, tipo, numerador, denominador)
             if sucesso:
                 st.success(mensagem)
@@ -1172,19 +2034,19 @@ def main():
                 st.error(mensagem)
 
         if not st.session_state.blocos.empty:
-            st.header("Excluir Blocos")
+            st.header("🗑️ Excluir Blocos")
             excluir = st.selectbox("Selecionar", st.session_state.blocos['nome'])
-            if st.button("Excluir"):
+            if st.button("❌ Excluir"):
                 mensagem = remover_bloco(excluir)
                 st.success(mensagem)
 
-        st.header("Configurações")
-        if st.button("Habilitar Cálculo de Erro" if not st.session_state.calculo_erro_habilitado else "Desabilitar Cálculo de Erro"):
+        st.header("⚙️ Configurações")
+        if st.button("🔢 Habilitar Cálculo de Erro" if not st.session_state.calculo_erro_habilitado else "❌ Desabilitar Cálculo de Erro"):
             st.session_state.calculo_erro_habilitado = not st.session_state.calculo_erro_habilitado
             st.rerun()
 
     if st.session_state.calculo_erro_habilitado:
-        st.subheader("Cálculo de Erro Estacionário")
+        st.subheader("📊 Cálculo de Erro Estacionário")
         col1, col2 = st.columns(2)
         with col1:
             num_erro = st.text_input("Numerador", value="", key="num_erro")
@@ -1193,13 +2055,13 @@ def main():
 
         btn_col1, btn_col2 = st.columns(2)
         with btn_col1:
-            if st.button("Calcular Erro Estacionário"):
+            if st.button("🔍 Calcular Erro Estacionário"):
                 try:
                     G, _ = converter_para_tf(num_erro, den_erro)
                     tipo, Kp, Kv, Ka = constantes_de_erro(G)
 
                     df = pd.DataFrame([{"Tipo": tipo, "Kp": Kp, "Kv": Kv, "Ka": Ka}])
-                    st.subheader("Resultado")
+                    st.subheader("📊 Resultado")
                     st.dataframe(
                         df.style.format({
                             "Kp": lambda x: formatar_numero(x),
@@ -1213,37 +2075,37 @@ def main():
                     st.error(f"Erro: {str(e)}")
 
         with btn_col2:
-            if st.button("Remover Planta", key="remover_planta"):
+            if st.button("🗑️ Remover Planta", key="remover_planta"):
                 if not st.session_state.blocos.empty:
                     st.session_state.blocos = st.session_state.blocos[st.session_state.blocos['tipo'] != 'Planta']
                     st.success("Plantas removidas!")
                 else:
                     st.warning("Nenhuma planta para remover")
     else:
-        st.info("Use o botão 'Habilitar Cálculo de Erro' na barra lateral")
+        st.info("💡 Use o botão 'Habilitar Cálculo de Erro' na barra lateral")
 
     col1, col2 = st.columns([2, 1])
 
     with col2:
-        st.subheader("Tipo de Sistema")
+        st.subheader("🔍 Tipo de Sistema")
         tipo_malha = st.selectbox("Tipo:", ["Malha Aberta", "Malha Fechada"])
         usar_ganho = st.checkbox("Adicionar ganho K ajustável", value=False)
 
         if usar_ganho:
             K = st.slider("Ganho K", 0.1, 100.0, 1.0, 0.1)
-            st.info(f"Ganho K: {K:.2f}")
+            st.info(f"✅ Ganho K: {K:.2f}")
         else:
             K = 1.0
 
-        st.subheader("Análises")
+        st.subheader("📊 Análises")
         analise_opcoes = ANALYSIS_OPTIONS["malha_fechada" if tipo_malha == "Malha Fechada" else "malha_aberta"]
         analises = st.multiselect("Escolha:", analise_opcoes, default=analise_opcoes[0])
         entrada = st.selectbox("Sinal de Entrada", INPUT_SIGNALS)
 
     with col1:
-        st.subheader("Resultados")
+        st.subheader("📈 Resultados")
 
-        if st.button("Executar Simulação", use_container_width=True):
+        if st.button("▶️ Executar Simulação", use_container_width=True):
             try:
                 df = st.session_state.blocos
                 if df.empty:
@@ -1262,20 +2124,54 @@ def main():
 
                 if tipo_malha == "Malha Aberta":
                     sistema = ganho_tf * planta
-                    st.info(f"Sistema em Malha Aberta com K = {K:.2f}")
+                    st.info(f"🔧 Sistema em Malha Aberta com K = {K:.2f}")
                 else:
                     planta_com_ganho = ganho_tf * planta
                     sistema = calcular_malha_fechada(planta_com_ganho, controlador, sensor)
-                    st.info(f"Sistema em Malha Fechada com K = {K:.2f}")
+                    st.info(f"🔧 Sistema em Malha Fechada com K = {K:.2f}")
 
-                executar_analises(sistema, analises, entrada)
+                for analise in analises:
+                    st.markdown(f"### 🔎 {analise}")
+
+                    if analise == 'Resposta no tempo':
+                        fig, t_out, y = plot_resposta_temporal(sistema, entrada)
+                        st.plotly_chart(fig, use_container_width=True)
+
+                    elif analise == 'Desempenho':
+                        desempenho = calcular_desempenho(sistema)
+                        for chave, valor in desempenho.items():
+                            st.markdown(f"**{chave}:** {valor}")
+
+                    elif analise == 'Diagrama De Bode Magnitude':
+                        fig = plot_bode(sistema, 'magnitude')
+                        st.plotly_chart(fig, use_container_width=True)
+
+                    elif analise == 'Diagrama De Bode Fase':
+                        fig = plot_bode(sistema, 'fase')
+                        st.plotly_chart(fig, use_container_width=True)
+
+                    elif analise == 'Diagrama de Polos e Zeros':
+                        fig = plot_polos_zeros(sistema)
+                        st.plotly_chart(fig, use_container_width=True)
+
+                    elif analise == 'LGR':
+                        fig = plot_lgr(sistema)
+                        st.plotly_chart(fig, use_container_width=True)
+
+                    elif analise == 'Nyquist':
+                        fig, polos_spd, voltas, Z = plot_nyquist(sistema)
+                        st.markdown(f"**Polos SPD (P):** {polos_spd}")
+                        st.markdown(f"**Voltas (N):** {voltas}")
+                        st.markdown(f"**Z = {Z} → {'✅ Estável' if Z == 0 else '❌ Instável'}**")
+                        st.plotly_chart(fig, use_container_width=True)
 
             except Exception as e:
                 st.error(f"Erro durante a simulação: {e}")
 
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### Dica")
+    st.sidebar.markdown("### 💡 Dica")
     st.sidebar.info("Experimente o **Editor Visual** para construir sistemas graficamente!")
+
 
 if __name__ == "__main__":
     main()
