@@ -1827,7 +1827,7 @@ def main():
     st.sidebar.header("🎛️ Modo de Trabalho")
     modo = st.sidebar.radio(
         "Escolha o modo:",
-        ['Clássico (Lista)', 'Editor Visual (Xcos)'],
+        ['Clássico (Lista)', 'Editor Visual DIagrama de Blocos (em desenvolvimento)'],
         index=0 if st.session_state.modo_editor == 'classico' else 1
     )
     st.session_state.modo_editor = 'visual' if 'Visual' in modo else 'classico'
@@ -2259,3 +2259,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
