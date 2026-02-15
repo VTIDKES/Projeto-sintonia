@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Sistema de Modelagem e Análise de Sistemas de Controle
-Com Editor Visual de Diagrama de Blocos (estilo Xcos)
+
 """
 
 import streamlit as st
@@ -1827,7 +1827,7 @@ def main():
     st.sidebar.header("🎛️ Modo de Trabalho")
     modo = st.sidebar.radio(
         "Escolha o modo:",
-        ['Clássico (Lista)', 'Editor Visual DIagrama de Blocos (em desenvolvimento)'],
+        ['Clássico (Lista)', 'Editor Visual / Diagrama de Blocos (em desenvolvimento)'],
         index=0 if st.session_state.modo_editor == 'classico' else 1
     )
     st.session_state.modo_editor = 'visual' if 'Visual' in modo else 'classico'
@@ -2259,4 +2259,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
