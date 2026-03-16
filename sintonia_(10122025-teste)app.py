@@ -1810,46 +1810,18 @@ def processar_diagrama_visual():
 
 
 # =====================================================
-# COMPONENTE VISUAL
+# COMPONENTE VISUAL (components.html)
 # =====================================================
 
-COMPONENT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "visual_blocks_frontend")
-_VISUAL_COMPONENT = None
-_VISUAL_HTML = None
+_VISUAL_HTML_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "visual_blocks_frontend", "index.html"
+)
 
+@st.cache_resource
 def _load_visual_editor_html():
     """Carrega o HTML do editor visual"""
-    global _VISUAL_HTML
-    if _VISUAL_HTML is None:
-        html_path = os.path.join(COMPONENT_DIR, "index.html")
-        with open(html_path, 'r', encoding='utf-8') as f:
-            _VISUAL_HTML = f.read()
-    return _VISUAL_HTML
-
-def _get_visual_component():
-    """Tenta criar o componente declarado, retorna None se falhar"""
-    global _VISUAL_COMPONENT
-    if _VISUAL_COMPONENT is None:
-        try:
-            _VISUAL_COMPONENT = components.declare_component("visual_blocks_editor", path=COMPONENT_DIR)
-        except Exception:
-            _VISUAL_COMPONENT = False  # Marca como falhou
-    return _VISUAL_COMPONENT if _VISUAL_COMPONENT else None
-
-def render_visual_editor(model_json):
-    """Renderiza o editor visual - tenta declare_component, fallback para components.html"""
-    comp = _get_visual_component()
-    if comp:
-        try:
-            result = comp(model=model_json, key="vb_editor", default=None)
-            return result
-        except Exception:
-            pass
-
-    # Fallback: usar components.html
-    html_content = _load_visual_editor_html()
-    components.html(html_content, height=620, scrolling=False)
-    return None
+    with open(_VISUAL_HTML_PATH, 'r', encoding='utf-8') as f:
+        return f.read()
 
 
 # =====================================================
@@ -2028,35 +2000,34 @@ def main():
         if 'diagram_model' not in st.session_state:
             st.session_state.diagram_model = {'nodes': [], 'edges': []}
 
-        # ── Editor Visual ──
-        current_model = st.session_state.diagram_model
-        result = render_visual_editor(json.dumps(current_model))
+        # ── Editor Visual (components.html) ──
+        html_content = _load_visual_editor_html()
+        components.html(html_content, height=620, scrolling=False)
 
-        # Receber modelo do componente (quando declare_component funciona)
-        if result is not None:
+        # ── JSON do Diagrama ──
+        st.markdown(
+            '<p style="font-size:13px; color:#888; margin:8px 0 4px 0;">'
+            '👉 Monte o diagrama acima, clique <b>Exportar JSON</b> no editor, '
+            'depois <b>Copiar JSON</b>, e cole abaixo:</p>',
+            unsafe_allow_html=True
+        )
+        json_input = st.text_area(
+            "JSON do Diagrama:",
+            value=json.dumps(st.session_state.diagram_model, indent=2) if st.session_state.diagram_model.get('nodes') else '',
+            height=150,
+            key="json_diagram_input",
+            placeholder='{"nodes":[...],"edges":[...]}',
+        )
+        if json_input and json_input.strip():
             try:
-                new_model = json.loads(result)
-                if new_model and 'nodes' in new_model and 'edges' in new_model:
-                    st.session_state.diagram_model = new_model
+                parsed = json.loads(json_input)
+                if parsed and 'nodes' in parsed and 'edges' in parsed:
+                    st.session_state.diagram_model = parsed
+                    n_nodes = len(parsed.get('nodes', []))
+                    n_edges = len(parsed.get('edges', []))
+                    st.success(f"Diagrama carregado: {n_nodes} blocos, {n_edges} conexões")
             except (json.JSONDecodeError, TypeError):
-                pass
-
-        # ── JSON do Diagrama (fallback para quando componente não retorna dados) ──
-        with st.expander("JSON do Diagrama (copie do editor e cole aqui para processar)", expanded=False):
-            st.caption("Se o editor não sincronizar automaticamente, copie o JSON exibido no editor e cole abaixo.")
-            json_input = st.text_area(
-                "Modelo JSON:",
-                value=json.dumps(st.session_state.diagram_model, indent=2) if st.session_state.diagram_model.get('nodes') else '',
-                height=120,
-                key="json_diagram_input"
-            )
-            if json_input and json_input.strip():
-                try:
-                    parsed = json.loads(json_input)
-                    if parsed and 'nodes' in parsed and 'edges' in parsed:
-                        st.session_state.diagram_model = parsed
-                except (json.JSONDecodeError, TypeError):
-                    st.error("JSON inválido. Verifique o formato.")
+                st.error("JSON inválido. Use o botão 'Exportar JSON' no editor para obter o formato correto.")
 
         # ── Configuração de Análise ──
         st.markdown("---")
