@@ -35,6 +35,7 @@ INPUT_SIGNALS = ['Degrau', 'Rampa', 'Senoidal', 'Impulso', 'Parabólica']
 # FUNÇÕES AUXILIARES
 # =====================================================
 
+
 def formatar_numero(valor):
     """Formata números para exibição amigável"""
     if np.isinf(valor):
@@ -2177,3 +2178,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
