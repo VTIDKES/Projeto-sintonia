@@ -1818,9 +1818,13 @@ _VISUAL_HTML_PATH = os.path.join(
 )
 
 def _load_visual_editor_html():
-    """Carrega o HTML do editor visual"""
+    """Carrega o HTML do editor visual (com cache-bust)"""
+    import time
     with open(_VISUAL_HTML_PATH, 'r', encoding='utf-8') as f:
-        return f.read()
+        html = f.read()
+    # Adiciona timestamp para forçar reload no navegador
+    html = html.replace('</head>', f'<!-- v{int(time.time())} -->\n</head>')
+    return html
 
 
 # =====================================================
