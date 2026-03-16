@@ -1810,11 +1810,46 @@ def processar_diagrama_visual():
 
 
 # =====================================================
-# COMPONENTE VISUAL - DECLARE COMPONENT
+# COMPONENTE VISUAL
 # =====================================================
 
 COMPONENT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "visual_blocks_frontend")
-visual_editor_component = components.declare_component("visual_blocks", path=COMPONENT_DIR)
+_VISUAL_COMPONENT = None
+_VISUAL_HTML = None
+
+def _load_visual_editor_html():
+    """Carrega o HTML do editor visual"""
+    global _VISUAL_HTML
+    if _VISUAL_HTML is None:
+        html_path = os.path.join(COMPONENT_DIR, "index.html")
+        with open(html_path, 'r', encoding='utf-8') as f:
+            _VISUAL_HTML = f.read()
+    return _VISUAL_HTML
+
+def _get_visual_component():
+    """Tenta criar o componente declarado, retorna None se falhar"""
+    global _VISUAL_COMPONENT
+    if _VISUAL_COMPONENT is None:
+        try:
+            _VISUAL_COMPONENT = components.declare_component("visual_blocks_editor", path=COMPONENT_DIR)
+        except Exception:
+            _VISUAL_COMPONENT = False  # Marca como falhou
+    return _VISUAL_COMPONENT if _VISUAL_COMPONENT else None
+
+def render_visual_editor(model_json):
+    """Renderiza o editor visual - tenta declare_component, fallback para components.html"""
+    comp = _get_visual_component()
+    if comp:
+        try:
+            result = comp(model=model_json, key="vb_editor", default=None)
+            return result
+        except Exception:
+            pass
+
+    # Fallback: usar components.html
+    html_content = _load_visual_editor_html()
+    components.html(html_content, height=620, scrolling=False)
+    return None
 
 
 # =====================================================
@@ -1993,15 +2028,11 @@ def main():
         if 'diagram_model' not in st.session_state:
             st.session_state.diagram_model = {'nodes': [], 'edges': []}
 
-        # ── Editor Visual (Streamlit Component) ──
+        # ── Editor Visual ──
         current_model = st.session_state.diagram_model
-        result = visual_editor_component(
-            model=json.dumps(current_model),
-            key="vb_editor",
-            default=None
-        )
+        result = render_visual_editor(json.dumps(current_model))
 
-        # Receber modelo do componente
+        # Receber modelo do componente (quando declare_component funciona)
         if result is not None:
             try:
                 new_model = json.loads(result)
@@ -2009,6 +2040,23 @@ def main():
                     st.session_state.diagram_model = new_model
             except (json.JSONDecodeError, TypeError):
                 pass
+
+        # ── JSON do Diagrama (fallback para quando componente não retorna dados) ──
+        with st.expander("JSON do Diagrama (copie do editor e cole aqui para processar)", expanded=False):
+            st.caption("Se o editor não sincronizar automaticamente, copie o JSON exibido no editor e cole abaixo.")
+            json_input = st.text_area(
+                "Modelo JSON:",
+                value=json.dumps(st.session_state.diagram_model, indent=2) if st.session_state.diagram_model.get('nodes') else '',
+                height=120,
+                key="json_diagram_input"
+            )
+            if json_input and json_input.strip():
+                try:
+                    parsed = json.loads(json_input)
+                    if parsed and 'nodes' in parsed and 'edges' in parsed:
+                        st.session_state.diagram_model = parsed
+                except (json.JSONDecodeError, TypeError):
+                    st.error("JSON inválido. Verifique o formato.")
 
         # ── Configuração de Análise ──
         st.markdown("---")
