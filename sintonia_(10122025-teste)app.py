@@ -1997,170 +1997,19 @@ def main():
     # ══════════════════════════════════════════
     if st.session_state.modo_editor == 'visual':
 
-        if 'diagram_model' not in st.session_state:
-            st.session_state.diagram_model = {'nodes': [], 'edges': []}
-
-        # ── Editor Visual (components.html) ──
+        # Editor visual completo com cálculos integrados em JavaScript
         html_content = _load_visual_editor_html()
-        components.html(html_content, height=620, scrolling=False)
-
-        # ── JSON do Diagrama ──
-        st.markdown(
-            '<p style="font-size:13px; color:#888; margin:8px 0 4px 0;">'
-            '👉 Monte o diagrama acima, clique <b>Exportar JSON</b> no editor, '
-            'depois <b>Copiar JSON</b>, e cole abaixo:</p>',
-            unsafe_allow_html=True
-        )
-        json_input = st.text_area(
-            "JSON do Diagrama:",
-            value=json.dumps(st.session_state.diagram_model, indent=2) if st.session_state.diagram_model.get('nodes') else '',
-            height=150,
-            key="json_diagram_input",
-            placeholder='{"nodes":[...],"edges":[...]}',
-        )
-        if json_input and json_input.strip():
-            try:
-                parsed = json.loads(json_input)
-                if parsed and 'nodes' in parsed and 'edges' in parsed:
-                    st.session_state.diagram_model = parsed
-                    n_nodes = len(parsed.get('nodes', []))
-                    n_edges = len(parsed.get('edges', []))
-                    st.success(f"Diagrama carregado: {n_nodes} blocos, {n_edges} conexões")
-            except (json.JSONDecodeError, TypeError):
-                st.error("JSON inválido. Use o botão 'Exportar JSON' no editor para obter o formato correto.")
-
-        # ── Configuração de Análise ──
-        st.markdown("---")
-        cfg_c1, cfg_c2, cfg_c3 = st.columns([1, 1, 2])
-
-        with cfg_c1:
-            v_entrada = st.selectbox("Sinal de Entrada:", INPUT_SIGNALS, key="v_entrada")
-        with cfg_c2:
-            v_usar_ganho = st.checkbox("Ganho K ajustável", value=False, key="v_usar_ganho")
-            if v_usar_ganho:
-                v_ganho_k = st.slider("Ganho K", 0.1, 100.0, 1.0, 0.1, key="v_ganho_k")
-            else:
-                v_ganho_k = 1.0
-        with cfg_c3:
-            v_analises = st.multiselect(
-                "Análises desejadas:",
-                ANALYSIS_OPTIONS["malha_fechada"],
-                default=["Resposta no tempo", "Desempenho"],
-                key="v_analises"
-            )
-
-        # ── BOTÃO PROCESSAR ──
-        processar = st.button(
-            "PROCESSAR DIAGRAMA",
-            type="primary",
-            use_container_width=True,
-            key="proc_visual"
-        )
-
-        # ── RESULTADOS ──
-        if processar:
-            diagram = st.session_state.diagram_model
-            nodes = diagram.get('nodes', [])
-            edges = diagram.get('edges', [])
-
-            if not nodes:
-                st.warning("Adicione blocos no editor visual acima.")
-                st.stop()
-
-            if not edges:
-                st.warning("Conecte os blocos entre si usando as portas.")
-                st.stop()
-
-            # Resolver diagrama
-            tf_result, error_msg = resolver_diagrama_para_tf(nodes, edges)
-
-            if error_msg:
-                st.error(error_msg)
-                st.stop()
-
-            if tf_result is None:
-                st.error("Não foi possível calcular a função de transferência.")
-                st.stop()
-
-            # Aplicar ganho K se habilitado
-            if v_usar_ganho and v_ganho_k != 1.0:
-                tf_result = TransferFunction([v_ganho_k], [1]) * tf_result
-
-            sistema = tf_result
-
-            # ── Info do sistema ──
-            st.markdown("---")
-            st.markdown("### Resultados da Análise")
-
-            info_c1, info_c2 = st.columns(2)
-            with info_c1:
-                st.info(f"**Função de Transferência Equivalente**")
-                st.code(f"T(s) = {sistema}", language=None)
-            with info_c2:
-                n_blocos = len([n for n in nodes if n.get('type') not in ('input', 'output', 'branch')])
-                n_conns = len(edges)
-                st.metric("Blocos funcionais", n_blocos)
-                st.metric("Conexões", n_conns)
-
-            # ── Exibir análises ──
-            for analise in v_analises:
-                st.markdown(f"### {analise}")
-
-                if analise == 'Resposta no tempo':
-                    fig, t_out, y = plot_resposta_temporal(sistema, v_entrada)
-                    st.plotly_chart(fig, use_container_width=True)
-
-                elif analise == 'Desempenho':
-                    desempenho = calcular_desempenho(sistema)
-                    perf_cols = st.columns(3)
-                    items = list(desempenho.items())
-                    for idx_d, (chave, valor) in enumerate(items):
-                        with perf_cols[idx_d % 3]:
-                            st.metric(label=chave, value=valor)
-
-                elif analise == 'Diagrama De Bode Magnitude':
-                    fig = plot_bode(sistema, 'magnitude')
-                    st.plotly_chart(fig, use_container_width=True)
-
-                elif analise == 'Diagrama De Bode Fase':
-                    fig = plot_bode(sistema, 'fase')
-                    st.plotly_chart(fig, use_container_width=True)
-
-                elif analise == 'Diagrama de Polos e Zeros':
-                    fig = plot_polos_zeros(sistema)
-                    st.plotly_chart(fig, use_container_width=True)
-
-                elif analise == 'LGR':
-                    fig = plot_lgr(sistema)
-                    st.plotly_chart(fig, use_container_width=True)
-
-                elif analise == 'Nyquist':
-                    fig, polos_spd, voltas, Z = plot_nyquist(sistema)
-                    ny_c1, ny_c2, ny_c3 = st.columns(3)
-                    with ny_c1:
-                        st.metric("Polos SPD (P)", polos_spd)
-                    with ny_c2:
-                        st.metric("Voltas (N)", voltas)
-                    with ny_c3:
-                        st.metric("Z = P + N", f"{Z} — {'Estável' if Z == 0 else 'Instável'}")
-                    st.plotly_chart(fig, use_container_width=True)
+        components.html(html_content, height=1200, scrolling=True)
 
         # ── Sidebar info ──
         with st.sidebar:
-            diagram = st.session_state.diagram_model
-            n_nodes = len(diagram.get('nodes', []))
-            n_edges = len(diagram.get('edges', []))
-            st.markdown("### Status do Diagrama")
-            st.metric("Blocos", n_nodes)
-            st.metric("Conexões", n_edges)
-            st.markdown("---")
             st.markdown("### Como usar")
             st.markdown("""
             1. **Adicione** blocos pela barra superior
             2. **Arraste** para posicionar
-            3. **Conecte**: clique porta azul (saída) → porta verde (entrada)
-            4. **Edite** parâmetros no painel lateral do editor
-            5. **Processe** para ver análises
+            3. **Conecte**: porta azul (saída) → porta verde (entrada)
+            4. **Edite** parâmetros no painel lateral
+            5. Clique **CALCULAR** para ver resultados
             """)
 
         return
