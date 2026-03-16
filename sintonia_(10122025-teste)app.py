@@ -1817,7 +1817,6 @@ _VISUAL_HTML_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "visual_blocks_frontend", "index.html"
 )
 
-@st.cache_resource
 def _load_visual_editor_html():
     """Carrega o HTML do editor visual"""
     with open(_VISUAL_HTML_PATH, 'r', encoding='utf-8') as f:
