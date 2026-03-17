@@ -578,6 +578,12 @@ function pfSub(a,b){return{n:pSub(pMul(a.n,b.d),pMul(b.n,a.d)),d:pMul(a.d,b.d)}}
 function pfMul(a,b){return{n:pMul(a.n,b.n),d:pMul(a.d,b.d)}}
 function pfDiv(a,b){return{n:pMul(a.n,b.d),d:pMul(a.d,b.n)}}
 
+/* ===== POLY SIMPLIFY ===== */
+function polyRem(a,b){a=a.slice();b=pTrim(b);if(b.length>a.length)return pTrim(a);for(var i=a.length-1;i>=b.length-1;i--){var c=a[i]/b[b.length-1];for(var j=0;j<b.length;j++)a[j+i-b.length+1]-=c*b[j]}var r=a.slice(0,b.length-1).map(function(v){return Math.abs(v)<1e-8?0:v});return pTrim(r)}
+function polyGCD(a,b){a=pTrim(a);b=pTrim(b);while(b.length>1||(b.length===1&&Math.abs(b[0])>1e-8)){var r=polyRem(a,b);a=b;b=r}var lc=a[a.length-1];if(Math.abs(lc)>1e-14)a=a.map(function(c){return c/lc});return pTrim(a)}
+function polyDivQ(a,b){a=a.slice();b=pTrim(b);if(b.length===1)return pTrim(a.map(function(c){return c/b[0]}));if(b.length>a.length)return[0];var q=new Array(a.length-b.length+1);for(var i=a.length-1;i>=b.length-1;i--){var c=a[i]/b[b.length-1];q[i-b.length+1]=c;for(var j=0;j<b.length;j++)a[j+i-b.length+1]-=c*b[j]}return pTrim(q)}
+function pfReduce(pf){var n=pTrim(pf.n),d=pTrim(pf.d);var g=polyGCD(n,d);if(g.length<=1)return{n:n,d:d};return{n:pTrim(polyDivQ(n,g)),d:pTrim(polyDivQ(d,g))}}
+
 /* ===== PARSER ===== */
 function parseP(s){
   s=(s||"").replace(/\s+/g,"");if(!s)return[0];
@@ -630,7 +636,7 @@ function solve(nodes,edges){
   var oi=ix[out.id],tf={n:pTrim(x[oi].n),d:pTrim(x[oi].d)};
   if(tf.d[tf.d.length-1]<0){tf.n=pScl(tf.n,-1);tf.d=pScl(tf.d,-1)}
   var lc=tf.d[tf.d.length-1];if(Math.abs(lc)>1e-14&&Math.abs(lc-1)>1e-10){tf.n=pScl(tf.n,1/lc);tf.d=pScl(tf.d,1/lc)}
-  return{tf:tf}}
+  tf=pfReduce(tf);return{tf:tf}}
 
 /* ===== ROOTS ===== */
 function roots(poly){poly=pTrim(poly);var n=poly.length-1;if(n<=0)return[];
@@ -654,6 +660,72 @@ function stepResp(tf,tMax,nP){var ln2=Math.LN2,ts=[],ys=[];
   for(var i=0;i<nP;i++){var t=(i+1)*tMax/nP;ts.push(t);var s=0;
     for(var j=0;j<SN;j++){var sv=(j+1)*ln2/t,nv=pEv(tf.n,sv),dv=pEv(tf.d,sv)*sv;if(Math.abs(dv)<1e-30)continue;s+=SV[j]*nv/dv}
     ys.push(s*ln2/t)}return{t:ts,y:ys}}
+
+/* ===== FORCED RESPONSE (generalized) ===== */
+function forceResp(tf,sig,tMax,nP){var ln2=Math.LN2,ts=[],ys=[],us=[];var om=2*Math.PI;
+  for(var i=0;i<nP;i++){var t=(i+1)*tMax/nP;ts.push(t);var s=0;
+    for(var j=0;j<SN;j++){var sv=(j+1)*ln2/t,nv=pEv(tf.n,sv),dv=pEv(tf.d,sv);
+      if(Math.abs(dv)<1e-30)continue;
+      var uv;if(sig==='rampa')uv=1/(sv*sv);else if(sig==='impulso')uv=1;
+      else if(sig==='parabolica')uv=2/(sv*sv*sv);else if(sig==='senoidal')uv=om/(sv*sv+om*om);
+      else uv=1/sv;
+      s+=SV[j]*nv*uv/dv}
+    ys.push(s*ln2/t);
+    if(sig==='rampa')us.push(t);else if(sig==='senoidal')us.push(Math.sin(om*t));
+    else if(sig==='impulso')us.push(i===0?nP/tMax:0);else if(sig==='parabolica')us.push(t*t);
+    else us.push(1)}
+  return{t:ts,y:ys,u:us}}
+
+/* ===== NYQUIST ===== */
+function nyq(tf,wMin,wMax,nP){var re=[],im=[];var lm=Math.log10(wMin),lx=Math.log10(wMax);
+  for(var i=0;i<nP;i++){var w=Math.pow(10,lm+i*(lx-lm)/(nP-1));
+    var jw={r:0,i:w},nc=cEvP(tf.n,jw),dc=cEvP(tf.d,jw),T=cDiv(nc,dc);re.push(T.r);im.push(T.i)}
+  return{re:re,im:im}}
+
+/* ===== LGR (Root Locus) ===== */
+function lgr(tf,nK){var kMax=200,branches=[];var nt=pTrim(tf.n),dt=pTrim(tf.d);var np=dt.length-1;
+  if(np<=0)return branches;
+  for(var i=0;i<np;i++)branches.push({re:[],im:[]});var prev=null;
+  for(var ki=0;ki<nK;ki++){var k=ki*kMax/(nK-1);
+    var cp=pAdd(dt,pScl(nt,k));var rs=roots(cp);
+    if(prev&&prev.length===rs.length){var used=[],matched=[];
+      for(var i=0;i<prev.length;i++){var best=-1,bd=Infinity;
+        for(var j=0;j<rs.length;j++){if(used.indexOf(j)>=0)continue;
+          var d=Math.sqrt(Math.pow(rs[j].r-prev[i].r,2)+Math.pow(rs[j].i-prev[i].i,2));
+          if(d<bd){bd=d;best=j}}
+        used.push(best);matched.push(rs[best])}rs=matched}
+    for(var i=0;i<Math.min(rs.length,np);i++){branches[i].re.push(rs[i].r);branches[i].im.push(rs[i].i)}
+    prev=rs.slice(0,np)}
+  return branches}
+
+function chartLGR(id,branches,tf){var c=document.getElementById(id);if(!c)return;
+  var w=c.width=c.parentElement.clientWidth||500,h=c.height=300,ctx=c.getContext("2d");
+  var mg={l:55,r:15,t:15,b:35},pw=w-mg.l-mg.r,ph=h-mg.t-mg.b;
+  var allX=[],allY=[];
+  branches.forEach(function(br){allX=allX.concat(br.re);allY=allY.concat(br.im)});
+  if(!allX.length)return;
+  var x0=Math.min.apply(null,allX),x1=Math.max.apply(null,allX);
+  var y0=Math.min.apply(null,allY),y1=Math.max.apply(null,allY);
+  var xp=(x1-x0)*.15||1,yp=(y1-y0)*.15||1;x0-=xp;x1+=xp;y0-=yp;y1+=yp;
+  function mX(x){return mg.l+(x-x0)/(x1-x0)*pw}
+  function mY(y){return mg.t+ph-(y-y0)/(y1-y0)*ph}
+  ctx.fillStyle="#0e1117";ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle="#252840";ctx.lineWidth=.5;
+  for(var i=0;i<=5;i++){var gy=mg.t+ph*i/5;ctx.beginPath();ctx.moveTo(mg.l,gy);ctx.lineTo(w-mg.r,gy);ctx.stroke();
+    ctx.fillStyle="#8890b0";ctx.font="10px system-ui";ctx.textAlign="right";ctx.fillText(fN(y1-(y1-y0)*i/5),mg.l-5,gy+4)}
+  if(y0<=0&&y1>=0){ctx.strokeStyle="#555";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(mg.l,mY(0));ctx.lineTo(w-mg.r,mY(0));ctx.stroke()}
+  if(x0<=0&&x1>=0){ctx.strokeStyle="#555";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(mX(0),mg.t);ctx.lineTo(mX(0),mg.t+ph);ctx.stroke()}
+  var cols=["#5b6be0","#60a5fa","#a78bfa","#f472b6","#fbbf24"];
+  branches.forEach(function(br,bi){ctx.strokeStyle=cols[bi%cols.length];ctx.lineWidth=1.5;ctx.beginPath();var st=false;
+    for(var i=0;i<br.re.length;i++){var px=mX(br.re[i]),py=mY(br.im[i]);
+      if(!st){ctx.moveTo(px,py);st=true}else ctx.lineTo(px,py)}ctx.stroke()});
+  var ps=roots(tf.d);ctx.strokeStyle="#ff4444";ctx.lineWidth=2;
+  ps.forEach(function(p){var px=mX(p.r),py=mY(p.i);ctx.beginPath();ctx.moveTo(px-5,py-5);ctx.lineTo(px+5,py+5);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(px+5,py-5);ctx.lineTo(px-5,py+5);ctx.stroke()});
+  var zs=roots(tf.n);ctx.strokeStyle="#44ff44";ctx.lineWidth=2;
+  zs.forEach(function(z){ctx.beginPath();ctx.arc(mX(z.r),mY(z.i),5,0,2*Math.PI);ctx.stroke()});
+  ctx.fillStyle="#8890b0";ctx.font="11px system-ui";ctx.textAlign="center";ctx.fillText("Parte Real",mg.l+pw/2,h-5);
+  ctx.save();ctx.translate(12,mg.t+ph/2);ctx.rotate(-Math.PI/2);ctx.fillText("Parte Imaginaria",0,0);ctx.restore()}
 
 /* ===== BODE ===== */
 function bode(tf,wMin,wMax,nP){var fs=[],ms=[],ps=[],lm=Math.log10(wMin),lx=Math.log10(wMax);
@@ -697,30 +769,143 @@ function chart(id,xD,yD,xL,yL,col,logX){var c=document.getElementById(id);if(!c)
   ctx.fillStyle="#8890b0";ctx.font="11px system-ui";ctx.textAlign="center";ctx.fillText(xL,mg.l+pw/2,h-5);
   ctx.save();ctx.translate(12,mg.t+ph/2);ctx.rotate(-Math.PI/2);ctx.fillText(yL,0,0);ctx.restore()}
 
+/* ===== CHART 2 TRACES (input+output) ===== */
+function chart2(id,xD,y1,y2,xL,yL){var c=document.getElementById(id);if(!c)return;
+  var w=c.width=c.parentElement.clientWidth||500,h=c.height=280,ctx=c.getContext("2d");
+  var mg={l:55,r:15,t:15,b:35},pw=w-mg.l-mg.r,ph=h-mg.t-mg.b;
+  var all=y1.concat(y2).filter(function(v){return isFinite(v)});if(!all.length)return;
+  var x0=Math.min.apply(null,xD),x1=Math.max.apply(null,xD);
+  var y0=Math.min.apply(null,all),ym=Math.max.apply(null,all);
+  var yp=(ym-y0)*.1||1;y0-=yp;ym+=yp;
+  function mX(x){return mg.l+(x-x0)/(x1-x0)*pw}
+  function mY(y){return mg.t+ph-(y-y0)/(ym-y0)*ph}
+  ctx.fillStyle="#0e1117";ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle="#252840";ctx.lineWidth=.5;
+  for(var i=0;i<=5;i++){var gy=mg.t+ph*i/5;ctx.beginPath();ctx.moveTo(mg.l,gy);ctx.lineTo(w-mg.r,gy);ctx.stroke();
+    ctx.fillStyle="#8890b0";ctx.font="10px system-ui";ctx.textAlign="right";ctx.fillText(fN(ym-(ym-y0)*i/5),mg.l-5,gy+4)}
+  ctx.strokeStyle="#60a5fa";ctx.lineWidth=1.5;ctx.setLineDash([6,4]);ctx.beginPath();var st=false;
+  for(var i=0;i<xD.length;i++){if(!isFinite(y1[i])){st=false;continue}
+    var px=mX(xD[i]),py=Math.max(mg.t,Math.min(mg.t+ph,mY(y1[i])));if(!st){ctx.moveTo(px,py);st=true}else ctx.lineTo(px,py)}ctx.stroke();
+  ctx.strokeStyle="#f44";ctx.lineWidth=2;ctx.setLineDash([]);ctx.beginPath();st=false;
+  for(var i=0;i<xD.length;i++){if(!isFinite(y2[i])){st=false;continue}
+    var px=mX(xD[i]),py=Math.max(mg.t,Math.min(mg.t+ph,mY(y2[i])));if(!st){ctx.moveTo(px,py);st=true}else ctx.lineTo(px,py)}ctx.stroke();
+  ctx.fillStyle="#60a5fa";ctx.fillRect(mg.l+10,mg.t+8,20,3);ctx.fillStyle="#8890b0";ctx.font="10px system-ui";ctx.textAlign="left";ctx.fillText("Entrada",mg.l+35,mg.t+12);
+  ctx.fillStyle="#f44";ctx.fillRect(mg.l+10,mg.t+22,20,3);ctx.fillText("Saida",mg.l+35,mg.t+26);
+  ctx.fillStyle="#8890b0";ctx.font="11px system-ui";ctx.textAlign="center";ctx.fillText(xL,mg.l+pw/2,h-5);
+  ctx.save();ctx.translate(12,mg.t+ph/2);ctx.rotate(-Math.PI/2);ctx.fillText(yL,0,0);ctx.restore()}
+
+/* ===== CHART XY (Nyquist) ===== */
+function chartXY(id,xD,yD,xL,yL){var c=document.getElementById(id);if(!c)return;
+  var w=c.width=c.parentElement.clientWidth||500,h=c.height=380,ctx=c.getContext("2d");
+  var mg={l:55,r:15,t:15,b:45},pw=w-mg.l-mg.r,ph=h-mg.t-mg.b;
+  var vX=xD.filter(function(v){return isFinite(v)}),vY=yD.filter(function(v){return isFinite(v)});
+  if(!vX.length||!vY.length)return;
+  var sX=vX.slice().sort(function(a,b){return a-b}),sY=vY.slice().sort(function(a,b){return a-b});
+  var lo=Math.floor(sX.length*.03),hi=Math.min(sX.length-1,Math.floor(sX.length*.97));
+  var loY=Math.floor(sY.length*.03),hiY=Math.min(sY.length-1,Math.floor(sY.length*.97));
+  var x0=Math.min(sX[lo],-1.5),x1=Math.max(sX[hi],0.5);
+  var y0=sY[loY],y1=sY[hiY];
+  var xp=(x1-x0)*.15||1,yp=(y1-y0)*.15||1;x0-=xp;x1+=xp;y0-=yp;y1+=yp;
+  function mX(x){return mg.l+(x-x0)/(x1-x0)*pw}
+  function mY(y){return mg.t+ph-(y-y0)/(y1-y0)*ph}
+  ctx.fillStyle="#0e1117";ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle="#252840";ctx.lineWidth=.5;
+  for(var i=0;i<=5;i++){var gy=mg.t+ph*i/5;ctx.beginPath();ctx.moveTo(mg.l,gy);ctx.lineTo(w-mg.r,gy);ctx.stroke();
+    ctx.fillStyle="#8890b0";ctx.font="10px system-ui";ctx.textAlign="right";ctx.fillText(fN(y1-(y1-y0)*i/5),mg.l-5,gy+4);
+    var gx=mg.l+pw*i/5;ctx.beginPath();ctx.moveTo(gx,mg.t);ctx.lineTo(gx,mg.t+ph);ctx.stroke();
+    ctx.textAlign="center";ctx.fillText(fN(x0+(x1-x0)*i/5),gx,mg.t+ph+14)}
+  if(y0<=0&&y1>=0){var ay=mY(0);ctx.strokeStyle="#555";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(mg.l,ay);ctx.lineTo(w-mg.r,ay);ctx.stroke()}
+  if(x0<=0&&x1>=0){var ax=mX(0);ctx.strokeStyle="#555";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(ax,mg.t);ctx.lineTo(ax,mg.t+ph);ctx.stroke()}
+  ctx.strokeStyle="#5b6be0";ctx.lineWidth=2;ctx.beginPath();var st=false;
+  for(var i=0;i<xD.length;i++){if(!isFinite(xD[i])||!isFinite(yD[i])){st=false;continue}
+    var px=Math.max(mg.l,Math.min(mg.l+pw,mX(xD[i]))),py=Math.max(mg.t,Math.min(mg.t+ph,mY(yD[i])));
+    if(!st){ctx.moveTo(px,py);st=true}else ctx.lineTo(px,py)}ctx.stroke();
+  ctx.strokeStyle="#888";ctx.lineWidth=1;ctx.setLineDash([4,4]);ctx.beginPath();st=false;
+  for(var i=0;i<xD.length;i++){if(!isFinite(xD[i])||!isFinite(yD[i])){st=false;continue}
+    var px=Math.max(mg.l,Math.min(mg.l+pw,mX(xD[i]))),py=Math.max(mg.t,Math.min(mg.t+ph,mY(-yD[i])));
+    if(!st){ctx.moveTo(px,py);st=true}else ctx.lineTo(px,py)}ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle="#ff4444";ctx.beginPath();ctx.arc(mX(-1),mY(0),6,0,2*Math.PI);ctx.fill();
+  ctx.fillStyle="#fff";ctx.font="10px system-ui";ctx.textAlign="left";ctx.fillText("-1",mX(-1)+8,mY(0)+4);
+  ctx.fillStyle="#8890b0";ctx.font="11px system-ui";ctx.textAlign="center";ctx.fillText(xL,mg.l+pw/2,h-5);
+  ctx.save();ctx.translate(12,mg.t+ph/2);ctx.rotate(-Math.PI/2);ctx.fillText(yL,0,0);ctx.restore()}
+
 /* ===== RESULTS ===== */
 function fC(c){if(Math.abs(c.i)<1e-8)return fN(c.r);return fN(c.r)+(c.i>=0?" + ":" - ")+fN(Math.abs(c.i))+"j"}
 function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
 
-function showRes(tf){var rd=document.getElementById("res"),rb=document.getElementById("rb");rd.classList.add("vis");rb.innerHTML="";
+var curSig='degrau';
+var curMalha='aberta';
+var selAn={tempo:true,desemp:true,pz:true,bm:true,bp:true,nyqst:true,lgr:true};
+var _lastTF=null;
+
+function reRender(){if(_lastTF)showRes(_lastTF)}
+
+function showRes(tf){
+  _lastTF=tf;
+  var rd=document.getElementById("res"),rb=document.getElementById("rb");
+  rd.classList.add("vis");
   var ns=fP(tf.n),ds=fP(tf.d);
-  rb.innerHTML+='<div class="rcard"><h4>T(s)</h4><div class="tf-disp"><div style="display:inline-block;text-align:center"><div style="padding:0 8px">'+esc(ns)+'</div><div style="border-top:2px solid var(--acc);padding:4px 8px 0">'+esc(ds)+'</div></div></div></div>';
   var ps=roots(tf.d),zs=roots(tf.n),stb=ps.every(function(p){return p.r<1e-6});
-  var h='<div class="rcard"><h4>Polos e Zeros</h4><div style="display:flex;gap:20px;flex-wrap:wrap"><div><b style="color:var(--red)">Polos:</b><div class="pzl">';
-  ps.forEach(function(p){h+='<div style="color:var(--red)">'+fC(p)+'</div>'});if(!ps.length)h+="<div>-</div>";
-  h+='</div></div><div><b style="color:var(--blu)">Zeros:</b><div class="pzl">';
-  zs.forEach(function(z){h+='<div style="color:var(--blu)">'+fC(z)+'</div>'});if(!zs.length)h+="<div>-</div>";
-  h+='</div></div></div><div style="margin-top:8px;padding:6px 10px;border-radius:6px;font-weight:700;font-size:13px;'+(stb?'background:#16382a;color:#34d399">ESTAVEL':'background:#3a1520;color:#f87171">INSTAVEL')+'</div></div>';
-  rb.innerHTML+=h;
-  var tM=autoT(tf),sr=stepResp(tf,tM,400);
-  rb.innerHTML+='<div class="rcard"><h4>Resposta ao Degrau</h4><div><canvas id="cStep"></canvas></div></div>';
-  chart("cStep",sr.t,sr.y,"Tempo (s)","Amplitude","#5b6be0",false);
-  var pf=perf(sr.t,sr.y);h='<div class="rcard"><h4>Desempenho</h4><div class="mgrid">';
-  Object.keys(pf).forEach(function(k){h+='<div class="mbox"><div class="ml">'+k+'</div><div class="mv">'+pf[k]+'</div></div>'});
-  rb.innerHTML+=h+'</div></div>';
+  var tM=autoT(tf);
+  var sr=forceResp(tf,curSig,tM,400);
+  var pf=perf(sr.t,sr.y);
   var wr=autoW(tf),bd=bode(tf,wr.a,wr.b,400);
-  rb.innerHTML+='<div class="rcard"><h4>Bode - Magnitude</h4><div><canvas id="cBM"></canvas></div></div>';
-  rb.innerHTML+='<div class="rcard"><h4>Bode - Fase</h4><div><canvas id="cBP"></canvas></div></div>';
-  chart("cBM",bd.w,bd.m,"w (rad/s)","dB","#60a5fa",true);chart("cBP",bd.w,bd.p,"w (rad/s)","graus","#f472b6",true);
+  var nqd=nyq(tf,wr.a,wr.b,400);
+  var lgrData=lgr(tf,300);
+  var sigNomes={degrau:'Degrau',rampa:'Rampa',senoidal:'Senoidal',impulso:'Impulso',parabolica:'Parabolica'};
+  var h='';
+  var ss='background:var(--sf2);border:1px solid var(--bd);border-radius:6px;color:var(--tx);padding:5px 10px;font-size:12px';
+  h+='<div class="rcard"><h4>Configuracoes de Analise</h4>';
+  h+='<div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:12px">';
+  h+='<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px;color:var(--txm);font-weight:600">Tipo de Malha:</span>';
+  h+='<select onchange="curMalha=this.value;reRender()" style="'+ss+';font-weight:600">';
+  h+='<option value="aberta"'+(curMalha==='aberta'?' selected':'')+'>Malha Aberta</option>';
+  h+='<option value="fechada"'+(curMalha==='fechada'?' selected':'')+'>Malha Fechada</option>';
+  h+='</select></div>';
+  h+='<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px;color:var(--txm)">Sinal:</span>';
+  h+='<select onchange="curSig=this.value;reRender()" style="'+ss+'">';
+  ['degrau','rampa','senoidal','impulso','parabolica'].forEach(function(s){
+    h+='<option value="'+s+'"'+(curSig===s?' selected':'')+'>'+sigNomes[s]+'</option>'});
+  h+='</select></div></div>';
+  var chks;
+  if(curMalha==='aberta'){
+    chks=[['tempo','Resposta no tempo'],['desemp','Desempenho'],['pz','Diagrama de Polos e Zeros'],['bm','Diagrama De Bode Magnitude'],['bp','Diagrama De Bode Fase'],['nyqst','Nyquist']];
+  }else{
+    chks=[['tempo','Resposta no tempo'],['desemp','Desempenho'],['pz','Diagrama de Polos e Zeros'],['bm','Diagrama De Bode Magnitude'],['bp','Diagrama De Bode Fase'],['lgr','LGR']];
+  }
+  h+='<div style="display:flex;flex-wrap:wrap;gap:8px 16px">';
+  chks.forEach(function(c){h+='<label style="font-size:12px;cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" '+(selAn[c[0]]?'checked':'')+' onchange="selAn.'+c[0]+'=this.checked;reRender()"> '+c[1]+'</label>'});
+  h+='</div></div>';
+  h+='<div class="rcard"><h4>T(s)</h4><div class="tf-disp"><div style="display:inline-block;text-align:center"><div style="padding:0 8px">'+esc(ns)+'</div><div style="border-top:2px solid var(--acc);padding:4px 8px 0">'+esc(ds)+'</div></div></div></div>';
+  if(selAn.tempo){
+    h+='<div class="rcard"><h4>Resposta no Tempo - '+sigNomes[curSig]+'</h4><div><canvas id="cStep"></canvas></div></div>';}
+  if(selAn.desemp){
+    h+='<div class="rcard"><h4>Desempenho</h4><div class="mgrid">';
+    Object.keys(pf).forEach(function(k){h+='<div class="mbox"><div class="ml">'+k+'</div><div class="mv">'+pf[k]+'</div></div>'});
+    h+='</div></div>';}
+  if(selAn.pz){
+    h+='<div class="rcard"><h4>Diagrama de Polos e Zeros</h4><div style="display:flex;gap:20px;flex-wrap:wrap"><div><b style="color:var(--red)">Polos:</b><div class="pzl">';
+    ps.forEach(function(p){h+='<div style="color:var(--red)">'+fC(p)+'</div>'});if(!ps.length)h+="<div>-</div>";
+    h+='</div></div><div><b style="color:var(--blu)">Zeros:</b><div class="pzl">';
+    zs.forEach(function(z){h+='<div style="color:var(--blu)">'+fC(z)+'</div>'});if(!zs.length)h+="<div>-</div>";
+    h+='</div></div></div><div style="margin-top:8px;padding:6px 10px;border-radius:6px;font-weight:700;font-size:13px;'+(stb?'background:#16382a;color:#34d399">ESTAVEL':'background:#3a1520;color:#f87171">INSTAVEL')+'</div></div>';}
+  if(selAn.bm){
+    h+='<div class="rcard"><h4>Diagrama De Bode - Magnitude</h4><div><canvas id="cBM"></canvas></div></div>';}
+  if(selAn.bp){
+    h+='<div class="rcard"><h4>Diagrama De Bode - Fase</h4><div><canvas id="cBP"></canvas></div></div>';}
+  if(curMalha==='aberta'&&selAn.nyqst){
+    h+='<div class="rcard"><h4>Nyquist</h4><div><canvas id="cNyq"></canvas></div>';
+    var nps=roots(tf.d),npsd=0;nps.forEach(function(p){if(p.r>1e-6)npsd++});
+    h+='<div style="margin-top:8px;font-size:12px"><b>Polos SPD (P):</b> '+npsd+' | <b>Z = P + N:</b> '+(npsd===0?'Estavel':'Instavel')+'</div></div>';}
+  if(curMalha==='fechada'&&selAn.lgr){
+    h+='<div class="rcard"><h4>Lugar Geometrico das Raizes (LGR)</h4><div><canvas id="cLGR"></canvas></div>';
+    h+='<div style="margin-top:8px;font-size:11px;color:var(--txm)">Polos (X vermelho) | Zeros (O verde) | K: 0 a 200</div></div>';}
+  rb.innerHTML=h;
+  if(selAn.tempo)chart2("cStep",sr.t,sr.u,sr.y,"Tempo (s)","Amplitude");
+  if(selAn.bm)chart("cBM",bd.w,bd.m,"w (rad/s)","dB","#60a5fa",true);
+  if(selAn.bp)chart("cBP",bd.w,bd.p,"w (rad/s)","graus","#f472b6",true);
+  if(curMalha==='aberta'&&selAn.nyqst)chartXY("cNyq",nqd.re,nqd.im,"Parte Real","Parte Imaginaria");
+  if(curMalha==='fechada'&&selAn.lgr)chartLGR("cLGR",lgrData,tf);
   rd.scrollIntoView({behavior:"smooth"})}
 
 /* ===== MODE SWITCHING ===== */
@@ -755,7 +940,7 @@ function onCalc(){
       tf={n:pMul(gn,hn),d:pMul(gd,hd)};
     }
     var lc=tf.d[tf.d.length-1];if(Math.abs(lc)>1e-14&&Math.abs(lc-1)>1e-10){tf.n=pScl(tf.n,1/lc);tf.d=pScl(tf.d,1/lc)}
-    showRes(tf);return;
+    tf=pfReduce(tf);showRes(tf);return;
   }
   var r=solve(model.nodes,model.edges);
   if(r.e){var rd=document.getElementById("res"),rb=document.getElementById("rb");rd.classList.add("vis");rb.innerHTML='<div class="ebox">'+esc(r.e)+'</div>';rd.scrollIntoView({behavior:"smooth"});return}
