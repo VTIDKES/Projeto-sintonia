@@ -25,7 +25,7 @@ ANALYSIS_OPTIONS = {
     "malha_fechada": ["Resposta no tempo", "Desempenho", "Diagrama de Polos e Zeros",
                      "Diagrama De Bode Magnitude", "Diagrama De Bode Fase", "LGR"]
 }
-claude
+
 INPUT_SIGNALS = ['Degrau', 'Rampa', 'Senoidal', 'Impulso', 'Parabolica']
 
 # =====================================================
