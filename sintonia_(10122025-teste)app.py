@@ -1575,7 +1575,16 @@ def tela_inicial():
         margin-bottom: 40px;
     }
     /* Esconde os botoes fisicos — cards sao clicaveis diretamente */
-    [data-testid="stButton"] { display: none !important; }
+    [data-testid="stButton"] {
+        position: absolute !important;
+        width: 0 !important;
+        height: 0 !important;
+        overflow: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -1591,7 +1600,7 @@ def tela_inicial():
     with col1:
         st.markdown("""
         <div class="mode-card mode-card-classic"
-             onclick="(function(){var btns=window.parent.document.querySelectorAll('[data-testid=stButton] button');if(btns[0])btns[0].click();})()">
+             onclick="(function(){var btns=document.querySelectorAll('[data-testid=stButton] button');if(btns[0])btns[0].click();})()">
             <div class="mode-card-body">
                 <div class="mode-icon">
                     <svg viewBox="0 0 240 80" xmlns="http://www.w3.org/2000/svg" width="100%">
@@ -1625,7 +1634,7 @@ def tela_inicial():
     with col2:
         st.markdown("""
         <div class="mode-card mode-card-diagram"
-             onclick="(function(){var btns=window.parent.document.querySelectorAll('[data-testid=stButton] button');if(btns[1])btns[1].click();})()">
+             onclick="(function(){var btns=document.querySelectorAll('[data-testid=stButton] button');if(btns[1])btns[1].click();})()">
             <div class="mode-card-body">
                 <div class="mode-icon">
                     <svg viewBox="0 0 240 80" xmlns="http://www.w3.org/2000/svg" width="100%">
