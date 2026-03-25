@@ -60,6 +60,7 @@ def inicializar_estado():
         ]),
         'conexoes': [],
         'calculo_erro_habilitado': False,
+        'representacao_classico': 'Funcao de Transferencia',
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -1529,6 +1530,7 @@ def tela_inicial():
         display: flex;
         flex-direction: column;
         min-height: 350px;
+        user-select: none;
     }
     .mode-card-body {
         padding: 28px 24px 24px;
@@ -1572,6 +1574,8 @@ def tela_inicial():
         text-align: center; font-size: 16px; color: #8890b0;
         margin-bottom: 40px;
     }
+    /* Esconde os botoes fisicos — cards sao clicaveis diretamente */
+    [data-testid="stButton"] { display: none !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -1586,7 +1590,8 @@ def tela_inicial():
 
     with col1:
         st.markdown("""
-        <div class="mode-card mode-card-classic">
+        <div class="mode-card mode-card-classic"
+             onclick="(function(){var btns=window.parent.document.querySelectorAll('[data-testid=stButton] button');if(btns[0])btns[0].click();})()">
             <div class="mode-card-body">
                 <div class="mode-icon">
                     <svg viewBox="0 0 240 80" xmlns="http://www.w3.org/2000/svg" width="100%">
@@ -1606,20 +1611,21 @@ def tela_inicial():
                 <div class="mode-title">Modo Classico</div>
                 <div class="mode-desc">
                     Insira Planta, Controlador e Sensor por funcao de
-                    transferencia. Analise em malha aberta ou fechada
-                    com ganho K ajustavel.
+                    transferencia ou espaco de estados. Analise em
+                    malha aberta ou fechada com ganho K ajustavel.
                 </div>
                 <div class="mode-hint mode-hint-classic">Clique para entrar &#8594;</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("Selecionar Modo Classico", use_container_width=True, type="primary"):
+        if st.button("Selecionar Modo Classico", key="btn_classico"):
             st.session_state.modo_selecionado = 'classico'
             st.rerun()
 
     with col2:
         st.markdown("""
-        <div class="mode-card mode-card-diagram">
+        <div class="mode-card mode-card-diagram"
+             onclick="(function(){var btns=window.parent.document.querySelectorAll('[data-testid=stButton] button');if(btns[1])btns[1].click();})()">
             <div class="mode-card-body">
                 <div class="mode-icon">
                     <svg viewBox="0 0 240 80" xmlns="http://www.w3.org/2000/svg" width="100%">
@@ -1648,7 +1654,7 @@ def tela_inicial():
             </div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("Selecionar Modo Diagrama de Blocos", use_container_width=True, type="primary"):
+        if st.button("Selecionar Modo Diagrama de Blocos", key="btn_canvas"):
             st.session_state.modo_selecionado = 'canvas'
             st.rerun()
 
@@ -1841,12 +1847,30 @@ def modo_classico():
 
         nome = st.text_input("Nome", value="G1")
         tipo = st.selectbox("Tipo", ['Planta', 'Controlador', 'Sensor', 'Atuador'])
-        numerador = st.text_input("Numerador", placeholder="ex: 4*s")
-        denominador = st.text_input("Denominador", placeholder="ex: s^2 + 2*s + 3")
+
+        representacao = st.radio(
+            "Representacao",
+            ['Funcao de Transferencia', 'Espaco de Estados'],
+            horizontal=True,
+            key="representacao_classico"
+        )
+
+        if representacao == 'Funcao de Transferencia':
+            numerador   = st.text_input("Numerador",   placeholder="ex: 4")
+            denominador = st.text_input("Denominador", placeholder="ex: s^2 + 2*s + 3")
+            A_str = B_str = C_str = D_str = ''
+        else:
+            st.caption("Matrizes separadas por ';' entre linhas e espacos/virgulas entre colunas.")
+            A_str = st.text_input("Matriz A", placeholder="ex: 0 1; -2 -3")
+            B_str = st.text_input("Matriz B", placeholder="ex: 0; 1")
+            C_str = st.text_input("Matriz C", placeholder="ex: 1 0")
+            D_str = st.text_input("Matriz D", placeholder="ex: 0")
+            numerador = denominador = ''
 
         if st.button("Adicionar", type="primary", use_container_width=True):
-            ok, msg = adicionar_bloco(nome, tipo, 'Funcao de Transferencia',
-                                      numerador, denominador)
+            ok, msg = adicionar_bloco(nome, tipo, representacao,
+                                      numerador, denominador,
+                                      A_str, B_str, C_str, D_str)
             if ok:
                 st.success(msg)
                 st.rerun()
