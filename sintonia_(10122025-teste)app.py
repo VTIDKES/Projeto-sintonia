@@ -1522,20 +1522,48 @@ def tela_inicial():
         background: linear-gradient(135deg, #1a1d2e, #252840);
         border: 2px solid #333654;
         border-radius: 16px;
-        padding: 28px 24px;
+        overflow: hidden;
         text-align: center;
         cursor: pointer;
-        transition: all 0.2s;
-        height: 100%;
+        transition: all 0.25s ease;
+        display: flex;
+        flex-direction: column;
+        min-height: 350px;
     }
-    .mode-card:hover {
+    .mode-card-body {
+        padding: 28px 24px 24px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        flex: 1;
+    }
+    .mode-card-classic  { border-top: 4px solid #5b6be0; }
+    .mode-card-diagram  { border-top: 4px solid #34d399; }
+    .mode-card-classic:hover {
         border-color: #5b6be0;
-        transform: translateY(-2px);
-        box-shadow: 0 8px 30px rgba(91,107,224,0.2);
+        transform: translateY(-3px);
+        box-shadow: 0 14px 40px rgba(91,107,224,0.3);
+        background: linear-gradient(135deg, #1e2238, #2b2f52);
     }
-    .mode-icon { font-size: 42px; margin-bottom: 12px; display: flex; justify-content: center; align-items: center; }
-    .mode-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; color: #e0e4f0; }
-    .mode-desc { font-size: 14px; color: #8890b0; line-height: 1.6; }
+    .mode-card-diagram:hover {
+        border-color: #34d399;
+        transform: translateY(-3px);
+        box-shadow: 0 14px 40px rgba(52,211,153,0.2);
+        background: linear-gradient(135deg, #1a2230, #1e2e2a);
+    }
+    .mode-icon {
+        width: 100%;
+        max-width: 230px;
+        margin: 0 auto 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .mode-title { font-size: 20px; font-weight: 700; margin-bottom: 10px; color: #e0e4f0; }
+    .mode-desc  { font-size: 14px; color: #8890b0; line-height: 1.7; flex: 1; }
+    .mode-hint  { margin-top: 14px; font-size: 12px; font-weight: 600; letter-spacing: .4px; }
+    .mode-hint-classic { color: #5b6be0; }
+    .mode-hint-diagram { color: #34d399; }
     .welcome-title {
         text-align: center; font-size: 32px; font-weight: 700;
         margin-bottom: 8px; color: #e0e4f0;
@@ -1558,25 +1586,30 @@ def tela_inicial():
 
     with col1:
         st.markdown("""
-        <div class="mode-card">
-            <div class="mode-icon">
-                <svg viewBox="0 0 120 80" xmlns="http://www.w3.org/2000/svg" style="width:110px;height:73px;">
-                  <line x1="10" y1="10" x2="10" y2="70" stroke="#555" stroke-width="1"/>
-                  <line x1="10" y1="70" x2="112" y2="70" stroke="#555" stroke-width="1"/>
-                  <polygon points="10,8 7,13 13,13" fill="#555"/>
-                  <polygon points="114,70 109,67 109,73" fill="#555"/>
-                  <line x1="10" y1="10" x2="112" y2="10" stroke="#444" stroke-width="1" stroke-dasharray="3,2"/>
-                  <text x="114" y="73" fill="#8890b0" font-size="8" font-family="monospace">t</text>
-                  <text x="3" y="8" fill="#8890b0" font-size="8" font-family="monospace">y</text>
-                  <polyline points="10,70 15,50 20,37 25,28 30,22 35,18 47,13 60,11 85,10.1 112,10"
-                            fill="none" stroke="#5b6be0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-            </div>
-            <div class="mode-title">Modo Classico</div>
-            <div class="mode-desc">
-                Insira Planta, Controlador e Sensor por funcao de
-                transferencia. Analise em malha aberta ou fechada
-                com ganho K ajustavel.
+        <div class="mode-card mode-card-classic">
+            <div class="mode-card-body">
+                <div class="mode-icon">
+                    <svg viewBox="0 0 240 80" xmlns="http://www.w3.org/2000/svg" width="100%">
+                      <line x1="20" y1="10" x2="20" y2="72" stroke="#555" stroke-width="1.2"/>
+                      <line x1="20" y1="72" x2="230" y2="72" stroke="#555" stroke-width="1.2"/>
+                      <polygon points="20,8 17,14 23,14" fill="#555"/>
+                      <polygon points="232,72 226,69 226,75" fill="#555"/>
+                      <line x1="20" y1="17" x2="230" y2="17" stroke="#444" stroke-width="1" stroke-dasharray="5,3"/>
+                      <text x="233" y="75" fill="#8890b0" font-size="10" font-family="monospace">t</text>
+                      <text x="5" y="15" fill="#8890b0" font-size="10" font-family="monospace">y</text>
+                      <polyline points="20,72 30,54 40,42 50,34 60,28 70,24 95,20 120,18 170,17 225,17"
+                                fill="none" stroke="#5b6be0" stroke-width="2.5"
+                                stroke-linecap="round" stroke-linejoin="round"/>
+                      <circle cx="225" cy="17" r="3.5" fill="#5b6be0"/>
+                    </svg>
+                </div>
+                <div class="mode-title">Modo Classico</div>
+                <div class="mode-desc">
+                    Insira Planta, Controlador e Sensor por funcao de
+                    transferencia. Analise em malha aberta ou fechada
+                    com ganho K ajustavel.
+                </div>
+                <div class="mode-hint mode-hint-classic">Clique para entrar &#8594;</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -1586,27 +1619,32 @@ def tela_inicial():
 
     with col2:
         st.markdown("""
-        <div class="mode-card">
-            <div class="mode-icon">
-                <svg viewBox="0 0 220 60" xmlns="http://www.w3.org/2000/svg" style="width:180px;height:49px;">
-                  <defs>
-                    <marker id="arrow-db" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-                      <polygon points="0 0, 8 3, 0 6" fill="#5b6be0"/>
-                    </marker>
-                  </defs>
-                  <text x="2" y="33" fill="#8890b0" font-size="11" font-family="monospace">R(s)</text>
-                  <line x1="28" y1="30" x2="67" y2="30" stroke="#5b6be0" stroke-width="2" marker-end="url(#arrow-db)"/>
-                  <rect x="68" y="15" width="84" height="30" fill="#1a1d2e" stroke="#5b6be0" stroke-width="1.5" rx="3"/>
-                  <text x="110" y="35" fill="#e0e4f0" font-size="11" font-family="monospace" text-anchor="middle">4/(s+4)</text>
-                  <line x1="152" y1="30" x2="191" y2="30" stroke="#5b6be0" stroke-width="2" marker-end="url(#arrow-db)"/>
-                  <text x="194" y="33" fill="#8890b0" font-size="11" font-family="monospace">Y(s)</text>
-                </svg>
-            </div>
-            <div class="mode-title">Modo Diagrama de Blocos</div>
-            <div class="mode-desc">
-                Editor visual de diagrama de blocos. Arraste, conecte
-                e calcule a FT equivalente graficamente.
-                Entrada manual e espaco de estados integrados.
+        <div class="mode-card mode-card-diagram">
+            <div class="mode-card-body">
+                <div class="mode-icon">
+                    <svg viewBox="0 0 240 80" xmlns="http://www.w3.org/2000/svg" width="100%">
+                      <defs>
+                        <marker id="arw-diag" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                          <polygon points="0 0, 8 3, 0 6" fill="#34d399"/>
+                        </marker>
+                      </defs>
+                      <text x="3" y="45" fill="#8890b0" font-size="12" font-family="monospace" font-weight="bold">R(s)</text>
+                      <line x1="35" y1="40" x2="58" y2="40" stroke="#34d399" stroke-width="2" marker-end="url(#arw-diag)"/>
+                      <rect x="60" y="18" width="120" height="44" fill="#1a1d2e" stroke="#34d399" stroke-width="1.5" rx="5"/>
+                      <text x="120" y="35" fill="#e0e4f0" font-size="13" font-family="monospace" text-anchor="middle">4</text>
+                      <line x1="73" y1="40" x2="167" y2="40" stroke="#e0e4f0" stroke-width="1" opacity="0.35"/>
+                      <text x="120" y="55" fill="#e0e4f0" font-size="13" font-family="monospace" text-anchor="middle">s + 4</text>
+                      <line x1="180" y1="40" x2="203" y2="40" stroke="#34d399" stroke-width="2" marker-end="url(#arw-diag)"/>
+                      <text x="206" y="45" fill="#8890b0" font-size="12" font-family="monospace" font-weight="bold">Y(s)</text>
+                    </svg>
+                </div>
+                <div class="mode-title">Modo Diagrama de Blocos</div>
+                <div class="mode-desc">
+                    Editor visual de diagrama de blocos. Arraste, conecte
+                    e calcule a FT equivalente graficamente.
+                    Entrada manual e espaco de estados integrados.
+                </div>
+                <div class="mode-hint mode-hint-diagram">Clique para entrar &#8594;</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -2020,4 +2058,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
