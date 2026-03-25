@@ -1554,7 +1554,7 @@ def tela_inicial():
     st.markdown('<div class="welcome-sub">Escolha o modo de trabalho para comecar</div>',
                 unsafe_allow_html=True)
 
-col1, col2, = st.columns(3, gap="large")
+col1, col2, = st.columns(2, gap="large")
 
 with col2:
         st.markdown("""
