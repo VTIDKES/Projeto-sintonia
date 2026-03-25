@@ -1574,17 +1574,6 @@ def tela_inicial():
         text-align: center; font-size: 16px; color: #8890b0;
         margin-bottom: 40px;
     }
-    /* Esconde os botoes fisicos — cards sao clicaveis diretamente */
-    [data-testid="stButton"] {
-        position: absolute !important;
-        width: 0 !important;
-        height: 0 !important;
-        overflow: hidden !important;
-        opacity: 0 !important;
-        pointer-events: none !important;
-        margin: 0 !important;
-        padding: 0 !important;
-    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -1599,8 +1588,7 @@ def tela_inicial():
 
     with col1:
         st.markdown("""
-        <div class="mode-card mode-card-classic"
-             onclick="(function(){var btns=document.querySelectorAll('[data-testid=stButton] button');if(btns[0])btns[0].click();})()">
+        <div class="mode-card mode-card-classic">
             <div class="mode-card-body">
                 <div class="mode-icon">
                     <svg viewBox="0 0 240 80" xmlns="http://www.w3.org/2000/svg" width="100%">
@@ -1623,18 +1611,16 @@ def tela_inicial():
                     transferencia ou espaco de estados. Analise em
                     malha aberta ou fechada com ganho K ajustavel.
                 </div>
-                <div class="mode-hint mode-hint-classic">Clique para entrar &#8594;</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("Selecionar Modo Classico", key="btn_classico"):
+        if st.button("Entrar no Modo Classico", key="btn_classico", type="primary", use_container_width=True):
             st.session_state.modo_selecionado = 'classico'
             st.rerun()
 
     with col2:
         st.markdown("""
-        <div class="mode-card mode-card-diagram"
-             onclick="(function(){var btns=document.querySelectorAll('[data-testid=stButton] button');if(btns[1])btns[1].click();})()">
+        <div class="mode-card mode-card-diagram">
             <div class="mode-card-body">
                 <div class="mode-icon">
                     <svg viewBox="0 0 240 80" xmlns="http://www.w3.org/2000/svg" width="100%">
@@ -1659,11 +1645,10 @@ def tela_inicial():
                     e calcule a FT equivalente graficamente.
                     Entrada manual e espaco de estados integrados.
                 </div>
-                <div class="mode-hint mode-hint-diagram">Clique para entrar &#8594;</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("Selecionar Modo Diagrama de Blocos", key="btn_canvas"):
+        if st.button("Entrar no Modo Diagrama de Blocos", key="btn_canvas", type="primary", use_container_width=True):
             st.session_state.modo_selecionado = 'canvas'
             st.rerun()
 
