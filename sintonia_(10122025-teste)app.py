@@ -1554,25 +1554,9 @@ def tela_inicial():
     st.markdown('<div class="welcome-sub">Escolha o modo de trabalho para comecar</div>',
                 unsafe_allow_html=True)
 
-    col1, col2, col3 = st.columns(3, gap="large")
+col1, col2, = st.columns(3, gap="large")
 
-    with col1:
-        st.markdown("""
-        <div class="mode-card">
-            <div class="mode-icon">&#128203;</div>
-            <div class="mode-title">Modo Lista</div>
-            <div class="mode-desc">
-                Adicione blocos a uma lista, defina conexoes
-                (serie, paralelo, feedback) e obtenha a FT equivalente.
-                Suporte a espaco de estados (A, B, C, D).
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("Selecionar Modo Lista", use_container_width=True, type="primary"):
-            st.session_state.modo_selecionado = 'lista'
-            st.rerun()
-
-    with col2:
+with col2:
         st.markdown("""
         <div class="mode-card">
             <div class="mode-icon">&#128200;</div>
@@ -1588,7 +1572,7 @@ def tela_inicial():
             st.session_state.modo_selecionado = 'classico'
             st.rerun()
 
-    with col3:
+with col2:
         st.markdown("""
         <div class="mode-card">
             <div class="mode-icon">&#127912;</div>
