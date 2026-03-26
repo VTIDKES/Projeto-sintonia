@@ -1784,6 +1784,18 @@ def modo_lista():
                             st.session_state.conexoes.pop(i)
                             st.rerun()
 
+            # Diagrama de blocos refletindo as conexoes definidas
+            if not st.session_state.blocos.empty:
+                st.markdown("---")
+                st.subheader("Diagrama de Blocos")
+                st.markdown(VISUAL_BLOCKS_CSS, unsafe_allow_html=True)
+                svg_diagram = _svg_diagrama_blocos(
+                    st.session_state.blocos, st.session_state.conexoes)
+                if svg_diagram:
+                    st.markdown(
+                        f'<div class="conn-diagram-wrap">{svg_diagram}</div>',
+                        unsafe_allow_html=True)
+
     with tab_analise:
         st.subheader("Analise do Sistema")
         if st.session_state.blocos.empty:
@@ -1939,8 +1951,12 @@ def _svg_render_bloco(x, y, bw, bh, row):
           f'stroke="#e0e4f0" stroke-width=".6" opacity=".3"/>')
     s += (f'<text x="{x+bw/2}" y="{y+bh-10}" fill="#e0e4f0" font-size="11" '
           f'font-family="monospace" text-anchor="middle">{den_s}</text>')
-    s += (f'<text x="{x+bw/2}" y="{y-5}" fill="{cor}" font-size="9" '
-          f'text-anchor="middle" font-weight="600">{row["nome"]} ({icone})</text>')
+    name_label = f'{row["nome"]} ({icone})'
+    name_w = len(name_label) * 6 + 8
+    s += (f'<rect x="{x+bw/2-name_w/2}" y="{y-16}" width="{name_w}" height="14" '
+          f'rx="3" fill="#1a1d2e" opacity="0.85"/>')
+    s += (f'<text x="{x+bw/2}" y="{y-5}" fill="{cor}" font-size="10" '
+          f'text-anchor="middle" font-weight="600">{name_label}</text>')
     return s
 
 
@@ -1992,17 +2008,17 @@ def _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r):
     if not sections:
         return _svg_blocos_sem_conexao(list(nomes_map.values()), bw, bh, gap, margin)
 
-    # Calcula dimensoes por secao
+    # Calcula dimensoes por secao (espaco extra para rotulos e legibilidade)
     total_h = margin
     section_ys = []
     for tipo, blocos, _ in sections:
         section_ys.append(total_h)
         if tipo.startswith('Realimentacao'):
-            total_h += bh + 130
+            total_h += bh + 160
         elif tipo == 'Paralelo':
-            total_h += len(blocos) * (bh + 20) + 50
+            total_h += len(blocos) * (bh + 25) + 70
         else:
-            total_h += bh + 60
+            total_h += bh + 80
     total_h += margin
 
     max_b = max(len(b) for _, b, _ in sections)
@@ -2015,15 +2031,19 @@ def _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r):
     for sec_idx, (tipo, blocos, nomes) in enumerate(sections):
         sy = section_ys[sec_idx]
 
-        # Rotulo da secao
+        # Rotulo da secao (com fundo para legibilidade)
         tipo_cores = {'Serie': '#60a5fa', 'Paralelo': '#a78bfa',
                       'Realimentacao Negativa': '#f472b6',
                       'Realimentacao Positiva': '#fbbf24'}
         tipo_cor = tipo_cores.get(tipo, '#5b6be0')
-        svg += (f'<text x="{margin}" y="{sy+12}" fill="{tipo_cor}" font-size="11" '
-                f'font-weight="700">{tipo}: {", ".join(nomes)}</text>')
+        label_text = f'{tipo}: {", ".join(nomes)}'
+        label_w = len(label_text) * 7 + 12
+        svg += (f'<rect x="{margin-4}" y="{sy}" width="{label_w}" height="18" '
+                f'rx="3" fill="#1a1d2e" opacity="0.85"/>')
+        svg += (f'<text x="{margin}" y="{sy+13}" fill="{tipo_cor}" font-size="12" '
+                f'font-weight="700">{label_text}</text>')
 
-        block_y = sy + 22
+        block_y = sy + 30
         mid_y = block_y + bh / 2
 
         if tipo == 'Serie':
@@ -2067,14 +2087,14 @@ def _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r):
             svg += f'<circle cx="{fork_x}" cy="{first_mid}" r="4" fill="#a78bfa"/>'
 
             # Somador
-            all_mid = block_y + (nb - 1) * (bh + 20) / 2 + bh / 2
+            all_mid = block_y + (nb - 1) * (bh + 25) / 2 + bh / 2
             svg += (f'<circle cx="{sum_out_x+sum_r}" cy="{all_mid}" r="{sum_r}" '
                     f'fill="#1a3d3a" stroke="#a78bfa" stroke-width="2"/>')
             svg += (f'<text x="{sum_out_x+sum_r}" y="{all_mid+5}" fill="#e0e4f0" '
                     f'font-size="16" font-weight="700" text-anchor="middle">\u03a3</text>')
 
             for i, row in enumerate(blocos):
-                y_off = block_y + i * (bh + 20)
+                y_off = block_y + i * (bh + 25)
                 b_mid = y_off + bh / 2
                 svg += _svg_render_bloco(blk_x, y_off, bw, bh, row)
                 # Fork -> bloco
@@ -2116,12 +2136,12 @@ def _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r):
                     f'fill="#1a3d3a" stroke="#2d8a70" stroke-width="2"/>')
             svg += (f'<text x="{sum_cx}" y="{mid_y+5}" fill="#e0e4f0" font-size="16" '
                     f'font-weight="700" text-anchor="middle">\u03a3</text>')
-            svg += (f'<text x="{sum_cx-6}" y="{mid_y-sum_r-4}" fill="#34d399" '
-                    f'font-size="11" font-weight="700">+</text>')
+            svg += (f'<text x="{sum_cx+4}" y="{mid_y-sum_r-6}" fill="#34d399" '
+                    f'font-size="13" font-weight="700">+</text>')
             sign = '+' if is_pos else '\u2212'
             sign_cor = '#fbbf24' if is_pos else '#f87171'
-            svg += (f'<text x="{sum_cx-sum_r-8}" y="{mid_y+14}" fill="{sign_cor}" '
-                    f'font-size="11" font-weight="700">{sign}</text>')
+            svg += (f'<text x="{sum_cx-sum_r-14}" y="{mid_y+sum_r+14}" fill="{sign_cor}" '
+                    f'font-size="13" font-weight="700">{sign}</text>')
 
             # Sigma -> G
             svg += (f'<line x1="{sum_cx+sum_r}" y1="{mid_y}" x2="{g_x}" y2="{mid_y}" '
@@ -2139,7 +2159,7 @@ def _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r):
                     f'font-family="monospace" font-weight="bold">Y(s)</text>')
 
             # Caminho de realimentacao
-            fb_y_pos = block_y + bh + 40
+            fb_y_pos = block_y + bh + 50
             svg += (f'<line x1="{branch_x}" y1="{mid_y}" x2="{branch_x}" y2="{fb_y_pos}" '
                     f'stroke="#f472b6" stroke-width="1.5"/>')
 
@@ -2162,9 +2182,12 @@ def _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r):
                 svg += (f'<line x1="{sum_cx}" y1="{fb_y_pos}" '
                         f'x2="{sum_cx}" y2="{mid_y+sum_r}" '
                         f'stroke="#f472b6" stroke-width="1.5" marker-end="url(#arrF)"/>')
-                svg += (f'<text x="{(sum_cx+branch_x)/2}" y="{fb_y_pos-6}" fill="#f472b6" '
-                        f'font-size="10" text-anchor="middle" font-style="italic">'
-                        f'Unitaria</text>')
+                unit_x = (sum_cx + branch_x) / 2
+                svg += (f'<rect x="{unit_x-30}" y="{fb_y_pos-16}" width="60" height="16" '
+                        f'rx="3" fill="#1a1d2e" opacity="0.85"/>')
+                svg += (f'<text x="{unit_x}" y="{fb_y_pos-4}" fill="#f472b6" '
+                        f'font-size="11" text-anchor="middle" font-style="italic" '
+                        f'font-weight="600">Unitaria</text>')
 
     svg += '</svg>'
     return svg
