@@ -1909,44 +1909,19 @@ def _coeffs_to_poly_str(coeffs):
 
 
 def _svg_diagrama_blocos(blocos_df, conexoes):
-    """Gera SVG do diagrama de blocos com conexoes visuais."""
+    """Gera SVG do diagrama de blocos baseado nas conexoes definidas pelo usuario."""
     if blocos_df.empty:
         return ''
 
     bw, bh, gap, margin, sum_r = 120, 55, 50, 50, 18
+    nomes_map = {row['nome']: row for _, row in blocos_df.iterrows()}
 
-    # Categoriza blocos
-    planta = controlador = sensor = None
-    outros = []
-    for _, row in blocos_df.iterrows():
-        if row['tipo'] == 'Planta' and planta is None:
-            planta = row
-        elif row['tipo'] == 'Controlador' and controlador is None:
-            controlador = row
-        elif row['tipo'] == 'Sensor' and sensor is None:
-            sensor = row
-        else:
-            outros.append(row)
-
-    # Se ha conexoes explicitas, usa _svg_com_conexoes
+    # COM conexoes: renderiza o diagrama conforme a escolha do usuario
     if conexoes:
-        nomes_map = {row['nome']: row for _, row in blocos_df.iterrows()}
         return _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r)
 
-    # Auto-layout baseado nos tipos de blocos
-    forward = []
-    if controlador is not None:
-        forward.append(controlador)
-    if planta is not None:
-        forward.append(planta)
-    for o in outros:
-        if o['tipo'] != 'Sensor':
-            forward.append(o)
-    if not forward:
-        forward = [row for _, row in blocos_df.iterrows()]
-
-    needs_fb = sensor is not None
-    return _svg_layout_padrao(forward, sensor, needs_fb, bw, bh, gap, margin, sum_r)
+    # SEM conexoes: mostra blocos isolados aguardando definicao do usuario
+    return _svg_blocos_sem_conexao(list(nomes_map.values()), bw, bh, gap, margin)
 
 
 def _svg_render_bloco(x, y, bw, bh, row):
@@ -1969,94 +1944,45 @@ def _svg_render_bloco(x, y, bw, bh, row):
     return s
 
 
-def _svg_layout_padrao(forward, sensor, needs_fb, bw, bh, gap, margin, sum_r):
-    """SVG para layout padrao: serie com possivel feedback."""
-    nf = len(forward)
-    extra_left = 70 if needs_fb else 40
-    total_w = extra_left + nf * bw + max(0, nf - 1) * gap + 60 + 2 * margin
-    fb_h = 80 if needs_fb else 0
-    total_h = bh + fb_h + 2 * margin
-    main_y = margin
-    mid_y = main_y + bh / 2
-    fb_y = main_y + bh + 40
+def _svg_blocos_sem_conexao(blocos, bw, bh, gap, margin):
+    """SVG com blocos isolados - aguardando o usuario definir conexoes."""
+    n = len(blocos)
+    total_w = n * bw + (n - 1) * gap + 2 * margin
+    total_h = bh + 2 * margin + 20
 
     svg = (f'<svg viewBox="0 0 {total_w} {total_h}" xmlns="http://www.w3.org/2000/svg" '
            f'style="width:100%;max-height:{int(total_h)}px">')
-    svg += ('<defs>'
-            '<marker id="arrD" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">'
-            '<polygon points="0 0,8 3,0 6" fill="#5b6be0"/></marker>'
-            '<marker id="arrF" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">'
-            '<polygon points="0 0,8 3,0 6" fill="#f472b6"/></marker></defs>')
 
-    r_x = margin
-    svg += (f'<text x="{r_x}" y="{mid_y+5}" fill="#8890b0" font-size="13" '
-            f'font-family="monospace" font-weight="bold">R(s)</text>')
+    for i, row in enumerate(blocos):
+        x = margin + i * (bw + gap)
+        svg += _svg_render_bloco(x, margin, bw, bh, row)
+        if i < n - 1:
+            mx = x + bw
+            mid = margin + bh / 2
+            svg += (f'<line x1="{mx+4}" y1="{mid}" x2="{mx+gap-4}" y2="{mid}" '
+                    f'stroke="#555" stroke-width="1.5" stroke-dasharray="6 3"/>')
+            svg += (f'<text x="{mx+gap/2}" y="{mid-8}" fill="#8890b0" font-size="13" '
+                    f'text-anchor="middle" font-weight="700">?</text>')
 
-    if needs_fb:
-        sum_x = margin + 45
-        svg += (f'<line x1="{r_x+30}" y1="{mid_y}" x2="{sum_x-sum_r}" y2="{mid_y}" '
-                f'stroke="#5b6be0" stroke-width="2" marker-end="url(#arrD)"/>')
-        svg += (f'<circle cx="{sum_x}" cy="{mid_y}" r="{sum_r}" '
-                f'fill="#1a3d3a" stroke="#2d8a70" stroke-width="2"/>')
-        svg += (f'<text x="{sum_x}" y="{mid_y+5}" fill="#e0e4f0" font-size="16" '
-                f'font-weight="700" text-anchor="middle">\u03a3</text>')
-        svg += (f'<text x="{sum_x-6}" y="{mid_y-sum_r-4}" fill="#34d399" '
-                f'font-size="11" font-weight="700">+</text>')
-        svg += (f'<text x="{sum_x-sum_r-8}" y="{mid_y+14}" fill="#f87171" '
-                f'font-size="11" font-weight="700">\u2212</text>')
-        first_x = sum_x + sum_r + 15
-    else:
-        first_x = margin + 40
-        svg += (f'<line x1="{r_x+30}" y1="{mid_y}" x2="{first_x}" y2="{mid_y}" '
-                f'stroke="#5b6be0" stroke-width="2" marker-end="url(#arrD)"/>')
-
-    for i, row in enumerate(forward):
-        x = first_x + i * (bw + gap)
-        svg += _svg_render_bloco(x, main_y, bw, bh, row)
-        if i > 0:
-            px = first_x + (i - 1) * (bw + gap) + bw
-            svg += (f'<line x1="{px}" y1="{mid_y}" x2="{x}" y2="{mid_y}" '
-                    f'stroke="#5b6be0" stroke-width="2" marker-end="url(#arrD)"/>')
-        elif needs_fb:
-            svg += (f'<line x1="{first_x-15}" y1="{mid_y}" x2="{x}" y2="{mid_y}" '
-                    f'stroke="#5b6be0" stroke-width="2" marker-end="url(#arrD)"/>')
-
-    last_x = first_x + max(0, nf - 1) * (bw + gap) + bw
-    y_x = last_x + 40
-    svg += (f'<line x1="{last_x}" y1="{mid_y}" x2="{y_x-10}" y2="{mid_y}" '
-            f'stroke="#5b6be0" stroke-width="2" marker-end="url(#arrD)"/>')
-    svg += (f'<text x="{y_x}" y="{mid_y+5}" fill="#8890b0" font-size="13" '
-            f'font-family="monospace" font-weight="bold">Y(s)</text>')
-
-    if needs_fb:
-        sum_x = margin + 45
-        branch_x = last_x + 15
-        svg += f'<circle cx="{branch_x}" cy="{mid_y}" r="4" fill="#5b6be0"/>'
-        svg += (f'<line x1="{branch_x}" y1="{mid_y}" x2="{branch_x}" y2="{fb_y}" '
-                f'stroke="#f472b6" stroke-width="1.5"/>')
-        if sensor is not None:
-            fb_bx = (sum_x + branch_x) / 2 - bw / 2
-            svg += _svg_render_bloco(fb_bx, fb_y - bh / 2, bw, bh, sensor)
-            svg += (f'<line x1="{branch_x}" y1="{fb_y}" x2="{fb_bx+bw}" y2="{fb_y}" '
-                    f'stroke="#f472b6" stroke-width="1.5" marker-end="url(#arrF)"/>')
-            svg += (f'<line x1="{fb_bx}" y1="{fb_y}" x2="{sum_x}" y2="{fb_y}" '
-                    f'stroke="#f472b6" stroke-width="1.5"/>')
-            svg += (f'<line x1="{sum_x}" y1="{fb_y}" x2="{sum_x}" y2="{mid_y+sum_r}" '
-                    f'stroke="#f472b6" stroke-width="1.5" marker-end="url(#arrF)"/>')
-        else:
-            svg += (f'<line x1="{branch_x}" y1="{fb_y}" x2="{sum_x}" y2="{fb_y}" '
-                    f'stroke="#f472b6" stroke-width="1.5"/>')
-            svg += (f'<line x1="{sum_x}" y1="{fb_y}" x2="{sum_x}" y2="{mid_y+sum_r}" '
-                    f'stroke="#f472b6" stroke-width="1.5" marker-end="url(#arrF)"/>')
-            svg += (f'<text x="{(sum_x+branch_x)/2}" y="{fb_y-6}" fill="#f472b6" '
-                    f'font-size="10" text-anchor="middle" font-style="italic">Unitaria</text>')
+    svg += (f'<text x="{total_w/2}" y="{total_h-5}" fill="#8890b0" font-size="11" '
+            f'text-anchor="middle" font-style="italic">'
+            f'Defina o tipo de conexao no painel lateral</text>')
 
     svg += '</svg>'
     return svg
 
 
 def _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r):
-    """SVG para conexoes explicitamente definidas pelo usuario."""
+    """SVG completo com diagrama baseado nas conexoes escolhidas pelo usuario."""
+    _DEFS = ('<defs>'
+             '<marker id="arrD" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">'
+             '<polygon points="0 0,8 3,0 6" fill="#5b6be0"/></marker>'
+             '<marker id="arrF" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">'
+             '<polygon points="0 0,8 3,0 6" fill="#f472b6"/></marker>'
+             '<marker id="arrP" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">'
+             '<polygon points="0 0,8 3,0 6" fill="#a78bfa"/></marker></defs>')
+
+    # Filtra conexoes validas
     sections = []
     for con in conexoes:
         blocos = [nomes_map[n] for n in con['blocos'] if n in nomes_map]
@@ -2064,123 +1990,181 @@ def _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r):
             sections.append((con['tipo'], blocos, con['blocos']))
 
     if not sections:
-        forward = list(nomes_map.values())
-        return _svg_layout_padrao(forward, None, False, bw, bh, gap, margin, sum_r)
+        return _svg_blocos_sem_conexao(list(nomes_map.values()), bw, bh, gap, margin)
 
-    # Calcula altura total
+    # Calcula dimensoes por secao
     total_h = margin
     section_ys = []
     for tipo, blocos, _ in sections:
         section_ys.append(total_h)
         if tipo.startswith('Realimentacao'):
-            total_h += bh + 120
+            total_h += bh + 130
         elif tipo == 'Paralelo':
-            total_h += len(blocos) * (bh + 15) + 40
+            total_h += len(blocos) * (bh + 20) + 50
         else:
-            total_h += bh + 50
+            total_h += bh + 60
     total_h += margin
 
     max_b = max(len(b) for _, b, _ in sections)
-    total_w = max(max_b * (bw + gap) + 2 * margin + 140, 500)
+    total_w = max(max_b * (bw + gap) + 2 * margin + 180, 520)
 
     svg = (f'<svg viewBox="0 0 {total_w} {total_h}" xmlns="http://www.w3.org/2000/svg" '
            f'style="width:100%;max-height:{int(total_h)}px">')
-    svg += ('<defs>'
-            '<marker id="arrD" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">'
-            '<polygon points="0 0,8 3,0 6" fill="#5b6be0"/></marker>'
-            '<marker id="arrF" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">'
-            '<polygon points="0 0,8 3,0 6" fill="#f472b6"/></marker>'
-            '<marker id="arrP" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">'
-            '<polygon points="0 0,8 3,0 6" fill="#a78bfa"/></marker></defs>')
+    svg += _DEFS
 
     for sec_idx, (tipo, blocos, nomes) in enumerate(sections):
         sy = section_ys[sec_idx]
-        mid_y = sy + bh / 2 + 18
 
         # Rotulo da secao
         tipo_cores = {'Serie': '#60a5fa', 'Paralelo': '#a78bfa',
-                      'Realimentacao Negativa': '#f472b6', 'Realimentacao Positiva': '#fbbf24'}
+                      'Realimentacao Negativa': '#f472b6',
+                      'Realimentacao Positiva': '#fbbf24'}
         tipo_cor = tipo_cores.get(tipo, '#5b6be0')
-        svg += (f'<text x="{margin}" y="{sy+10}" fill="{tipo_cor}" font-size="11" '
+        svg += (f'<text x="{margin}" y="{sy+12}" fill="{tipo_cor}" font-size="11" '
                 f'font-weight="700">{tipo}: {", ".join(nomes)}</text>')
 
+        block_y = sy + 22
+        mid_y = block_y + bh / 2
+
         if tipo == 'Serie':
+            # R(s) -> [B1] -> [B2] -> ... -> Y(s)
+            r_x = margin
+            svg += (f'<text x="{r_x}" y="{mid_y+5}" fill="#8890b0" font-size="13" '
+                    f'font-family="monospace" font-weight="bold">R(s)</text>')
+            first_x = margin + 45
+            svg += (f'<line x1="{r_x+30}" y1="{mid_y}" x2="{first_x}" y2="{mid_y}" '
+                    f'stroke="#5b6be0" stroke-width="2" marker-end="url(#arrD)"/>')
+
             for i, row in enumerate(blocos):
-                x = margin + 20 + i * (bw + gap)
-                svg += _svg_render_bloco(x, sy + 18, bw, bh, row)
+                x = first_x + i * (bw + gap)
+                svg += _svg_render_bloco(x, block_y, bw, bh, row)
                 if i > 0:
-                    px = margin + 20 + (i - 1) * (bw + gap) + bw
+                    px = first_x + (i - 1) * (bw + gap) + bw
                     svg += (f'<line x1="{px}" y1="{mid_y}" x2="{x}" y2="{mid_y}" '
                             f'stroke="#5b6be0" stroke-width="2" marker-end="url(#arrD)"/>')
-            # Setas de entrada e saida
-            svg += (f'<text x="{margin+5}" y="{mid_y+5}" fill="#8890b0" font-size="11" '
-                    f'font-family="monospace">&#8594;</text>')
+
+            last_x = first_x + (len(blocos) - 1) * (bw + gap) + bw
+            y_x = last_x + 40
+            svg += (f'<line x1="{last_x}" y1="{mid_y}" x2="{y_x-10}" y2="{mid_y}" '
+                    f'stroke="#5b6be0" stroke-width="2" marker-end="url(#arrD)"/>')
+            svg += (f'<text x="{y_x}" y="{mid_y+5}" fill="#8890b0" font-size="13" '
+                    f'font-family="monospace" font-weight="bold">Y(s)</text>')
 
         elif tipo == 'Paralelo':
-            center_x = margin + 20
-            sum_out_x = margin + 20 + bw + gap
-            for i, row in enumerate(blocos):
-                y_off = sy + 18 + i * (bh + 15)
-                svg += _svg_render_bloco(center_x, y_off, bw, bh, row)
-                svg += (f'<line x1="{center_x+bw}" y1="{y_off+bh/2}" '
-                        f'x2="{sum_out_x}" y2="{sy+18+bh/2}" '
-                        f'stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrP)"/>')
-            svg += (f'<circle cx="{sum_out_x+sum_r}" cy="{sy+18+bh/2}" r="{sum_r}" '
+            # R(s) -> fork -> [B1] + [B2] + ... -> Sigma -> Y(s)
+            nb = len(blocos)
+            r_x = margin
+            fork_x = margin + 42
+            blk_x = margin + 60
+            sum_out_x = blk_x + bw + gap
+
+            # Ponto de bifurcacao e R(s)
+            first_mid = block_y + bh / 2
+            svg += (f'<text x="{r_x}" y="{first_mid+5}" fill="#8890b0" font-size="13" '
+                    f'font-family="monospace" font-weight="bold">R(s)</text>')
+            svg += (f'<line x1="{r_x+30}" y1="{first_mid}" x2="{fork_x}" y2="{first_mid}" '
+                    f'stroke="#a78bfa" stroke-width="2"/>')
+            svg += f'<circle cx="{fork_x}" cy="{first_mid}" r="4" fill="#a78bfa"/>'
+
+            # Somador
+            all_mid = block_y + (nb - 1) * (bh + 20) / 2 + bh / 2
+            svg += (f'<circle cx="{sum_out_x+sum_r}" cy="{all_mid}" r="{sum_r}" '
                     f'fill="#1a3d3a" stroke="#a78bfa" stroke-width="2"/>')
-            svg += (f'<text x="{sum_out_x+sum_r}" y="{sy+18+bh/2+5}" fill="#e0e4f0" '
-                    f'font-size="14" font-weight="700" text-anchor="middle">+</text>')
+            svg += (f'<text x="{sum_out_x+sum_r}" y="{all_mid+5}" fill="#e0e4f0" '
+                    f'font-size="16" font-weight="700" text-anchor="middle">\u03a3</text>')
+
+            for i, row in enumerate(blocos):
+                y_off = block_y + i * (bh + 20)
+                b_mid = y_off + bh / 2
+                svg += _svg_render_bloco(blk_x, y_off, bw, bh, row)
+                # Fork -> bloco
+                svg += (f'<line x1="{fork_x}" y1="{first_mid}" x2="{fork_x}" y2="{b_mid}" '
+                        f'stroke="#a78bfa" stroke-width="1.5"/>')
+                svg += (f'<line x1="{fork_x}" y1="{b_mid}" x2="{blk_x}" y2="{b_mid}" '
+                        f'stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrP)"/>')
+                # Bloco -> somador
+                svg += (f'<line x1="{blk_x+bw}" y1="{b_mid}" x2="{sum_out_x}" y2="{all_mid}" '
+                        f'stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrP)"/>')
+
+            # Y(s)
+            y_x = sum_out_x + sum_r * 2 + 30
+            svg += (f'<line x1="{sum_out_x+sum_r*2}" y1="{all_mid}" x2="{y_x-10}" '
+                    f'y2="{all_mid}" stroke="#a78bfa" stroke-width="2" '
+                    f'marker-end="url(#arrP)"/>')
+            svg += (f'<text x="{y_x}" y="{all_mid+5}" fill="#8890b0" font-size="13" '
+                    f'font-family="monospace" font-weight="bold">Y(s)</text>')
 
         elif tipo.startswith('Realimentacao'):
             is_pos = tipo == 'Realimentacao Positiva'
             G = blocos[0]
             H = blocos[1] if len(blocos) > 1 else None
 
-            g_x = margin + 70
-            sum_cx = margin + 40
+            # R(s) -> Sigma -> [G] -> Y(s)
+            #          sign ^            |
+            #               +-- [H] <---+
+            r_x = margin
+            sum_cx = margin + 45
+            g_x = sum_cx + sum_r + 20
 
+            svg += (f'<text x="{r_x}" y="{mid_y+5}" fill="#8890b0" font-size="13" '
+                    f'font-family="monospace" font-weight="bold">R(s)</text>')
+            # R(s) -> Sigma
+            svg += (f'<line x1="{r_x+30}" y1="{mid_y}" x2="{sum_cx-sum_r}" y2="{mid_y}" '
+                    f'stroke="#5b6be0" stroke-width="2" marker-end="url(#arrD)"/>')
             # Somador
             svg += (f'<circle cx="{sum_cx}" cy="{mid_y}" r="{sum_r}" '
                     f'fill="#1a3d3a" stroke="#2d8a70" stroke-width="2"/>')
-            svg += (f'<text x="{sum_cx}" y="{mid_y+5}" fill="#e0e4f0" font-size="14" '
+            svg += (f'<text x="{sum_cx}" y="{mid_y+5}" fill="#e0e4f0" font-size="16" '
                     f'font-weight="700" text-anchor="middle">\u03a3</text>')
-            sign = '+' if is_pos else '\u2212'
-            sign_cor = '#fbbf24' if is_pos else '#f87171'
             svg += (f'<text x="{sum_cx-6}" y="{mid_y-sum_r-4}" fill="#34d399" '
                     f'font-size="11" font-weight="700">+</text>')
+            sign = '+' if is_pos else '\u2212'
+            sign_cor = '#fbbf24' if is_pos else '#f87171'
             svg += (f'<text x="{sum_cx-sum_r-8}" y="{mid_y+14}" fill="{sign_cor}" '
                     f'font-size="11" font-weight="700">{sign}</text>')
 
-            # Seta somador -> G
+            # Sigma -> G
             svg += (f'<line x1="{sum_cx+sum_r}" y1="{mid_y}" x2="{g_x}" y2="{mid_y}" '
                     f'stroke="#5b6be0" stroke-width="2" marker-end="url(#arrD)"/>')
             # Bloco G
-            svg += _svg_render_bloco(g_x, sy + 18, bw, bh, G)
-            # Seta saida
-            out_x = g_x + bw + 30
-            svg += (f'<line x1="{g_x+bw}" y1="{mid_y}" x2="{out_x}" y2="{mid_y}" '
-                    f'stroke="#5b6be0" stroke-width="2" marker-end="url(#arrD)"/>')
-            # Branch point
-            branch_bx = g_x + bw + 15
-            svg += f'<circle cx="{branch_bx}" cy="{mid_y}" r="4" fill="#5b6be0"/>'
+            svg += _svg_render_bloco(g_x, block_y, bw, bh, G)
 
-            fb_y_pos = sy + bh + 55
-            svg += (f'<line x1="{branch_bx}" y1="{mid_y}" x2="{branch_bx}" y2="{fb_y_pos}" '
+            # G -> Y(s) com branch point
+            branch_x = g_x + bw + 20
+            y_x = branch_x + 30
+            svg += (f'<line x1="{g_x+bw}" y1="{mid_y}" x2="{y_x-10}" y2="{mid_y}" '
+                    f'stroke="#5b6be0" stroke-width="2" marker-end="url(#arrD)"/>')
+            svg += f'<circle cx="{branch_x}" cy="{mid_y}" r="4" fill="#5b6be0"/>'
+            svg += (f'<text x="{y_x}" y="{mid_y+5}" fill="#8890b0" font-size="13" '
+                    f'font-family="monospace" font-weight="bold">Y(s)</text>')
+
+            # Caminho de realimentacao
+            fb_y_pos = block_y + bh + 40
+            svg += (f'<line x1="{branch_x}" y1="{mid_y}" x2="{branch_x}" y2="{fb_y_pos}" '
                     f'stroke="#f472b6" stroke-width="1.5"/>')
 
             if H is not None:
-                h_x = (sum_cx + branch_bx) / 2 - bw / 2
+                h_x = (sum_cx + branch_x) / 2 - bw / 2
                 svg += _svg_render_bloco(h_x, fb_y_pos - bh / 2, bw, bh, H)
-                svg += (f'<line x1="{branch_bx}" y1="{fb_y_pos}" x2="{h_x+bw}" y2="{fb_y_pos}" '
+                svg += (f'<line x1="{branch_x}" y1="{fb_y_pos}" '
+                        f'x2="{h_x+bw}" y2="{fb_y_pos}" '
                         f'stroke="#f472b6" stroke-width="1.5" marker-end="url(#arrF)"/>')
-                svg += (f'<line x1="{h_x}" y1="{fb_y_pos}" x2="{sum_cx}" y2="{fb_y_pos}" '
+                svg += (f'<line x1="{h_x}" y1="{fb_y_pos}" '
+                        f'x2="{sum_cx}" y2="{fb_y_pos}" '
                         f'stroke="#f472b6" stroke-width="1.5"/>')
-                svg += (f'<line x1="{sum_cx}" y1="{fb_y_pos}" x2="{sum_cx}" y2="{mid_y+sum_r}" '
+                svg += (f'<line x1="{sum_cx}" y1="{fb_y_pos}" '
+                        f'x2="{sum_cx}" y2="{mid_y+sum_r}" '
                         f'stroke="#f472b6" stroke-width="1.5" marker-end="url(#arrF)"/>')
             else:
-                svg += (f'<line x1="{branch_bx}" y1="{fb_y_pos}" x2="{sum_cx}" y2="{fb_y_pos}" '
+                svg += (f'<line x1="{branch_x}" y1="{fb_y_pos}" '
+                        f'x2="{sum_cx}" y2="{fb_y_pos}" '
                         f'stroke="#f472b6" stroke-width="1.5"/>')
-                svg += (f'<line x1="{sum_cx}" y1="{fb_y_pos}" x2="{sum_cx}" y2="{mid_y+sum_r}" '
+                svg += (f'<line x1="{sum_cx}" y1="{fb_y_pos}" '
+                        f'x2="{sum_cx}" y2="{mid_y+sum_r}" '
                         f'stroke="#f472b6" stroke-width="1.5" marker-end="url(#arrF)"/>')
+                svg += (f'<text x="{(sum_cx+branch_x)/2}" y="{fb_y_pos-6}" fill="#f472b6" '
+                        f'font-size="10" text-anchor="middle" font-style="italic">'
+                        f'Unitaria</text>')
 
     svg += '</svg>'
     return svg
