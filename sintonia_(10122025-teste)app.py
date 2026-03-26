@@ -1509,6 +1509,9 @@ document.querySelectorAll(".tb[data-add]").forEach(function(b){b.addEventListene
 document.getElementById("btnDel").addEventListener("click",delSel);document.getElementById("btnClear").addEventListener("click",clrAll);document.getElementById("btnAuto").addEventListener("click",autoLay);
 document.addEventListener("keydown",function(e){if(e.target.tagName==="INPUT")return;if(e.key==="Delete"||e.key==="Backspace")delSel();if(e.key==="Escape"){conSt=null;closeModal();document.querySelectorAll(".port.active").forEach(function(p){p.classList.remove("active")})}});
 render();new ResizeObserver(function(){rW()}).observe(cw);
+/* Blocos iniciais injetados do modo classico */
+var _initB=__INITIAL_BLOCKS__;
+if(_initB&&_initB.length>0){_initB.forEach(function(b){addBP(b.type,b.params)});setTimeout(autoLay,200)}
 </script></body></html>'''
 
 
@@ -1824,6 +1827,366 @@ def modo_lista():
 
 
 # ══════════════════════════════════════════════════
+# VISUALIZACAO DE BLOCOS (CARDS + DIAGRAMA SVG)
+# ══════════════════════════════════════════════════
+
+VISUAL_BLOCKS_CSS = """<style>
+.vb-container{display:flex;flex-wrap:wrap;gap:16px;margin:16px 0;justify-content:center}
+.vb-card{background:linear-gradient(135deg,#1a1d2e,#252840);border:2px solid #333654;border-radius:12px;
+  padding:16px 20px;min-width:170px;max-width:250px;text-align:center;transition:all .2s;position:relative;flex:1}
+.vb-card:hover{border-color:#5b6be0;transform:translateY(-2px);box-shadow:0 8px 24px rgba(91,107,224,.15)}
+.vb-tipo{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#8890b0;margin-bottom:4px}
+.vb-icone{font-size:24px;font-weight:700;margin-bottom:4px}
+.vb-nome{font-size:14px;font-weight:600;color:#e0e4f0;margin-bottom:8px}
+.vb-tf{font-family:monospace;font-size:12px;background:rgba(0,0,0,.3);border-radius:6px;padding:8px;color:#a0b8d8}
+.vb-tf-num{border-bottom:1px solid rgba(255,255,255,.2);padding-bottom:3px;margin-bottom:3px}
+.vb-badge{position:absolute;top:-8px;right:-8px;background:#16a34a;color:white;font-size:10px;
+  font-weight:700;padding:2px 8px;border-radius:10px}
+.vb-ss{font-size:10px;color:#8890b0;margin-top:6px;text-align:left;line-height:1.5}
+.conn-diagram-wrap{background:#0e1117;border:1px solid #333654;border-radius:12px;padding:20px;
+  margin:16px 0;text-align:center;overflow-x:auto}
+</style>"""
+
+CORES_TIPO_VIS = {
+    'Planta':       ('#60a5fa', '#1e3a5f', 'G(s)'),
+    'Controlador':  ('#a78bfa', '#2d1f4e', 'C(s)'),
+    'Sensor':       ('#f472b6', '#4a1a2d', 'H(s)'),
+    'Atuador':      ('#34d399', '#1a3a4a', 'A(s)'),
+    'Pre-filtro':   ('#fbbf24', '#3d3a1a', 'F(s)'),
+    'Perturbacao':  ('#f87171', '#3a1520', 'D(s)'),
+}
+
+
+def _html_bloco_visual(row, is_new=False):
+    """Gera HTML card para um bloco."""
+    cor, bg, icone = CORES_TIPO_VIS.get(row['tipo'], ('#8890b0', '#252840', '?'))
+    num_s = _tf_to_str(row['tf'].num[0][0])
+    den_s = _tf_to_str(row['tf'].den[0][0])
+    badge = '<span class="vb-badge">NOVO</span>' if is_new else ''
+    ss = ''
+    if row.get('representacao') == 'Espaco de Estados' and row.get('A'):
+        ss = (f'<div class="vb-ss">A=[{row["A"]}] B=[{row["B"]}]'
+              f'<br>C=[{row["C"]}] D=[{row["D"]}]</div>')
+    return (f'<div class="vb-card" style="border-top:3px solid {cor}">{badge}'
+            f'<div class="vb-tipo">{row["tipo"]}</div>'
+            f'<div class="vb-icone" style="color:{cor}">{icone}</div>'
+            f'<div class="vb-nome">{row["nome"]}</div>'
+            f'<div class="vb-tf"><div class="vb-tf-num">{num_s}</div>'
+            f'<div>{den_s}</div></div>{ss}</div>')
+
+
+def _coeffs_to_poly_str(coeffs):
+    """Converte coeficientes [a_n,...,a_0] para string polinomial (ex: s^2+2s+1)."""
+    n = len(coeffs) - 1
+    terms = []
+    for i, c in enumerate(coeffs):
+        power = n - i
+        c_val = float(c)
+        if abs(c_val) < 1e-10:
+            continue
+        if power == 0:
+            terms.append(f"{c_val:g}")
+        elif power == 1:
+            if abs(c_val - 1) < 1e-10:
+                terms.append("s")
+            elif abs(c_val + 1) < 1e-10:
+                terms.append("-s")
+            else:
+                terms.append(f"{c_val:g}*s")
+        else:
+            if abs(c_val - 1) < 1e-10:
+                terms.append(f"s^{power}")
+            elif abs(c_val + 1) < 1e-10:
+                terms.append(f"-s^{power}")
+            else:
+                terms.append(f"{c_val:g}*s^{power}")
+    if not terms:
+        return "0"
+    result = terms[0]
+    for t in terms[1:]:
+        result += t if t.startswith('-') else '+' + t
+    return result
+
+
+def _svg_diagrama_blocos(blocos_df, conexoes):
+    """Gera SVG do diagrama de blocos com conexoes visuais."""
+    if blocos_df.empty:
+        return ''
+
+    bw, bh, gap, margin, sum_r = 120, 55, 50, 50, 18
+
+    # Categoriza blocos
+    planta = controlador = sensor = None
+    outros = []
+    for _, row in blocos_df.iterrows():
+        if row['tipo'] == 'Planta' and planta is None:
+            planta = row
+        elif row['tipo'] == 'Controlador' and controlador is None:
+            controlador = row
+        elif row['tipo'] == 'Sensor' and sensor is None:
+            sensor = row
+        else:
+            outros.append(row)
+
+    # Se ha conexoes explicitas, usa _svg_com_conexoes
+    if conexoes:
+        nomes_map = {row['nome']: row for _, row in blocos_df.iterrows()}
+        return _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r)
+
+    # Auto-layout baseado nos tipos de blocos
+    forward = []
+    if controlador is not None:
+        forward.append(controlador)
+    if planta is not None:
+        forward.append(planta)
+    for o in outros:
+        if o['tipo'] != 'Sensor':
+            forward.append(o)
+    if not forward:
+        forward = [row for _, row in blocos_df.iterrows()]
+
+    needs_fb = sensor is not None
+    return _svg_layout_padrao(forward, sensor, needs_fb, bw, bh, gap, margin, sum_r)
+
+
+def _svg_render_bloco(x, y, bw, bh, row):
+    """Renderiza um bloco retangular no SVG."""
+    cor = CORES_TIPO_VIS.get(row['tipo'], ('#8890b0', '#252840', '?'))[0]
+    icone = CORES_TIPO_VIS.get(row['tipo'], ('#8890b0', '#252840', '?'))[2]
+    num_s = _tf_to_str(row['tf'].num[0][0])
+    den_s = _tf_to_str(row['tf'].den[0][0])
+    mid = y + bh / 2
+    s = (f'<rect x="{x}" y="{y}" width="{bw}" height="{bh}" '
+         f'fill="#1a1d2e" stroke="{cor}" stroke-width="1.5" rx="5"/>')
+    s += (f'<text x="{x+bw/2}" y="{y+20}" fill="#e0e4f0" font-size="11" '
+          f'font-family="monospace" text-anchor="middle">{num_s}</text>')
+    s += (f'<line x1="{x+8}" y1="{mid}" x2="{x+bw-8}" y2="{mid}" '
+          f'stroke="#e0e4f0" stroke-width=".6" opacity=".3"/>')
+    s += (f'<text x="{x+bw/2}" y="{y+bh-10}" fill="#e0e4f0" font-size="11" '
+          f'font-family="monospace" text-anchor="middle">{den_s}</text>')
+    s += (f'<text x="{x+bw/2}" y="{y-5}" fill="{cor}" font-size="9" '
+          f'text-anchor="middle" font-weight="600">{row["nome"]} ({icone})</text>')
+    return s
+
+
+def _svg_layout_padrao(forward, sensor, needs_fb, bw, bh, gap, margin, sum_r):
+    """SVG para layout padrao: serie com possivel feedback."""
+    nf = len(forward)
+    extra_left = 70 if needs_fb else 40
+    total_w = extra_left + nf * bw + max(0, nf - 1) * gap + 60 + 2 * margin
+    fb_h = 80 if needs_fb else 0
+    total_h = bh + fb_h + 2 * margin
+    main_y = margin
+    mid_y = main_y + bh / 2
+    fb_y = main_y + bh + 40
+
+    svg = (f'<svg viewBox="0 0 {total_w} {total_h}" xmlns="http://www.w3.org/2000/svg" '
+           f'style="width:100%;max-height:{int(total_h)}px">')
+    svg += ('<defs>'
+            '<marker id="arrD" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">'
+            '<polygon points="0 0,8 3,0 6" fill="#5b6be0"/></marker>'
+            '<marker id="arrF" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">'
+            '<polygon points="0 0,8 3,0 6" fill="#f472b6"/></marker></defs>')
+
+    r_x = margin
+    svg += (f'<text x="{r_x}" y="{mid_y+5}" fill="#8890b0" font-size="13" '
+            f'font-family="monospace" font-weight="bold">R(s)</text>')
+
+    if needs_fb:
+        sum_x = margin + 45
+        svg += (f'<line x1="{r_x+30}" y1="{mid_y}" x2="{sum_x-sum_r}" y2="{mid_y}" '
+                f'stroke="#5b6be0" stroke-width="2" marker-end="url(#arrD)"/>')
+        svg += (f'<circle cx="{sum_x}" cy="{mid_y}" r="{sum_r}" '
+                f'fill="#1a3d3a" stroke="#2d8a70" stroke-width="2"/>')
+        svg += (f'<text x="{sum_x}" y="{mid_y+5}" fill="#e0e4f0" font-size="16" '
+                f'font-weight="700" text-anchor="middle">\u03a3</text>')
+        svg += (f'<text x="{sum_x-6}" y="{mid_y-sum_r-4}" fill="#34d399" '
+                f'font-size="11" font-weight="700">+</text>')
+        svg += (f'<text x="{sum_x-sum_r-8}" y="{mid_y+14}" fill="#f87171" '
+                f'font-size="11" font-weight="700">\u2212</text>')
+        first_x = sum_x + sum_r + 15
+    else:
+        first_x = margin + 40
+        svg += (f'<line x1="{r_x+30}" y1="{mid_y}" x2="{first_x}" y2="{mid_y}" '
+                f'stroke="#5b6be0" stroke-width="2" marker-end="url(#arrD)"/>')
+
+    for i, row in enumerate(forward):
+        x = first_x + i * (bw + gap)
+        svg += _svg_render_bloco(x, main_y, bw, bh, row)
+        if i > 0:
+            px = first_x + (i - 1) * (bw + gap) + bw
+            svg += (f'<line x1="{px}" y1="{mid_y}" x2="{x}" y2="{mid_y}" '
+                    f'stroke="#5b6be0" stroke-width="2" marker-end="url(#arrD)"/>')
+        elif needs_fb:
+            svg += (f'<line x1="{first_x-15}" y1="{mid_y}" x2="{x}" y2="{mid_y}" '
+                    f'stroke="#5b6be0" stroke-width="2" marker-end="url(#arrD)"/>')
+
+    last_x = first_x + max(0, nf - 1) * (bw + gap) + bw
+    y_x = last_x + 40
+    svg += (f'<line x1="{last_x}" y1="{mid_y}" x2="{y_x-10}" y2="{mid_y}" '
+            f'stroke="#5b6be0" stroke-width="2" marker-end="url(#arrD)"/>')
+    svg += (f'<text x="{y_x}" y="{mid_y+5}" fill="#8890b0" font-size="13" '
+            f'font-family="monospace" font-weight="bold">Y(s)</text>')
+
+    if needs_fb:
+        sum_x = margin + 45
+        branch_x = last_x + 15
+        svg += f'<circle cx="{branch_x}" cy="{mid_y}" r="4" fill="#5b6be0"/>'
+        svg += (f'<line x1="{branch_x}" y1="{mid_y}" x2="{branch_x}" y2="{fb_y}" '
+                f'stroke="#f472b6" stroke-width="1.5"/>')
+        if sensor is not None:
+            fb_bx = (sum_x + branch_x) / 2 - bw / 2
+            svg += _svg_render_bloco(fb_bx, fb_y - bh / 2, bw, bh, sensor)
+            svg += (f'<line x1="{branch_x}" y1="{fb_y}" x2="{fb_bx+bw}" y2="{fb_y}" '
+                    f'stroke="#f472b6" stroke-width="1.5" marker-end="url(#arrF)"/>')
+            svg += (f'<line x1="{fb_bx}" y1="{fb_y}" x2="{sum_x}" y2="{fb_y}" '
+                    f'stroke="#f472b6" stroke-width="1.5"/>')
+            svg += (f'<line x1="{sum_x}" y1="{fb_y}" x2="{sum_x}" y2="{mid_y+sum_r}" '
+                    f'stroke="#f472b6" stroke-width="1.5" marker-end="url(#arrF)"/>')
+        else:
+            svg += (f'<line x1="{branch_x}" y1="{fb_y}" x2="{sum_x}" y2="{fb_y}" '
+                    f'stroke="#f472b6" stroke-width="1.5"/>')
+            svg += (f'<line x1="{sum_x}" y1="{fb_y}" x2="{sum_x}" y2="{mid_y+sum_r}" '
+                    f'stroke="#f472b6" stroke-width="1.5" marker-end="url(#arrF)"/>')
+            svg += (f'<text x="{(sum_x+branch_x)/2}" y="{fb_y-6}" fill="#f472b6" '
+                    f'font-size="10" text-anchor="middle" font-style="italic">Unitaria</text>')
+
+    svg += '</svg>'
+    return svg
+
+
+def _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r):
+    """SVG para conexoes explicitamente definidas pelo usuario."""
+    sections = []
+    for con in conexoes:
+        blocos = [nomes_map[n] for n in con['blocos'] if n in nomes_map]
+        if len(blocos) >= 2:
+            sections.append((con['tipo'], blocos, con['blocos']))
+
+    if not sections:
+        forward = list(nomes_map.values())
+        return _svg_layout_padrao(forward, None, False, bw, bh, gap, margin, sum_r)
+
+    # Calcula altura total
+    total_h = margin
+    section_ys = []
+    for tipo, blocos, _ in sections:
+        section_ys.append(total_h)
+        if tipo.startswith('Realimentacao'):
+            total_h += bh + 120
+        elif tipo == 'Paralelo':
+            total_h += len(blocos) * (bh + 15) + 40
+        else:
+            total_h += bh + 50
+    total_h += margin
+
+    max_b = max(len(b) for _, b, _ in sections)
+    total_w = max(max_b * (bw + gap) + 2 * margin + 140, 500)
+
+    svg = (f'<svg viewBox="0 0 {total_w} {total_h}" xmlns="http://www.w3.org/2000/svg" '
+           f'style="width:100%;max-height:{int(total_h)}px">')
+    svg += ('<defs>'
+            '<marker id="arrD" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">'
+            '<polygon points="0 0,8 3,0 6" fill="#5b6be0"/></marker>'
+            '<marker id="arrF" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">'
+            '<polygon points="0 0,8 3,0 6" fill="#f472b6"/></marker>'
+            '<marker id="arrP" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">'
+            '<polygon points="0 0,8 3,0 6" fill="#a78bfa"/></marker></defs>')
+
+    for sec_idx, (tipo, blocos, nomes) in enumerate(sections):
+        sy = section_ys[sec_idx]
+        mid_y = sy + bh / 2 + 18
+
+        # Rotulo da secao
+        tipo_cores = {'Serie': '#60a5fa', 'Paralelo': '#a78bfa',
+                      'Realimentacao Negativa': '#f472b6', 'Realimentacao Positiva': '#fbbf24'}
+        tipo_cor = tipo_cores.get(tipo, '#5b6be0')
+        svg += (f'<text x="{margin}" y="{sy+10}" fill="{tipo_cor}" font-size="11" '
+                f'font-weight="700">{tipo}: {", ".join(nomes)}</text>')
+
+        if tipo == 'Serie':
+            for i, row in enumerate(blocos):
+                x = margin + 20 + i * (bw + gap)
+                svg += _svg_render_bloco(x, sy + 18, bw, bh, row)
+                if i > 0:
+                    px = margin + 20 + (i - 1) * (bw + gap) + bw
+                    svg += (f'<line x1="{px}" y1="{mid_y}" x2="{x}" y2="{mid_y}" '
+                            f'stroke="#5b6be0" stroke-width="2" marker-end="url(#arrD)"/>')
+            # Setas de entrada e saida
+            svg += (f'<text x="{margin+5}" y="{mid_y+5}" fill="#8890b0" font-size="11" '
+                    f'font-family="monospace">&#8594;</text>')
+
+        elif tipo == 'Paralelo':
+            center_x = margin + 20
+            sum_out_x = margin + 20 + bw + gap
+            for i, row in enumerate(blocos):
+                y_off = sy + 18 + i * (bh + 15)
+                svg += _svg_render_bloco(center_x, y_off, bw, bh, row)
+                svg += (f'<line x1="{center_x+bw}" y1="{y_off+bh/2}" '
+                        f'x2="{sum_out_x}" y2="{sy+18+bh/2}" '
+                        f'stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrP)"/>')
+            svg += (f'<circle cx="{sum_out_x+sum_r}" cy="{sy+18+bh/2}" r="{sum_r}" '
+                    f'fill="#1a3d3a" stroke="#a78bfa" stroke-width="2"/>')
+            svg += (f'<text x="{sum_out_x+sum_r}" y="{sy+18+bh/2+5}" fill="#e0e4f0" '
+                    f'font-size="14" font-weight="700" text-anchor="middle">+</text>')
+
+        elif tipo.startswith('Realimentacao'):
+            is_pos = tipo == 'Realimentacao Positiva'
+            G = blocos[0]
+            H = blocos[1] if len(blocos) > 1 else None
+
+            g_x = margin + 70
+            sum_cx = margin + 40
+
+            # Somador
+            svg += (f'<circle cx="{sum_cx}" cy="{mid_y}" r="{sum_r}" '
+                    f'fill="#1a3d3a" stroke="#2d8a70" stroke-width="2"/>')
+            svg += (f'<text x="{sum_cx}" y="{mid_y+5}" fill="#e0e4f0" font-size="14" '
+                    f'font-weight="700" text-anchor="middle">\u03a3</text>')
+            sign = '+' if is_pos else '\u2212'
+            sign_cor = '#fbbf24' if is_pos else '#f87171'
+            svg += (f'<text x="{sum_cx-6}" y="{mid_y-sum_r-4}" fill="#34d399" '
+                    f'font-size="11" font-weight="700">+</text>')
+            svg += (f'<text x="{sum_cx-sum_r-8}" y="{mid_y+14}" fill="{sign_cor}" '
+                    f'font-size="11" font-weight="700">{sign}</text>')
+
+            # Seta somador -> G
+            svg += (f'<line x1="{sum_cx+sum_r}" y1="{mid_y}" x2="{g_x}" y2="{mid_y}" '
+                    f'stroke="#5b6be0" stroke-width="2" marker-end="url(#arrD)"/>')
+            # Bloco G
+            svg += _svg_render_bloco(g_x, sy + 18, bw, bh, G)
+            # Seta saida
+            out_x = g_x + bw + 30
+            svg += (f'<line x1="{g_x+bw}" y1="{mid_y}" x2="{out_x}" y2="{mid_y}" '
+                    f'stroke="#5b6be0" stroke-width="2" marker-end="url(#arrD)"/>')
+            # Branch point
+            branch_bx = g_x + bw + 15
+            svg += f'<circle cx="{branch_bx}" cy="{mid_y}" r="4" fill="#5b6be0"/>'
+
+            fb_y_pos = sy + bh + 55
+            svg += (f'<line x1="{branch_bx}" y1="{mid_y}" x2="{branch_bx}" y2="{fb_y_pos}" '
+                    f'stroke="#f472b6" stroke-width="1.5"/>')
+
+            if H is not None:
+                h_x = (sum_cx + branch_bx) / 2 - bw / 2
+                svg += _svg_render_bloco(h_x, fb_y_pos - bh / 2, bw, bh, H)
+                svg += (f'<line x1="{branch_bx}" y1="{fb_y_pos}" x2="{h_x+bw}" y2="{fb_y_pos}" '
+                        f'stroke="#f472b6" stroke-width="1.5" marker-end="url(#arrF)"/>')
+                svg += (f'<line x1="{h_x}" y1="{fb_y_pos}" x2="{sum_cx}" y2="{fb_y_pos}" '
+                        f'stroke="#f472b6" stroke-width="1.5"/>')
+                svg += (f'<line x1="{sum_cx}" y1="{fb_y_pos}" x2="{sum_cx}" y2="{mid_y+sum_r}" '
+                        f'stroke="#f472b6" stroke-width="1.5" marker-end="url(#arrF)"/>')
+            else:
+                svg += (f'<line x1="{branch_bx}" y1="{fb_y_pos}" x2="{sum_cx}" y2="{fb_y_pos}" '
+                        f'stroke="#f472b6" stroke-width="1.5"/>')
+                svg += (f'<line x1="{sum_cx}" y1="{fb_y_pos}" x2="{sum_cx}" y2="{mid_y+sum_r}" '
+                        f'stroke="#f472b6" stroke-width="1.5" marker-end="url(#arrF)"/>')
+
+    svg += '</svg>'
+    return svg
+
+
+# ══════════════════════════════════════════════════
 # MODO CLASSICO
 # ══════════════════════════════════════════════════
 
@@ -1880,6 +2243,49 @@ def modo_classico():
                 st.rerun()
 
         st.markdown("---")
+        st.header("Conexoes entre Blocos")
+        if len(st.session_state.blocos) >= 2:
+            tipo_conexao = st.selectbox(
+                "Tipo de conexao", CONNECTION_TYPES, key="conn_tipo_classico")
+            nomes_disp = list(st.session_state.blocos['nome'])
+
+            if tipo_conexao in ['Realimentacao Negativa', 'Realimentacao Positiva']:
+                st.caption("Bloco 1 = caminho direto G(s), Bloco 2 = realimentacao H(s)")
+                max_sel = 2
+            else:
+                max_sel = len(nomes_disp)
+
+            blocos_conexao = st.multiselect(
+                "Blocos (na ordem)", nomes_disp,
+                max_selections=max_sel, key="conn_blocos_classico")
+
+            if st.button("Adicionar Conexao", key="btn_add_conn"):
+                if len(blocos_conexao) < 2:
+                    st.error("Selecione pelo menos 2 blocos.")
+                else:
+                    st.session_state.conexoes.append({
+                        'tipo': tipo_conexao,
+                        'blocos': blocos_conexao,
+                    })
+                    st.success(f"Conexao '{tipo_conexao}' adicionada.")
+                    st.rerun()
+
+            if st.session_state.conexoes:
+                st.markdown("**Conexoes definidas:**")
+                simbolos = {'Serie': ' \u2192 ', 'Paralelo': ' || ',
+                            'Realimentacao Negativa': ' -fb\u2192 ',
+                            'Realimentacao Positiva': ' +fb\u2192 '}
+                for i, con in enumerate(st.session_state.conexoes):
+                    st.markdown(
+                        f"**{i+1}.** {con['tipo']}: "
+                        f"`{simbolos.get(con['tipo'], ' \u2192 ').join(con['blocos'])}`")
+                    if st.button("Remover", key=f"rmcon_c_{i}"):
+                        st.session_state.conexoes.pop(i)
+                        st.rerun()
+        else:
+            st.caption("Adicione pelo menos 2 blocos para definir conexoes.")
+
+        st.markdown("---")
         st.header("Configuracoes")
         if st.button(
             "Habilitar Calculo de Erro"
@@ -1911,6 +2317,43 @@ def modo_classico():
             except Exception as e:
                 st.error(f"Erro: {e}")
 
+    # ── Blocos visuais e diagrama ──
+    if not st.session_state.blocos.empty:
+        st.markdown(VISUAL_BLOCKS_CSS, unsafe_allow_html=True)
+
+        st.subheader("Blocos do Sistema")
+        # Detecta o ultimo bloco adicionado para badge "NOVO"
+        ultimo_idx = len(st.session_state.blocos) - 1
+        html_cards = '<div class="vb-container">'
+        for idx, row in st.session_state.blocos.iterrows():
+            html_cards += _html_bloco_visual(row, is_new=(idx == ultimo_idx))
+        html_cards += '</div>'
+        st.markdown(html_cards, unsafe_allow_html=True)
+
+        # Conexoes definidas
+        if st.session_state.conexoes:
+            simbolos = {'Serie': '\u2192', 'Paralelo': '||',
+                        'Realimentacao Negativa': '-fb\u2192',
+                        'Realimentacao Positiva': '+fb\u2192'}
+            conn_txt = " | ".join(
+                f"**{c['tipo']}**: {simbolos.get(c['tipo'], '\u2192').join(c['blocos'])}"
+                for c in st.session_state.conexoes)
+            st.markdown(f"**Conexoes:** {conn_txt}")
+
+        # Diagrama visual SVG
+        st.subheader("Diagrama de Blocos")
+        svg_diagram = _svg_diagrama_blocos(st.session_state.blocos, st.session_state.conexoes)
+        if svg_diagram:
+            st.markdown(f'<div class="conn-diagram-wrap">{svg_diagram}</div>',
+                        unsafe_allow_html=True)
+
+        # Botao para abrir no editor visual
+        if st.button("Abrir no Editor Visual (Diagrama de Blocos)", key="btn_to_canvas"):
+            st.session_state.modo_selecionado = 'canvas'
+            st.rerun()
+
+        st.markdown("---")
+
     # Painel de analise
     col1, col2 = st.columns([2, 1])
 
@@ -1936,25 +2379,41 @@ def modo_classico():
                     st.warning("Adicione blocos primeiro.")
                     st.stop()
 
-                planta = obter_bloco_por_tipo('Planta')
-                controlador = obter_bloco_por_tipo('Controlador')
-                sensor = obter_bloco_por_tipo('Sensor')
-
-                if planta is None:
-                    st.error("Adicione pelo menos uma Planta.")
-                    st.stop()
-
                 ganho_tf = TransferFunction([K], [1])
 
-                if tipo_malha == "Malha Aberta":
-                    sistema = ganho_tf * planta
-                    if controlador is not None:
-                        sistema = controlador * sistema
-                    st.info(f"Malha Aberta | K = {K:.2f}")
+                # Se ha conexoes definidas pelo usuario, usa simplificar_diagrama
+                if st.session_state.conexoes:
+                    sistema = simplificar_diagrama(
+                        st.session_state.blocos, st.session_state.conexoes)
+                    if usar_ganho and K != 1.0:
+                        sistema = ganho_tf * sistema
+                    if tipo_malha == "Malha Fechada" and not any(
+                            c['tipo'].startswith('Realimentacao')
+                            for c in st.session_state.conexoes):
+                        sistema = ctrl.feedback(sistema, TransferFunction([1], [1]))
+                    label_extra = " (conexoes definidas)"
                 else:
-                    planta_com_ganho = ganho_tf * planta
-                    sistema = calcular_malha_fechada(planta_com_ganho, controlador, sensor)
-                    st.info(f"Malha Fechada | K = {K:.2f}")
+                    # Modo classico: Plant + Controller + Sensor
+                    planta = obter_bloco_por_tipo('Planta')
+                    controlador = obter_bloco_por_tipo('Controlador')
+                    sensor = obter_bloco_por_tipo('Sensor')
+
+                    if planta is None:
+                        st.error("Adicione pelo menos uma Planta.")
+                        st.stop()
+
+                    if tipo_malha == "Malha Aberta":
+                        sistema = ganho_tf * planta
+                        if controlador is not None:
+                            sistema = controlador * sistema
+                    else:
+                        planta_com_ganho = ganho_tf * planta
+                        sistema = calcular_malha_fechada(
+                            planta_com_ganho, controlador, sensor)
+                    label_extra = ""
+
+                sistema = ctrl.minreal(sistema, verbose=False)
+                st.info(f"{tipo_malha} | K = {K:.2f}{label_extra}")
 
                 # Mostrar FT equivalente
                 num_str = _tf_to_str(sistema.num[0][0])
@@ -1998,6 +2457,24 @@ def modo_canvas():
         """)
 
     html_content = _load_visual_editor_html()
+
+    # Injeta blocos do modo classico no canvas
+    if not st.session_state.blocos.empty:
+        blocks_data = []
+        tipo_map = {
+            'Planta': 'tf', 'Controlador': 'tf', 'Sensor': 'sensor',
+            'Atuador': 'actuator', 'Pre-filtro': 'tf', 'Perturbacao': 'tf',
+        }
+        for _, row in st.session_state.blocos.iterrows():
+            tf_obj = row['tf']
+            bt = tipo_map.get(row['tipo'], 'tf')
+            num_s = _coeffs_to_poly_str(tf_obj.num[0][0])
+            den_s = _coeffs_to_poly_str(tf_obj.den[0][0])
+            blocks_data.append({'type': bt, 'params': {'num': num_s, 'den': den_s}})
+        html_content = html_content.replace('__INITIAL_BLOCKS__', json.dumps(blocks_data))
+    else:
+        html_content = html_content.replace('__INITIAL_BLOCKS__', '[]')
+
     components.html(html_content, height=1200, scrolling=True)
 
 
