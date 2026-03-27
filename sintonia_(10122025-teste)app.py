@@ -18,7 +18,7 @@ from plotly.subplots import make_subplots
 import streamlit.components.v1 as components
 import json
 import re
-
+ 
 # ══════════════════════════════════════════════════
 # CONSTANTES
 # ══════════════════════════════════════════════════
@@ -766,8 +766,8 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 <div id="modalGrid">
 <div class="cat-label">Sinais</div>
 <div class="block-grid">
-<div class="block-option" onclick="pickBlock('input')"><div class="bo-icon" style="color:var(--grn)">R(s)</div><div class="bo-label">Entrada</div><div class="bo-desc">Sinal de referencia</div></div>
-<div class="block-option" onclick="pickBlock('output')"><div class="bo-icon" style="color:var(--red)">Y(s)</div><div class="bo-label">Saida</div><div class="bo-desc">Sinal de saida</div></div>
+<div class="block-option" onclick="pickBlock('input')"><div class="bo-icon" style="color:var(--grn)">R(s)</div><div class="bo-label">R(s)</div><div class="bo-desc">Entrada</div></div>
+<div class="block-option" onclick="pickBlock('output')"><div class="bo-icon" style="color:var(--red)">Y(s)</div><div class="bo-label">Y(s)</div><div class="bo-desc">Saida</div></div>
 </div>
 <div class="cat-label">Blocos de Transferencia</div>
 <div class="block-grid">
