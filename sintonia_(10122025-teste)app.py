@@ -704,6 +704,7 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 .block-pid{background:linear-gradient(135deg,#2a1f4e,#1a1535);border:1px solid #5548a0}
 .block-sensor{background:linear-gradient(135deg,#4a1a2d,#351020);border:1px solid #8a2d50}
 .block-actuator{background:linear-gradient(135deg,#1a3a4a,#102535);border:1px solid #2d708a}
+.block-ss{background:linear-gradient(135deg,#1a3d2a,#0f2518);border:1px solid #2d8a50}
 .block-input{background:linear-gradient(135deg,#1a3d1a,#0f250f);border:1px solid #2d8a2d;border-radius:20px}
 .block-output{background:linear-gradient(135deg,#3d1a1a,#250f0f);border:1px solid #8a2d2d;border-radius:20px}
 .block-sum{background:linear-gradient(135deg,#1a3d3a,#122a28);border:2px solid #2d8a70;border-radius:50%;min-width:56px;width:56px;height:56px;display:flex;align-items:center;justify-content:center}
@@ -768,6 +769,8 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 .man-row{grid-template-columns:1fr}.man-tabs{flex-wrap:wrap}
 .block-grid{grid-template-columns:1fr}
 }
+.conn-item{display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:4px;background:var(--sf2);border:1px solid var(--bd);border-radius:8px;cursor:pointer;font-size:12px;transition:all .15s}
+.conn-item:hover{border-color:var(--acc);background:#2f3349}
 </style></head><body><div class="app">
 
 <!-- MODAL DE ADICIONAR BLOCO -->
@@ -784,6 +787,7 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 <div class="cat-label">Blocos de Transferencia</div>
 <div class="block-grid">
 <div class="block-option" onclick="pickBlock('tf')"><div class="bo-icon" style="color:var(--blu)">G(s)</div><div class="bo-label">Planta</div><div class="bo-desc">Funcao de transferencia</div></div>
+<div class="block-option" onclick="pickBlock('ss')"><div class="bo-icon" style="color:var(--grn)">SS</div><div class="bo-label">Espaco de Estados</div><div class="bo-desc">Matrizes A,B,C,D livres</div></div>
 <div class="block-option" onclick="pickBlock('gain')"><div class="bo-icon" style="color:var(--pur)">K</div><div class="bo-label">Ganho</div><div class="bo-desc">Ganho constante</div></div>
 <div class="block-option" onclick="pickBlock('pid')"><div class="bo-icon" style="color:var(--pur)">PID</div><div class="bo-label">Controlador PID</div><div class="bo-desc">Kp + Ki/s + Kd*s</div></div>
 <div class="block-option" onclick="pickBlock('int')"><div class="bo-icon" style="color:var(--yel)">1/s</div><div class="bo-label">Integrador</div><div class="bo-desc">Integracao pura</div></div>
@@ -806,14 +810,34 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 </div>
 </div></div></div>
 
+<!-- MODAL DE CONEXAO -->
+<div class="modal-overlay" id="connModal">
+<div class="modal">
+<div class="modal-hdr"><h3 id="connModalTitle">Conectar Blocos</h3><button class="modal-close" onclick="closeConnModal()">&times;</button></div>
+<div class="modal-body">
+<p style="font-size:12px;color:var(--txm);margin-bottom:12px" id="connModalHint">Selecione os blocos na ordem desejada.</p>
+<div id="connBlockList" style="max-height:250px;overflow-y:auto"></div>
+<div style="margin-top:12px;display:flex;gap:8px">
+<button class="cfg-btn" onclick="applyConn()">Aplicar Conexao</button>
+<button class="cfg-btn" style="background:var(--sf2);border:1px solid var(--bd)" onclick="closeConnModal()">Cancelar</button>
+</div>
+</div></div></div>
+
 <div class="toolbar" id="diag-toolbar">
 <button class="tb tb-add" onclick="openModal()">+ Adicionar Bloco</button>
 <div class="sep"></div>
 <span class="lbl">Rapido:</span>
 <button class="tb" style="background:#162038;border-color:#2d558a;color:var(--blu)" data-add="tf">G(s)</button>
+<button class="tb" style="background:#1a3d2a;border-color:#2d8a50;color:var(--grn)" onclick="pickBlock('ss')">SS</button>
 <button class="tb" style="background:#201638;border-color:#5a2d8a;color:var(--pur)" data-add="gain">K</button>
 <button class="tb" data-add="sum">&Sigma;</button>
 <button class="tb" style="background:#381628;border-color:#8a2d5a;color:var(--pnk)" data-add="sensor">H(s)</button>
+<div class="sep"></div>
+<span class="lbl">Conexao:</span>
+<button class="tb" style="background:#0e2a1a;border-color:#2d8a55;color:#34d399" id="btnSerie" onclick="openConnModal('serie')">Serie</button>
+<button class="tb" style="background:#1a1040;border-color:#6d5acd;color:#a78bfa" id="btnParalelo" onclick="openConnModal('paralelo')">Paralelo</button>
+<button class="tb" style="background:#2a1020;border-color:#8a2d50;color:#f472b6" id="btnFbNeg" onclick="openConnModal('fb_neg')">FB -</button>
+<button class="tb" style="background:#2a2010;border-color:#8a7a2d;color:#fbbf24" id="btnFbPos" onclick="openConnModal('fb_pos')">FB +</button>
 <div class="sep"></div>
 <button class="tb" style="background:#3a1520;border-color:#8a3050;color:#ff8fa3" id="btnDel">Del</button>
 <button class="tb" style="background:#3a1520;border-color:#8a3050;color:#ff8fa3" id="btnClear">Limpar</button>
@@ -914,11 +938,17 @@ function pickBlock(t){
   document.getElementById("modalGrid").style.display="none";
   var cp=document.getElementById("cfgPanel");cp.classList.add("vis");
   var cf=document.getElementById("cfgFields");var h="";
-  var titles={tf:"Planta G(s)",gain:"Ganho K",pid:"Controlador PID",sensor:"Sensor H(s)",sum:"Somador",actuator:"Atuador A(s)"};
+  var titles={tf:"Planta G(s)",ss:"Espaco de Estados",gain:"Ganho K",pid:"Controlador PID",sensor:"Sensor H(s)",sum:"Somador",actuator:"Atuador A(s)"};
   document.getElementById("cfgTitle").textContent="Configurar: "+(titles[t]||t);
   if(t==="tf"||t==="sensor"||t==="actuator"){
     h+='<div class="cfg-row"><div><label>Numerador</label><input id="cfgNum" value="1" placeholder="ex: s+1"></div>';
     h+='<div><label>Denominador</label><input id="cfgDen" value="s+1" placeholder="ex: s^2+2s+1"></div></div>'}
+  else if(t==="ss"){
+    h+='<div class="cfg-row"><div><label>Matriz A (nxn)</label><input id="cfgSSA" value="0 1; -2 -3" placeholder="0 1; -2 -3"></div>';
+    h+='<div><label>Matriz B (nx1)</label><input id="cfgSSB" value="0; 1" placeholder="0; 1"></div></div>';
+    h+='<div class="cfg-row"><div><label>Matriz C (1xn)</label><input id="cfgSSC" value="1 0" placeholder="1 0"></div>';
+    h+='<div><label>Matriz D (1x1)</label><input id="cfgSSD" value="0" placeholder="0"></div></div>';
+    h+='<div style="font-size:10px;color:var(--txm);margin-top:4px">Use <code>;</code> para separar linhas. Dimensoes livres (1x1, 2x2, 3x3, etc). Converte para T(s)=C(sI-A)<sup>-1</sup>B+D</div>'}
   else if(t==="gain"){h+='<div class="cfg-row"><div><label>Ganho K</label><input id="cfgK" value="1" placeholder="ex: 10"></div><div></div></div>'}
   else if(t==="pid"){
     h+='<div class="cfg-row"><div><label>Kp</label><input id="cfgKp" value="1"></div><div><label>Ki</label><input id="cfgKi" value="0"></div></div>';
@@ -929,6 +959,7 @@ function confirmAdd(){
   if(!pendingType)return;
   var t=pendingType,p={};
   if(t==="tf"||t==="sensor"||t==="actuator"){p.num=(document.getElementById("cfgNum")||{}).value||"1";p.den=(document.getElementById("cfgDen")||{}).value||"1"}
+  else if(t==="ss"){p.ssA=(document.getElementById("cfgSSA")||{}).value||"0";p.ssB=(document.getElementById("cfgSSB")||{}).value||"0";p.ssC=(document.getElementById("cfgSSC")||{}).value||"1";p.ssD=(document.getElementById("cfgSSD")||{}).value||"0"}
   else if(t==="gain"){p.k=(document.getElementById("cfgK")||{}).value||"1"}
   else if(t==="pid"){p.kp=(document.getElementById("cfgKp")||{}).value||"1";p.ki=(document.getElementById("cfgKi")||{}).value||"0";p.kd=(document.getElementById("cfgKd")||{}).value||"0"}
   else if(t==="sum"){p.signs=(document.getElementById("cfgSigns")||{}).value||"+ -"}
@@ -1053,6 +1084,7 @@ function fP(c){c=pTrim(c);var ts=[];for(var i=c.length-1;i>=0;i--){var v=c[i];if
 /* ===== BLOCK TF ===== */
 function bTF(nd){var p=nd.params||{},t=nd.type;
   if(t==="tf"||t==="sensor"||t==="actuator")return{n:parseP(p.num||"1"),d:parseP(p.den||"1")};
+  if(t==="ss")return ssToTF(p.ssA||"0",p.ssB||"0",p.ssC||"1",p.ssD||"0");
   if(t==="gain")return pfC(parseFloat(p.k)||1);
   if(t==="int")return{n:[1],d:[0,1]};if(t==="der")return{n:[0,1],d:[1]};
   if(t==="pid"){var kp=parseFloat(p.kp)||0,ki=parseFloat(p.ki)||0,kd=parseFloat(p.kd)||0;
@@ -1425,11 +1457,12 @@ var model={nodes:[],edges:[]},selId=null,dragSt=null,conSt=null;
 var cw=document.getElementById("cw"),cv=document.getElementById("cv"),wSvg=document.getElementById("wires");
 function nxtId(){var m=0;model.nodes.forEach(function(n){var v=parseInt(n.id.replace("n",""))||0;if(v>m)m=v});return"n"+(m+1)}
 function ptr(e){if(e.touches&&e.touches.length)return{x:e.touches[0].clientX,y:e.touches[0].clientY};if(e.changedTouches&&e.changedTouches.length)return{x:e.changedTouches[0].clientX,y:e.changedTouches[0].clientY};return{x:e.clientX,y:e.clientY}}
-var BL={tf:"Planta",gain:"Ganho",sum:"Somador",int:"Integrador",der:"Derivador",pid:"PID",sensor:"Sensor",actuator:"Atuador",input:"Entrada",output:"Saida",branch:"Ramificacao"};
-function dPar(t){if(t==="tf")return{num:"1",den:"s+1"};if(t==="gain")return{k:"1"};if(t==="sum")return{signs:"+ -"};if(t==="pid")return{kp:"1",ki:"0",kd:"0"};if(t==="sensor"||t==="actuator")return{num:"1",den:"1"};if(t==="input")return{label:"R(s)"};if(t==="output")return{label:"Y(s)"};return{}}
+var BL={tf:"Planta",ss:"Espaco de Estados",gain:"Ganho",sum:"Somador",int:"Integrador",der:"Derivador",pid:"PID",sensor:"Sensor",actuator:"Atuador",input:"Entrada",output:"Saida",branch:"Ramificacao"};
+function dPar(t){if(t==="tf")return{num:"1",den:"s+1"};if(t==="ss")return{ssA:"0 1; -2 -3",ssB:"0; 1",ssC:"1 0",ssD:"0"};if(t==="gain")return{k:"1"};if(t==="sum")return{signs:"+ -"};if(t==="pid")return{kp:"1",ki:"0",kd:"0"};if(t==="sensor"||t==="actuator")return{num:"1",den:"1"};if(t==="input")return{label:"R(s)"};if(t==="output")return{label:"Y(s)"};return{}}
 function gPC(t,p){if(t==="input")return{i:[],o:[{id:"out0"}]};if(t==="output")return{i:[{id:"in0"}],o:[]};if(t==="branch")return{i:[{id:"in0"}],o:[{id:"out0"},{id:"out1"}]};
   if(t==="sum"){var sg=(p&&p.signs?p.signs:"+ -").trim().split(/\s+/);return{i:sg.map(function(s,i){return{id:"in"+i,sign:s}}),o:[{id:"out0"}]}}return{i:[{id:"in0"}],o:[{id:"out0"}]}}
 function bTxt(n){var p=n.params||{};if(n.type==="tf"||n.type==="actuator")return'<div class="block-tf-disp"><div class="tf-num">'+(p.num||"1")+'</div><div>'+(p.den||"1")+'</div></div>';
+  if(n.type==="ss"){var tf=ssToTF(p.ssA||"0",p.ssB||"0",p.ssC||"1",p.ssD||"0");return'<div class="block-tf-disp"><div class="tf-num">'+fP(tf.n)+'</div><div>'+fP(tf.d)+'</div></div>'}
   if(n.type==="gain")return"K="+(p.k||"1");if(n.type==="pid")return'<div class="block-tf-disp">Kp='+(p.kp||"0")+" Ki="+(p.ki||"0")+" Kd="+(p.kd||"0")+'</div>';
   if(n.type==="sensor")return'<div class="block-tf-disp"><div class="tf-num">'+(p.num||"1")+'</div><div>'+(p.den||"1")+'</div></div>';
   if(n.type==="input")return p.label||"R(s)";if(n.type==="output")return p.label||"Y(s)";if(n.type==="sum")return"\u03a3";if(n.type==="int")return"1/s";if(n.type==="der")return"s";return""}
@@ -1499,6 +1532,7 @@ function updP(){document.getElementById("pB").textContent=model.nodes.length;doc
   var nd=model.nodes.find(function(n){return n.id===selId});if(!nd){pa.innerHTML="";return}var p=nd.params||{};
   var h='<div style="font-size:11px;color:var(--txm);margin-bottom:6px">'+BL[nd.type]+' <b style="color:var(--tx)">'+nd.id+'</b></div>';
   if(nd.type==="tf"||nd.type==="sensor"||nd.type==="actuator"){h+=pI("Num","num",p.num||"1");h+=pI("Den","den",p.den||"1")}
+  else if(nd.type==="ss"){h+=pI("Matriz A","ssA",p.ssA||"0 1; -2 -3");h+=pI("Matriz B","ssB",p.ssB||"0; 1");h+=pI("Matriz C","ssC",p.ssC||"1 0");h+=pI("Matriz D","ssD",p.ssD||"0")}
   else if(nd.type==="gain")h+=pI("K","k",p.k||"1");
   else if(nd.type==="sum")h+=pI("Sinais","signs",p.signs||"+ -");
   else if(nd.type==="pid"){h+=pI("Kp","kp",p.kp||"1");h+=pI("Ki","ki",p.ki||"0");h+=pI("Kd","kd",p.kd||"0")}
@@ -1506,13 +1540,118 @@ function updP(){document.getElementById("pB").textContent=model.nodes.length;doc
   pa.innerHTML=h;pa.querySelectorAll("input[data-key]").forEach(function(inp){inp.addEventListener("input",function(){nd.params[inp.dataset.key]=inp.value;
     if(inp.dataset.key==="signs")render();else{var bl=document.querySelector('.block[data-id="'+nd.id+'"] .block-body');if(bl)bl.innerHTML=bTxt(nd)}})})}
 function pI(l,k,v){return'<div class="pg"><label>'+l+'</label><input data-key="'+k+'" value="'+esc(String(v))+'"></div>'}
+
+/* ===== CONEXAO INTERATIVA (Serie, Paralelo, Feedback) ===== */
+var connType=null,connSel=[];
+function openConnModal(tipo){
+  connType=tipo;connSel=[];
+  var titles={serie:'Serie: blocos em cadeia',paralelo:'Paralelo: blocos somados',fb_neg:'Realimentacao Negativa: G/(1+GH)',fb_pos:'Realimentacao Positiva: G/(1-GH)'};
+  var hints={serie:'Selecione 2 ou mais blocos na ordem da cadeia.',paralelo:'Selecione 2 ou mais blocos para conectar em paralelo.',fb_neg:'Selecione 2 blocos: primeiro = G(s) direto, segundo = H(s) feedback.',fb_pos:'Selecione 2 blocos: primeiro = G(s) direto, segundo = H(s) feedback.'};
+  document.getElementById('connModalTitle').textContent=titles[tipo]||'Conexao';
+  document.getElementById('connModalHint').textContent=hints[tipo]||'';
+  /* Lista blocos disponiveis (tf, ss, gain, pid, sensor, actuator, int, der) */
+  var avail=model.nodes.filter(function(n){return['tf','ss','gain','pid','sensor','actuator','int','der'].indexOf(n.type)>=0});
+  var cl=document.getElementById('connBlockList');
+  var h='';
+  if(!avail.length){h='<p style="color:var(--red);font-size:12px">Adicione blocos primeiro.</p>'}
+  else{avail.forEach(function(n){
+    var lbl=BL[n.type]+' ('+n.id+')';
+    var det='';if(n.params){if(n.params.num)det=n.params.num+'/'+n.params.den;else if(n.params.k)det='K='+n.params.k;else if(n.params.ssA)det='SS'}
+    h+='<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:4px;background:var(--sf2);border:1px solid var(--bd);border-radius:8px;cursor:pointer;font-size:12px;transition:all .15s" data-connid="'+n.id+'" onclick="toggleConnSel(this,\''+n.id+'\')">';
+    h+='<input type="checkbox" style="pointer-events:none"> ';
+    h+='<span style="font-weight:600;color:var(--tx)">'+esc(lbl)+'</span>';
+    if(det)h+='<span style="color:var(--txm);font-size:10px;margin-left:auto">'+esc(det)+'</span>';
+    h+='</label>'})}
+  cl.innerHTML=h;
+  document.getElementById('connModal').classList.add('vis')}
+function closeConnModal(){document.getElementById('connModal').classList.remove('vis');connType=null;connSel=[]}
+function toggleConnSel(el,nid){
+  var idx=connSel.indexOf(nid);
+  var cb=el.querySelector('input[type=checkbox]');
+  if(idx>=0){connSel.splice(idx,1);el.style.borderColor='var(--bd)';if(cb)cb.checked=false}
+  else{
+    if((connType==='fb_neg'||connType==='fb_pos')&&connSel.length>=2)return;
+    connSel.push(nid);el.style.borderColor='var(--acc)';if(cb)cb.checked=true}}
+function applyConn(){
+  if(connSel.length<2){alert('Selecione pelo menos 2 blocos.');return}
+  if(connType==='serie')buildSerie(connSel);
+  else if(connType==='paralelo')buildParalelo(connSel);
+  else if(connType==='fb_neg')buildFeedback(connSel,false);
+  else if(connType==='fb_pos')buildFeedback(connSel,true);
+  closeConnModal();render()}
+
+function buildSerie(ids){
+  /* Remove edges existentes entre esses blocos e reconecta em serie */
+  for(var i=0;i<ids.length-1;i++){
+    var already=model.edges.some(function(e){return e.src===ids[i]&&e.dst===ids[i+1]});
+    if(!already)model.edges.push({id:'e'+Math.random().toString(36).slice(2),src:ids[i],srcPort:'out0',dst:ids[i+1],dstPort:'in0'})}
+  /* Reposiciona em linha */
+  var baseX=100,baseY=180;
+  ids.forEach(function(id,i){var nd=model.nodes.find(function(n){return n.id===id});if(nd){nd.x=baseX+i*180;nd.y=baseY}})}
+
+function buildParalelo(ids){
+  /* Cria branch, blocos paralelos, e somador */
+  var baseX=100,baseY=100;
+  /* Encontra posicao media dos blocos selecionados */
+  var sumX=0;ids.forEach(function(id){var nd=model.nodes.find(function(n){return n.id===id});if(nd)sumX+=nd.x});
+  baseX=Math.max(100,sumX/ids.length-100);
+  /* Cria branches encadeados */
+  var brIds=[];var nb=ids.length;
+  for(var i=0;i<nb-1;i++){
+    var br={id:nxtId(),type:'branch',x:baseX+i*25,y:150+i*40,params:{}};
+    model.nodes.push(br);brIds.push(br.id);
+    if(i>0)model.edges.push({id:'e'+Math.random().toString(36).slice(2),src:brIds[i-1],srcPort:'out0',dst:br.id,dstPort:'in0'})}
+  /* Cria somador */
+  var signs='';for(var i=0;i<nb;i++)signs+=(i>0?' ':'')+'+';
+  var sm={id:nxtId(),type:'sum',x:baseX+380,y:150+(nb-1)*50,params:{signs:signs}};model.nodes.push(sm);
+  /* Conecta blocos */
+  ids.forEach(function(id,i){
+    var nd=model.nodes.find(function(n){return n.id===id});
+    if(nd){nd.x=baseX+160;nd.y=baseY+i*110}
+    if(i<nb-1){model.edges.push({id:'e'+Math.random().toString(36).slice(2),src:brIds[i],srcPort:'out1',dst:id,dstPort:'in0'})}
+    else{model.edges.push({id:'e'+Math.random().toString(36).slice(2),src:brIds[nb-2],srcPort:'out0',dst:id,dstPort:'in0'})}
+    model.edges.push({id:'e'+Math.random().toString(36).slice(2),src:id,srcPort:'out0',dst:sm.id,dstPort:'in'+i})})}
+
+function buildFeedback(ids,positive){
+  if(ids.length<2)return;
+  var gId=ids[0],hId=ids[1];
+  var gNd=model.nodes.find(function(n){return n.id===gId});
+  var hNd=model.nodes.find(function(n){return n.id===hId});
+  var baseX=gNd?gNd.x-100:100,baseY=gNd?gNd.y:180;
+  /* Cria somador */
+  var signStr=positive?'+ +':'+ -';
+  var sm={id:nxtId(),type:'sum',x:baseX,y:baseY+10,params:{signs:signStr}};model.nodes.push(sm);
+  /* Cria branch */
+  var br={id:nxtId(),type:'branch',x:baseX+340,y:baseY+20,params:{}};model.nodes.push(br);
+  /* Posiciona G e H */
+  if(gNd){gNd.x=baseX+160;gNd.y=baseY}
+  if(hNd){hNd.x=baseX+200;hNd.y=baseY+150}
+  /* Edges: somador -> G -> branch, branch.out1 -> H -> somador.in1 */
+  model.edges.push({id:'e'+Math.random().toString(36).slice(2),src:sm.id,srcPort:'out0',dst:gId,dstPort:'in0'});
+  model.edges.push({id:'e'+Math.random().toString(36).slice(2),src:gId,srcPort:'out0',dst:br.id,dstPort:'in0'});
+  model.edges.push({id:'e'+Math.random().toString(36).slice(2),src:br.id,srcPort:'out1',dst:hId,dstPort:'in0'});
+  model.edges.push({id:'e'+Math.random().toString(36).slice(2),src:hId,srcPort:'out0',dst:sm.id,dstPort:'in1'})}
+
 document.querySelectorAll(".tb[data-add]").forEach(function(b){b.addEventListener("click",function(){addB(b.dataset.add)})});
 document.getElementById("btnDel").addEventListener("click",delSel);document.getElementById("btnClear").addEventListener("click",clrAll);document.getElementById("btnAuto").addEventListener("click",autoLay);
-document.addEventListener("keydown",function(e){if(e.target.tagName==="INPUT")return;if(e.key==="Delete"||e.key==="Backspace")delSel();if(e.key==="Escape"){conSt=null;closeModal();document.querySelectorAll(".port.active").forEach(function(p){p.classList.remove("active")})}});
+document.addEventListener("keydown",function(e){if(e.target.tagName==="INPUT")return;if(e.key==="Delete"||e.key==="Backspace")delSel();if(e.key==="Escape"){conSt=null;closeModal();closeConnModal();document.querySelectorAll(".port.active").forEach(function(p){p.classList.remove("active")})}});
 render();new ResizeObserver(function(){rW()}).observe(cw);
-/* Blocos iniciais injetados do modo classico */
-var _initB=__INITIAL_BLOCKS__;
-if(_initB&&_initB.length>0){_initB.forEach(function(b){addBP(b.type,b.params)});setTimeout(autoLay,200)}
+/* Modelo inicial injetado do modo classico (blocos + conexoes) */
+var _initData=__INITIAL_BLOCKS__;
+if(_initData){
+  if(_initData.nodes&&_initData.edges){
+    /* Formato completo: {nodes:[...], edges:[...]} */
+    _initData.nodes.forEach(function(n){
+      n.params=Object.assign(dPar(n.type),n.params||{});
+      model.nodes.push(n)});
+    _initData.edges.forEach(function(e){model.edges.push(e)});
+    render();
+  } else if(_initData.length>0){
+    /* Formato antigo: [{type,params},...] */
+    _initData.forEach(function(b){addBP(b.type,b.params)});
+    setTimeout(autoLay,200);
+  }
+}
 </script></body></html>'''
 
 
@@ -2467,6 +2606,178 @@ def modo_classico():
 # MODO CANVAS
 # ══════════════════════════════════════════════════
 
+def _build_canvas_model(blocos_df, conexoes):
+    """Constroi o modelo (nodes + edges) do canvas a partir dos blocos e conexoes do modo classico."""
+    tipo_map = {
+        'Planta': 'tf', 'Controlador': 'tf', 'Sensor': 'sensor',
+        'Atuador': 'actuator', 'Pre-filtro': 'tf', 'Perturbacao': 'tf',
+    }
+    nodes = []
+    edges = []
+    nid = 0
+
+    def mk_id():
+        nonlocal nid
+        nid += 1
+        return f"n{nid}"
+
+    # Se nao ha conexoes, retorna so os blocos (sem edges)
+    if not conexoes:
+        inp_id = mk_id()
+        nodes.append({'id': inp_id, 'type': 'input', 'x': 30, 'y': 200, 'params': {'label': 'R(s)'}})
+        for i, (_, row) in enumerate(blocos_df.iterrows()):
+            tf_obj = row['tf']
+            bt = tipo_map.get(row['tipo'], 'tf')
+            b_id = mk_id()
+            nodes.append({
+                'id': b_id, 'type': bt,
+                'x': 200 + i * 180, 'y': 180,
+                'params': {'num': _coeffs_to_poly_str(tf_obj.num[0][0]),
+                           'den': _coeffs_to_poly_str(tf_obj.den[0][0])}
+            })
+        out_id = mk_id()
+        nodes.append({'id': out_id, 'type': 'output',
+                      'x': 200 + len(blocos_df) * 180, 'y': 200,
+                      'params': {'label': 'Y(s)'}})
+        return {'nodes': nodes, 'edges': edges}
+
+    # Mapear nomes de blocos para dados
+    bloco_map = {}
+    for _, row in blocos_df.iterrows():
+        tf_obj = row['tf']
+        bt = tipo_map.get(row['tipo'], 'tf')
+        bloco_map[row['nome']] = {
+            'type': bt,
+            'params': {'num': _coeffs_to_poly_str(tf_obj.num[0][0]),
+                       'den': _coeffs_to_poly_str(tf_obj.den[0][0])}
+        }
+
+    # Adicionar input
+    inp_id = mk_id()
+    nodes.append({'id': inp_id, 'type': 'input', 'x': 30, 'y': 200, 'params': {'label': 'R(s)'}})
+
+    prev_out_id = inp_id
+    prev_out_port = 'out0'
+    x_offset = 200
+
+    for con in conexoes:
+        tipo_con = con['tipo']
+        nomes = [n for n in con['blocos'] if n in bloco_map]
+        if len(nomes) < 2:
+            continue
+
+        if tipo_con == 'Serie':
+            for i, nome in enumerate(nomes):
+                b = bloco_map[nome]
+                b_id = mk_id()
+                nodes.append({'id': b_id, 'type': b['type'],
+                              'x': x_offset + i * 180, 'y': 180,
+                              'params': dict(b['params'])})
+                edges.append({'id': f'e{len(edges)}', 'src': prev_out_id,
+                              'srcPort': prev_out_port, 'dst': b_id, 'dstPort': 'in0'})
+                prev_out_id = b_id
+                prev_out_port = 'out0'
+            x_offset += len(nomes) * 180
+
+        elif tipo_con == 'Paralelo':
+            # Cria branches encadeados para fan-out, blocos em paralelo, e sum
+            nb = len(nomes)
+            signs = ' '.join(['+'] * nb)
+            sum_id = mk_id()
+            nodes.append({'id': sum_id, 'type': 'sum',
+                          'x': x_offset + 360, 'y': 210,
+                          'params': {'signs': signs}})
+
+            # Cria cadeia de branches para distribuir sinal
+            branch_ids = []
+            cur_src_id = prev_out_id
+            cur_src_port = prev_out_port
+            for i in range(nb - 1):
+                br_id = mk_id()
+                nodes.append({'id': br_id, 'type': 'branch',
+                              'x': x_offset + i * 30, 'y': 160 + i * 50,
+                              'params': {}})
+                edges.append({'id': f'e{len(edges)}', 'src': cur_src_id,
+                              'srcPort': cur_src_port, 'dst': br_id, 'dstPort': 'in0'})
+                branch_ids.append(br_id)
+                cur_src_id = br_id
+                cur_src_port = 'out0'
+
+            for i, nome in enumerate(nomes):
+                b = bloco_map[nome]
+                b_id = mk_id()
+                nodes.append({'id': b_id, 'type': b['type'],
+                              'x': x_offset + 160, 'y': 100 + i * 120,
+                              'params': dict(b['params'])})
+                if i < nb - 1:
+                    # Conecta via out1 do branch correspondente
+                    edges.append({'id': f'e{len(edges)}', 'src': branch_ids[i],
+                                  'srcPort': 'out1', 'dst': b_id, 'dstPort': 'in0'})
+                else:
+                    # Ultimo bloco: conecta via out0 do ultimo branch
+                    edges.append({'id': f'e{len(edges)}', 'src': branch_ids[-1],
+                                  'srcPort': 'out0', 'dst': b_id, 'dstPort': 'in0'})
+                edges.append({'id': f'e{len(edges)}', 'src': b_id,
+                              'srcPort': 'out0', 'dst': sum_id, 'dstPort': f'in{i}'})
+
+            prev_out_id = sum_id
+            prev_out_port = 'out0'
+            x_offset += 520
+
+        elif tipo_con.startswith('Realimentacao'):
+            is_pos = tipo_con == 'Realimentacao Positiva'
+            sign_str = '+ +' if is_pos else '+ -'
+
+            sum_id = mk_id()
+            nodes.append({'id': sum_id, 'type': 'sum',
+                          'x': x_offset, 'y': 200,
+                          'params': {'signs': sign_str}})
+            edges.append({'id': f'e{len(edges)}', 'src': prev_out_id,
+                          'srcPort': prev_out_port, 'dst': sum_id, 'dstPort': 'in0'})
+
+            # G (caminho direto)
+            g_data = bloco_map[nomes[0]]
+            g_id = mk_id()
+            nodes.append({'id': g_id, 'type': g_data['type'],
+                          'x': x_offset + 160, 'y': 180,
+                          'params': dict(g_data['params'])})
+            edges.append({'id': f'e{len(edges)}', 'src': sum_id,
+                          'srcPort': 'out0', 'dst': g_id, 'dstPort': 'in0'})
+
+            # Branch point
+            branch_id = mk_id()
+            nodes.append({'id': branch_id, 'type': 'branch',
+                          'x': x_offset + 340, 'y': 210,
+                          'params': {}})
+            edges.append({'id': f'e{len(edges)}', 'src': g_id,
+                          'srcPort': 'out0', 'dst': branch_id, 'dstPort': 'in0'})
+
+            # H (realimentacao)
+            if len(nomes) > 1:
+                h_data = bloco_map[nomes[1]]
+                h_id = mk_id()
+                nodes.append({'id': h_id, 'type': h_data['type'],
+                              'x': x_offset + 200, 'y': 340,
+                              'params': dict(h_data['params'])})
+                edges.append({'id': f'e{len(edges)}', 'src': branch_id,
+                              'srcPort': 'out1', 'dst': h_id, 'dstPort': 'in0'})
+                edges.append({'id': f'e{len(edges)}', 'src': h_id,
+                              'srcPort': 'out0', 'dst': sum_id, 'dstPort': 'in1'})
+
+            prev_out_id = branch_id
+            prev_out_port = 'out0'
+            x_offset += 420
+
+    # Adicionar output
+    out_id = mk_id()
+    nodes.append({'id': out_id, 'type': 'output',
+                  'x': x_offset, 'y': 200, 'params': {'label': 'Y(s)'}})
+    edges.append({'id': f'e{len(edges)}', 'src': prev_out_id,
+                  'srcPort': prev_out_port, 'dst': out_id, 'dstPort': 'in0'})
+
+    return {'nodes': nodes, 'edges': edges}
+
+
 def modo_canvas():
     st.title("Modo Diagrama de Blocos")
 
@@ -2477,222 +2788,34 @@ def modo_canvas():
             st.rerun()
 
         st.markdown("---")
+        st.markdown("### Como usar")
+        st.markdown("""
+        **Diagrama de Blocos:**
+        1. Clique **+ Adicionar Bloco** ou use os botoes rapidos
+        2. Arraste para posicionar
+        3. Conecte: porta azul (saida) -> porta verde (entrada)
+        4. Edite parametros no painel lateral
+        5. Clique **CALCULAR** para ver resultados
 
-        # ── Adicionar blocos ──
-        st.header("Adicionar Bloco")
-        nome_cv = st.text_input("Nome do bloco",
-                                value=f"B{len(st.session_state.blocos)+1}",
-                                key="nome_canvas")
-        tipo_cv = st.selectbox("Tipo", list(BLOCK_TYPES.keys()), key="tipo_canvas")
+        **Entrada Manual:**
+        1. Clique em "Entrada Manual"
+        2. Escolha: T(s) Direta, Malha Fechada, Malha Aberta ou Espaco de Estados
+        3. Preencha os campos e as matrizes (dimensoes livres)
+        4. Clique **CALCULAR T(s)**
+        """)
 
-        repr_cv = st.radio(
-            "Representacao",
-            ['Funcao de Transferencia', 'Espaco de Estados'],
-            horizontal=True, key="repr_canvas")
+    html_content = _load_visual_editor_html()
 
-        if repr_cv == 'Funcao de Transferencia':
-            num_cv = st.text_input("Numerador", placeholder="ex: s+1", key="num_canvas")
-            den_cv = st.text_input("Denominador", placeholder="ex: s^2+2*s+3", key="den_canvas")
-            A_cv = B_cv = C_cv = D_cv = ''
-        else:
-            st.caption("Use `;` para separar linhas. Ex: `0 1; -2 -3`")
-            A_cv = st.text_input("Matriz A", placeholder="0 1; -2 -3", key="A_canvas")
-            B_cv = st.text_input("Matriz B", placeholder="0; 1", key="B_canvas")
-            C_cv = st.text_input("Matriz C", placeholder="1 0", key="C_canvas")
-            D_cv = st.text_input("Matriz D", placeholder="0", key="D_canvas")
-            num_cv = den_cv = ''
-
-        if st.button("Adicionar Bloco", type="primary", use_container_width=True, key="btn_add_canvas"):
-            if not nome_cv.strip():
-                st.error("Informe um nome.")
-            elif not st.session_state.blocos.empty and any(st.session_state.blocos['nome'] == nome_cv):
-                st.error(f"Bloco '{nome_cv}' ja existe.")
-            else:
-                ok, msg = adicionar_bloco(
-                    nome_cv, tipo_cv, repr_cv, num_cv, den_cv,
-                    A_cv, B_cv, C_cv, D_cv)
-                if ok:
-                    st.success(msg)
-                    st.rerun()
-                else:
-                    st.error(msg)
-
-        # ── Remover blocos ──
-        if not st.session_state.blocos.empty:
-            st.markdown("---")
-            st.header("Remover Blocos")
-            excluir_cv = st.selectbox("Selecionar bloco",
-                                      st.session_state.blocos['nome'],
-                                      key="excluir_canvas")
-            if st.button("Excluir", key="btn_excluir_canvas"):
-                remover_bloco(excluir_cv)
-                st.rerun()
-
-        # ── Definir conexoes ──
-        st.markdown("---")
-        st.header("Conexoes entre Blocos")
-        if len(st.session_state.blocos) >= 2:
-            tipo_conexao_cv = st.selectbox(
-                "Tipo de conexao", CONNECTION_TYPES, key="conn_tipo_canvas")
-            nomes_disp_cv = list(st.session_state.blocos['nome'])
-
-            if tipo_conexao_cv in ['Realimentacao Negativa', 'Realimentacao Positiva']:
-                st.caption("Bloco 1 = caminho direto G(s), Bloco 2 = realimentacao H(s)")
-                max_sel_cv = 2
-            else:
-                max_sel_cv = len(nomes_disp_cv)
-
-            blocos_conexao_cv = st.multiselect(
-                "Blocos (na ordem)", nomes_disp_cv,
-                max_selections=max_sel_cv, key="conn_blocos_canvas")
-
-            if st.button("Adicionar Conexao", key="btn_add_conn_canvas"):
-                if len(blocos_conexao_cv) < 2:
-                    st.error("Selecione pelo menos 2 blocos.")
-                else:
-                    st.session_state.conexoes.append({
-                        'tipo': tipo_conexao_cv,
-                        'blocos': blocos_conexao_cv,
-                    })
-                    st.success(f"Conexao '{tipo_conexao_cv}' adicionada.")
-                    st.rerun()
-
-            if st.session_state.conexoes:
-                st.markdown("**Conexoes definidas:**")
-                simbolos_cv = {'Serie': ' \u2192 ', 'Paralelo': ' || ',
-                               'Realimentacao Negativa': ' -fb\u2192 ',
-                               'Realimentacao Positiva': ' +fb\u2192 '}
-                for i, con in enumerate(st.session_state.conexoes):
-                    st.markdown(
-                        f"**{i+1}.** {con['tipo']}: "
-                        f"`{simbolos_cv.get(con['tipo'], ' \u2192 ').join(con['blocos'])}`")
-                    if st.button("Remover", key=f"rmcon_cv_{i}"):
-                        st.session_state.conexoes.pop(i)
-                        st.rerun()
-        else:
-            st.caption("Adicione pelo menos 2 blocos para definir conexoes.")
-
-    # ══════════════════════════════════════════════════
-    # AREA PRINCIPAL - Diagrama + Analise
-    # ══════════════════════════════════════════════════
-
-    if st.session_state.blocos.empty:
-        st.info("Adicione blocos pela barra lateral para comecar.")
-    else:
-        # ── Cards dos blocos ──
-        st.markdown(VISUAL_BLOCKS_CSS, unsafe_allow_html=True)
-        st.subheader("Blocos do Sistema")
-        html_cards = '<div class="vb-container">'
-        for idx, row in st.session_state.blocos.iterrows():
-            html_cards += _html_bloco_visual(row, is_new=(idx == len(st.session_state.blocos) - 1))
-        html_cards += '</div>'
-        st.markdown(html_cards, unsafe_allow_html=True)
-
-        # ── Conexoes resumo ──
-        if st.session_state.conexoes:
-            simbolos_res = {'Serie': '\u2192', 'Paralelo': '||',
-                            'Realimentacao Negativa': '-fb\u2192',
-                            'Realimentacao Positiva': '+fb\u2192'}
-            conn_txt = " | ".join(
-                f"**{c['tipo']}**: {simbolos_res.get(c['tipo'], '\u2192').join(c['blocos'])}"
-                for c in st.session_state.conexoes)
-            st.markdown(f"**Conexoes:** {conn_txt}")
-
-        # ── Diagrama SVG ──
-        st.subheader("Diagrama de Blocos")
-        svg_diagram = _svg_diagrama_blocos(
+    # Injeta modelo completo (blocos + conexoes do modo classico) no canvas
+    if not st.session_state.blocos.empty:
+        canvas_model = _build_canvas_model(
             st.session_state.blocos, st.session_state.conexoes)
-        if svg_diagram:
-            st.markdown(f'<div class="conn-diagram-wrap">{svg_diagram}</div>',
-                        unsafe_allow_html=True)
+        html_content = html_content.replace(
+            '__INITIAL_BLOCKS__', json.dumps(canvas_model))
+    else:
+        html_content = html_content.replace('__INITIAL_BLOCKS__', '[]')
 
-        st.markdown("---")
-
-        # ── Editor visual (canvas HTML/JS) ──
-        with st.expander("Editor Visual Interativo (arrastar e conectar)", expanded=False):
-            html_content = _load_visual_editor_html()
-            if not st.session_state.blocos.empty:
-                blocks_data = []
-                tipo_map = {
-                    'Planta': 'tf', 'Controlador': 'tf', 'Sensor': 'sensor',
-                    'Atuador': 'actuator', 'Pre-filtro': 'tf', 'Perturbacao': 'tf',
-                }
-                for _, row in st.session_state.blocos.iterrows():
-                    tf_obj = row['tf']
-                    bt = tipo_map.get(row['tipo'], 'tf')
-                    num_s = _coeffs_to_poly_str(tf_obj.num[0][0])
-                    den_s = _coeffs_to_poly_str(tf_obj.den[0][0])
-                    blocks_data.append({'type': bt, 'params': {'num': num_s, 'den': den_s}})
-                html_content = html_content.replace('__INITIAL_BLOCKS__', json.dumps(blocks_data))
-            else:
-                html_content = html_content.replace('__INITIAL_BLOCKS__', '[]')
-            components.html(html_content, height=900, scrolling=True)
-
-        st.markdown("---")
-
-        # ── Painel de analise ──
-        st.subheader("Analise do Sistema")
-        col1, col2 = st.columns(2)
-        with col1:
-            tipo_malha_cv = st.selectbox("Tipo de analise",
-                                         ["Malha Aberta", "Malha Fechada"],
-                                         key="malha_canvas")
-            usar_ganho_cv = st.checkbox("Ganho K ajustavel", key="ganho_canvas")
-            K_cv = st.slider("K", 0.1, 100.0, 1.0, 0.1, key="K_canvas") if usar_ganho_cv else 1.0
-        with col2:
-            chave_cv = "malha_fechada" if tipo_malha_cv == "Malha Fechada" else "malha_aberta"
-            analise_opcoes_cv = ANALYSIS_OPTIONS[chave_cv]
-            analises_cv = st.multiselect("Analises", analise_opcoes_cv,
-                                         default=[analise_opcoes_cv[0]],
-                                         key="analises_canvas")
-            entrada_cv = st.selectbox("Sinal de entrada", INPUT_SIGNALS,
-                                      key="entrada_canvas")
-
-        if st.button("Calcular e Analisar", type="primary",
-                     use_container_width=True, key="btn_calc_canvas"):
-            try:
-                df = st.session_state.blocos
-                if df.empty:
-                    st.warning("Adicione blocos primeiro.")
-                    st.stop()
-
-                ganho_tf = TransferFunction([K_cv], [1])
-
-                if st.session_state.conexoes:
-                    sistema = simplificar_diagrama(
-                        st.session_state.blocos, st.session_state.conexoes)
-                    if usar_ganho_cv and K_cv != 1.0:
-                        sistema = ganho_tf * sistema
-                    if tipo_malha_cv == "Malha Fechada" and not any(
-                            c['tipo'].startswith('Realimentacao')
-                            for c in st.session_state.conexoes):
-                        sistema = ctrl.feedback(sistema, TransferFunction([1], [1]))
-                else:
-                    planta = obter_bloco_por_tipo('Planta')
-                    controlador = obter_bloco_por_tipo('Controlador')
-                    sensor = obter_bloco_por_tipo('Sensor')
-                    if planta is None:
-                        st.error("Adicione pelo menos uma Planta ou defina conexoes.")
-                        st.stop()
-                    if tipo_malha_cv == "Malha Aberta":
-                        sistema = ganho_tf * planta
-                        if controlador is not None:
-                            sistema = controlador * sistema
-                    else:
-                        sistema = calcular_malha_fechada(
-                            ganho_tf * planta, controlador, sensor)
-
-                sistema = ctrl.minreal(sistema, verbose=False)
-
-                st.markdown("### Funcao de Transferencia Equivalente")
-                num_str = _tf_to_str(sistema.num[0][0])
-                den_str = _tf_to_str(sistema.den[0][0])
-                st.latex(f"T(s) = \\frac{{{num_str}}}{{{den_str}}}")
-
-                executar_analises(sistema, analises_cv, entrada_cv, tipo_malha_cv)
-
-            except Exception as e:
-                st.error(f"Erro durante a simulacao: {e}")
+    components.html(html_content, height=1200, scrolling=True)
 
 
 # ══════════════════════════════════════════════════
