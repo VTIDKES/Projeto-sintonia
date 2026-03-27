@@ -1,778 +1,1478 @@
-<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Visual Blocks - Editor de Diagrama de Blocos</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style>
-      :root{
-        --bg:#0f2b3a;
-        --panel:#16384a;
-        --panel2:#0b2230;
-        --card:#f5f7fb;
-        --accent:#22c55e;
-        --warn:#f59e0b;
-        --danger:#ef4444;
-        --muted:#94a3b8;
-      }
-      html,body{height:100%; margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;}
-      .wrap{height:100%; display:flex; flex-direction:column;}
-      .top{
-        display:grid; grid-template-columns: 1.2fr 1fr 1fr;
-        gap:10px; padding:10px; background:#ffffff;
-      }
-      .pill{
-        border-radius:6px; padding:10px 12px; background:#eef6ff; color:#0f172a;
-        display:flex; align-items:center; gap:8px; font-size:13px;
-        border:1px solid #e5e7eb;
-      }
-      .pill.ok{background:#ecfdf5;}
-      .pill .dot{width:8px; height:8px; border-radius:999px; background:#3b82f6;}
-      .pill.ok .dot{background:var(--accent);}
-      .bar{
-        display:flex; gap:8px; padding:10px; background:#1f4b63; align-items:center; flex-wrap:wrap;
-      }
-      .btn{
-        border:0; border-radius:8px; padding:7px 10px; font-size:12px; cursor:pointer;
-        color:white; background:#2563eb;
-        display:flex; align-items:center; gap:6px;
-        user-select:none; white-space:nowrap;
-      }
-      .btn.orange{background:#f59e0b; color:#0f172a;}
-      .btn.green{background:#22c55e; color:#0f172a;}
-      .btn.purple{background:#a855f7;}
-      .btn.red{background:#ef4444;}
-      .btn.gray{background:#334155;}
-      .btn.teal{background:#0d9488; color:white;}
-      .btn:hover{opacity:0.85;}
-      .content{flex:1; display:flex; min-height:0;}
-      .canvasWrap{flex:1; position:relative; background:var(--bg); overflow:hidden;}
-      .canvas{
-        position:absolute; inset:0;
-        background-image:
-          linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px);
-        background-size: 24px 24px;
-      }
-      svg.wires{position:absolute; inset:0; pointer-events:none;}
-      /* Standard block node */
-      .node{
-        position:absolute;
-        width:160px; min-height:58px;
-        border-radius:10px;
-        background:#ffffff;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.25);
-        border:1px solid rgba(15,23,42,0.15);
-        overflow:visible;
-      }
-      .node .head{
-        display:flex; align-items:center; justify-content:space-between;
-        padding:8px 10px; background:#f1f5f9; font-size:12px; font-weight:650;
-        border-radius:10px 10px 0 0;
-      }
-      .node .body{padding:8px 10px; font-size:12px; color:#0f172a;}
-      .tag{font-size:11px; color:#334155; background:#e2e8f0; padding:2px 6px; border-radius:999px;}
-      /* Input node */
-      .node.type-input{
-        background:#dcfce7; border-color:#22c55e;
-        border-radius:20px; min-width:100px; width:120px;
-      }
-      .node.type-input .head{background:#bbf7d0; border-radius:20px 20px 0 0;}
-      /* Output node */
-      .node.type-output{
-        background:#fee2e2; border-color:#ef4444;
-        border-radius:20px; min-width:100px; width:120px;
-      }
-      .node.type-output .head{background:#fecaca; border-radius:20px 20px 0 0;}
-      /* Summing junction */
-      .node.type-sum{
-        width:60px; min-height:60px; height:60px;
-        border-radius:50%; background:#fef3c7; border:2px solid #f59e0b;
-        display:flex; align-items:center; justify-content:center;
-      }
-      .node.type-sum .head{display:none;}
-      .node.type-sum .body{
-        padding:0; text-align:center; font-size:22px; font-weight:bold; color:#92400e;
-      }
-      /* Branch point */
-      .node.type-branch{
-        width:20px; min-height:20px; height:20px;
-        border-radius:50%; background:#3b82f6; border:2px solid #1d4ed8;
-        box-shadow: 0 4px 10px rgba(59,130,246,0.4);
-      }
-      .node.type-branch .head{display:none;}
-      .node.type-branch .body{display:none;}
-      /* Ports */
-      .ports{position:absolute; inset:0; pointer-events:none;}
-      .port{
-        width:12px; height:12px; border-radius:999px;
-        background:#0ea5e9; position:absolute; pointer-events:auto; cursor:crosshair;
-        border:2px solid rgba(255,255,255,0.9);
-        box-shadow:0 4px 10px rgba(0,0,0,0.25);
-        z-index:10;
-      }
-      .port.out{background:#22c55e;}
-      .port.in{background:#0ea5e9;}
-      .port.active{background:#fbbf24; box-shadow:0 0 12px rgba(251,191,36,0.7);}
-      .sign-label{
-        position:absolute; font-size:10px; font-weight:700; color:#92400e;
-        pointer-events:none; user-select:none;
-      }
-      .node.sel{outline:3px solid rgba(34,197,94,0.75);}
-      .side{
-        width:280px; background:#ffffff; border-left:1px solid #e5e7eb;
-        padding:10px; display:flex; flex-direction:column; gap:10px;
-        overflow-y:auto;
-      }
-      .card{border:1px solid #e5e7eb; border-radius:10px; padding:10px; background:#f8fafc;}
-      .card h4{margin:0 0 8px 0; font-size:13px;}
-      .kv{display:grid; grid-template-columns:1fr auto; gap:6px; font-size:12px;}
-      .hint{font-size:12px; color:#334155; line-height:1.3;}
-      .input{width:100%; padding:7px 8px; border-radius:8px; border:1px solid #cbd5e1; font-size:12px; box-sizing:border-box;}
-      .small{font-size:11px; color:#475569;}
-      .hr{height:1px; background:#e5e7eb; margin:8px 0;}
-      .kbd{font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; padding:2px 6px; border:1px solid #cbd5e1; border-bottom-width:2px; border-radius:6px; background:white;}
-      .sep{width:1px; height:28px; background:rgba(255,255,255,0.2); margin:0 4px;}
-    </style>
-  </head>
-  <body>
-    <div class="wrap">
-      <div class="top">
-        <div class="pill"><span class="dot"></span><strong>Editor Visual de Diagrama de Blocos</strong>&nbsp;<span class="small">Construa sistemas de controle visualmente</span></div>
-        <div class="pill ok"><span class="dot"></span><strong>Blocos:</strong>&nbsp;<span id="countNodes">0</span></div>
-        <div class="pill ok"><span class="dot"></span><strong>Conexoes:</strong>&nbsp;<span id="countEdges">0</span></div>
-      </div>
-
-      <div class="bar">
-        <span class="small" style="color:#e2e8f0; font-weight:700; margin-right:4px;">SINAIS:</span>
-        <button class="btn green" data-add="input">R(s) Entrada</button>
-        <button class="btn red" data-add="output">Y(s) Saida</button>
-        <button class="btn orange" data-add="sum">+/- Somador</button>
-        <button class="btn teal" data-add="branch">* Ramificacao</button>
-
-        <div class="sep"></div>
-        <span class="small" style="color:#e2e8f0; font-weight:700; margin-right:4px;">BLOCOS:</span>
-        <button class="btn" data-add="tf">G(s) Transferencia</button>
-        <button class="btn orange" data-add="gain">K Ganho</button>
-        <button class="btn purple" data-add="int">1/s Integrador</button>
-        <button class="btn gray" data-add="der">s Derivador</button>
-        <button class="btn purple" data-add="pid">PID</button>
-
-        <div class="sep"></div>
-        <span class="small" style="color:#e2e8f0; font-weight:700; margin-right:4px;">ACOES:</span>
-        <button class="btn red" id="btnDelete">Deletar</button>
-        <button class="btn gray" id="btnDuplicate">Duplicar</button>
-        <button class="btn red" id="btnClear">Limpar</button>
-        <button class="btn green" id="btnAuto">Auto-organizar</button>
-      </div>
-
-      <div class="content">
-        <div class="canvasWrap" id="wrap">
-          <div class="canvas" id="canvas"></div>
-          <svg class="wires" id="wires"></svg>
-        </div>
-
-        <div class="side">
-          <div class="card">
-            <h4>Informacoes do Sistema</h4>
-            <div class="kv"><div>Blocos:</div><div id="sideNodes">0</div></div>
-            <div class="kv"><div>Conexoes:</div><div id="sideEdges">0</div></div>
-            <div class="kv"><div>Selecionado:</div><div id="sideSel">Nenhum</div></div>
-          </div>
-
-          <div class="card">
-            <h4>Parametros do bloco</h4>
-            <div id="paramArea" class="hint">Selecione um bloco para editar.</div>
-          </div>
-
-          <div class="card">
-            <h4>Dicas</h4>
-            <div class="hint">
-              <strong>Construir diagrama:</strong><br/>
-              1. Adicione <span class="kbd">R(s) Entrada</span> e <span class="kbd">Y(s) Saida</span><br/>
-              2. Adicione blocos (G(s), K, PID, etc.)<br/>
-              3. Use <span class="kbd">Somador</span> para malha fechada<br/>
-              4. Use <span class="kbd">Ramificacao</span> para dividir sinais<br/><br/>
-              <strong>Conectar:</strong><br/>
-              Clique no <span class="kbd" style="color:#22c55e;">ponto verde</span> (saida) e depois no <span class="kbd" style="color:#0ea5e9;">ponto azul</span> (entrada)<br/><br/>
-              <strong>Atalhos:</strong><br/>
-              <span class="kbd">Del</span> remove selecionado<br/>
-              <span class="kbd">Ctrl+D</span> duplica selecionado
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <script src="https://unpkg.com/streamlit-component-lib/dist/streamlit-component-lib.js"></script>
-    <script>
-      const wrap = document.getElementById("wrap");
-      const canvas = document.getElementById("canvas");
-      const wires = document.getElementById("wires");
-      const countNodes = document.getElementById("countNodes");
-      const countEdges = document.getElementById("countEdges");
-      const sideNodes = document.getElementById("sideNodes");
-      const sideEdges = document.getElementById("sideEdges");
-      const sideSel = document.getElementById("sideSel");
-      const paramArea = document.getElementById("paramArea");
-
-      let model = {nodes: [], edges: []};
-      let selId = null;
-      let drag = null;
-      let connectFrom = null;
-
-      const randId = (p)=> p + "_" + Math.random().toString(16).slice(2) + Date.now().toString(16);
-
-      /* ---------- Block type configuration ---------- */
-
-      function nodeTitle(type){
-        if(type==="tf") return "G(s)";
-        if(type==="sum") return "\u03A3";
-        if(type==="gain") return "K";
-        if(type==="int") return "1/s";
-        if(type==="der") return "s";
-        if(type==="sat") return "sat";
-        if(type==="input") return "R(s)";
-        if(type==="output") return "Y(s)";
-        if(type==="branch") return "";
-        if(type==="pid") return "PID";
-        return type;
-      }
-
-      function defaultParams(type){
-        if(type==="tf") return {num:"1", den:"s+1"};
-        if(type==="gain") return {k:"1"};
-        if(type==="sum") return {signs:"+ -"};
-        if(type==="int") return {};
-        if(type==="der") return {};
-        if(type==="sat") return {min:"-1", max:"1"};
-        if(type==="input") return {label:"R(s)"};
-        if(type==="output") return {label:"Y(s)"};
-        if(type==="branch") return {};
-        if(type==="pid") return {kp:"1", ki:"0", kd:"0"};
-        return {};
-      }
-
-      /* Returns port definitions for a node type:
-         {in: [{id:"in0", x, y}, ...], out: [{id:"out0", x, y}, ...]}
-         x,y are relative to the node element (in pixels or % offsets).
-         We compute actual pixel positions at render time based on element size. */
-      function getPortConfig(type, params){
-        if(type==="input"){
-          return {in:[], out:[{id:"out0"}]};
-        }
-        if(type==="output"){
-          return {in:[{id:"in0"}], out:[]};
-        }
-        if(type==="branch"){
-          return {in:[{id:"in0"}], out:[{id:"out0"}, {id:"out1"}]};
-        }
-        if(type==="sum"){
-          const signs = (params && params.signs) ? params.signs.trim().split(/\s+/) : ["+", "-"];
-          const ins = signs.map((s, i) => ({id:"in"+i, sign:s}));
-          return {in: ins, out:[{id:"out0"}]};
-        }
-        // Default: 1 in, 1 out
-        return {in:[{id:"in0"}], out:[{id:"out0"}]};
-      }
-
-      /* ---------- Counter & selection ---------- */
-
-      function updateCounters(){
-        countNodes.textContent = model.nodes.length;
-        countEdges.textContent = model.edges.length;
-        sideNodes.textContent = model.nodes.length;
-        sideEdges.textContent = model.edges.length;
-        sideSel.textContent = selId ? (model.nodes.find(n=>n.id===selId)?.label || selId) : "Nenhum";
-      }
-
-      function setSel(id){
-        selId = id;
-        document.querySelectorAll(".node").forEach(el=>{
-          el.classList.toggle("sel", el.dataset.id===id);
-        });
-        renderParams();
-        updateCounters();
-      }
-
-      /* ---------- Node CRUD ---------- */
-
-      function addNode(type){
-        const r = wrap.getBoundingClientRect();
-        const n = {
-          id: randId("n"),
-          type,
-          label: nodeTitle(type),
-          x: Math.max(20, r.width*0.15 + Math.random()*120),
-          y: Math.max(30, r.height*0.2 + Math.random()*100),
-          params: defaultParams(type),
-        };
-        model.nodes.push(n);
-        render();
-        setSel(n.id);
-        pushToStreamlit();
-      }
-
-      function removeSelected(){
-        if(!selId) return;
-        model.edges = model.edges.filter(e => e.src!==selId && e.dst!==selId);
-        model.nodes = model.nodes.filter(n=>n.id!==selId);
-        selId = null;
-        render();
-        pushToStreamlit();
-      }
-
-      function duplicateSelected(){
-        if(!selId) return;
-        const n0 = model.nodes.find(n=>n.id===selId);
-        if(!n0) return;
-        const n = {...n0, id: randId("n"), x:n0.x+30, y:n0.y+30, params: {...n0.params}};
-        model.nodes.push(n);
-        render();
-        setSel(n.id);
-        pushToStreamlit();
-      }
-
-      function clearAll(){
-        model = {nodes: [], edges: []};
-        selId = null;
-        connectFrom = null;
-        render();
-        pushToStreamlit();
-      }
-
-      function autoArrange(){
-        // Simple left-to-right arrangement
-        const typeOrder = {input:0, sum:1, tf:2, gain:2, int:2, der:2, pid:2, sat:2, branch:3, output:4};
-        const sorted = [...model.nodes].sort((a,b) => (typeOrder[a.type]||2) - (typeOrder[b.type]||2));
-        const marginX = 60, marginY = 80, stepX = 200, stepY = 120;
-        let col = 0, row = 0, lastOrder = -1;
-        sorted.forEach((ns,i)=>{
-          const order = typeOrder[ns.type]||2;
-          if(order !== lastOrder && i > 0){ col++; row = 0; }
-          else if(i > 0){ row++; }
-          lastOrder = order;
-          const real = model.nodes.find(n=>n.id===ns.id);
-          if(real){
-            real.x = marginX + col * stepX;
-            real.y = marginY + row * stepY;
-          }
-        });
-        render();
-        pushToStreamlit();
-      }
-
-      /* ---------- Edges / connections ---------- */
-
-      function edgeExists(src, dst, srcPort, dstPort){
-        return model.edges.some(e => e.src===src && e.dst===dst && e.srcPort===srcPort && e.dstPort===dstPort);
-      }
-
-      function connect(srcId, srcPort, dstId, dstPort){
-        if(srcId===dstId) return;
-        if(edgeExists(srcId, dstId, srcPort, dstPort)) return;
-        model.edges.push({id: randId("e"), src: srcId, srcPort: srcPort, dst: dstId, dstPort: dstPort});
-        connectFrom = null;
-        clearPortHighlights();
-        render();
-        pushToStreamlit();
-      }
-
-      function clearPortHighlights(){
-        document.querySelectorAll(".port.active").forEach(p=>p.classList.remove("active"));
-      }
-
-      /* ---------- Port position calculation ---------- */
-
-      function getPortPos(nodeId, portId){
-        const nodeEl = document.querySelector(`.node[data-id="${nodeId}"]`);
-        if(!nodeEl) return {x:0,y:0};
-        const portEl = nodeEl.querySelector(`.port[data-port="${portId}"]`);
-        if(!portEl) {
-          // Fallback to first matching type
-          const isOut = portId.startsWith("out");
-          const fallback = nodeEl.querySelector(`.port.${isOut?"out":"in"}`);
-          if(!fallback) return {x:0,y:0};
-          const r = fallback.getBoundingClientRect();
-          const rw = wrap.getBoundingClientRect();
-          return {x: r.left - rw.left + r.width/2, y: r.top - rw.top + r.height/2};
-        }
-        const r = portEl.getBoundingClientRect();
-        const rw = wrap.getBoundingClientRect();
-        return {x: r.left - rw.left + r.width/2, y: r.top - rw.top + r.height/2};
-      }
-
-      /* ---------- Wire rendering ---------- */
-
-      function renderWires(){
-        while(wires.firstChild) wires.removeChild(wires.firstChild);
-        const rw = wrap.getBoundingClientRect();
-        wires.setAttribute("width", rw.width);
-        wires.setAttribute("height", rw.height);
-
-        // Arrow marker
-        const defs = document.createElementNS("http://www.w3.org/2000/svg","defs");
-        const marker = document.createElementNS("http://www.w3.org/2000/svg","marker");
-        marker.setAttribute("id","arrowhead");
-        marker.setAttribute("markerWidth","10");
-        marker.setAttribute("markerHeight","8");
-        marker.setAttribute("refX","9");
-        marker.setAttribute("refY","4");
-        marker.setAttribute("orient","auto");
-        const poly = document.createElementNS("http://www.w3.org/2000/svg","polygon");
-        poly.setAttribute("points","0 0, 10 4, 0 8");
-        poly.setAttribute("fill","rgba(34,197,94,0.9)");
-        marker.appendChild(poly);
-        defs.appendChild(marker);
-        wires.appendChild(defs);
-
-        model.edges.forEach(e=>{
-          const a = getPortPos(e.src, e.srcPort || "out0");
-          const b = getPortPos(e.dst, e.dstPort || "in0");
-          if(a.x===0 && a.y===0) return;
-          if(b.x===0 && b.y===0) return;
-
-          const dx = Math.max(40, Math.abs(b.x - a.x) * 0.45);
-          const c1 = {x: a.x + dx, y: a.y};
-          const c2 = {x: b.x - dx, y: b.y};
-
-          const path = document.createElementNS("http://www.w3.org/2000/svg","path");
-          const d = `M ${a.x} ${a.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${b.x} ${b.y}`;
-          path.setAttribute("d", d);
-          path.setAttribute("fill","none");
-          path.setAttribute("stroke","rgba(34,197,94,0.85)");
-          path.setAttribute("stroke-width","3");
-          path.setAttribute("stroke-linecap","round");
-          path.setAttribute("marker-end","url(#arrowhead)");
-          wires.appendChild(path);
-        });
-      }
-
-      /* ---------- Parameter panel ---------- */
-
-      function renderParams(){
-        if(!selId){
-          paramArea.innerHTML = `<div class="hint">Selecione um bloco para editar.</div>`;
-          return;
-        }
-        const n = model.nodes.find(n=>n.id===selId);
-        if(!n){
-          paramArea.innerHTML = `<div class="hint">Selecione um bloco para editar.</div>`;
-          return;
-        }
-
-        function inputRow(label, key, value){
-          return `
-            <div style="margin-bottom:8px;">
-              <div class="small" style="margin-bottom:4px;">${label}</div>
-              <input class="input" data-param="${key}" value="${String(value ?? "")}"/>
-            </div>
-          `;
-        }
-
-        let html = `<div class="small">Tipo: <strong>${n.type.toUpperCase()}</strong> | ID: ${n.id.slice(0,8)}</div><div class="hr"></div>`;
-
-        if(n.type==="tf"){
-          html += inputRow("Numerador (em s)", "num", n.params.num);
-          html += inputRow("Denominador (em s)", "den", n.params.den);
-        }else if(n.type==="gain"){
-          html += inputRow("Ganho K", "k", n.params.k);
-        }else if(n.type==="sum"){
-          html += inputRow("Sinais (ex: + - ou + +)", "signs", n.params.signs);
-          html += `<div class="small" style="margin-top:4px;">Cada sinal corresponde a uma porta de entrada. Ex: "+" "-" = 2 entradas, a primeira soma e a segunda subtrai.</div>`;
-        }else if(n.type==="pid"){
-          html += inputRow("Kp (proporcional)", "kp", n.params.kp);
-          html += inputRow("Ki (integral)", "ki", n.params.ki);
-          html += inputRow("Kd (derivativo)", "kd", n.params.kd);
-        }else if(n.type==="input"){
-          html += inputRow("Label", "label", n.params.label);
-        }else if(n.type==="output"){
-          html += inputRow("Label", "label", n.params.label);
-        }else if(n.type==="sat"){
-          html += inputRow("Min", "min", n.params.min);
-          html += inputRow("Max", "max", n.params.max);
-        }else{
-          html += `<div class="hint">Sem parametros para este bloco.</div>`;
-        }
-
-        paramArea.innerHTML = html;
-
-        paramArea.querySelectorAll("input[data-param]").forEach(inp=>{
-          inp.addEventListener("input", (ev)=>{
-            const k = ev.target.getAttribute("data-param");
-            n.params[k] = ev.target.value;
-            // Re-render if signs changed (affects port count)
-            if(k === "signs"){
-              render();
-            } else {
-              // Update body text
-              const nodeEl = document.querySelector(`.node[data-id="${n.id}"]`);
-              if(nodeEl){
-                const bodyEl = nodeEl.querySelector(".body");
-                if(bodyEl) bodyEl.textContent = getBodyText(n);
-              }
-            }
-            pushToStreamlitDebounced();
-          });
-        });
-      }
-
-      function getBodyText(n){
-        if(n.type==="tf") return `${n.params.num || "1"} / ${n.params.den || "1"}`;
-        if(n.type==="gain") return `K = ${n.params.k || "1"}`;
-        if(n.type==="pid") return `Kp=${n.params.kp||0} Ki=${n.params.ki||0} Kd=${n.params.kd||0}`;
-        if(n.type==="input") return n.params.label || "R(s)";
-        if(n.type==="output") return n.params.label || "Y(s)";
-        if(n.type==="sum") return "\u03A3";
-        if(n.type==="int") return "1/s";
-        if(n.type==="der") return "s";
-        return "";
-      }
-
-      /* ---------- Main render ---------- */
-
-      function render(){
-        canvas.querySelectorAll(".node").forEach(el=>el.remove());
-
-        model.nodes.forEach(n=>{
-          const el = document.createElement("div");
-          el.className = `node type-${n.type}`;
-          el.dataset.id = n.id;
-          el.style.left = `${n.x}px`;
-          el.style.top  = `${n.y}px`;
-
-          const bodyText = getBodyText(n);
-          const pc = getPortConfig(n.type, n.params);
-
-          // Build inner HTML based on type
-          if(n.type === "sum"){
-            el.innerHTML = `<div class="body">\u03A3</div><div class="ports"></div>`;
-          } else if(n.type === "branch"){
-            el.innerHTML = `<div class="ports"></div>`;
-          } else {
-            el.innerHTML = `
-              <div class="head">
-                <span>${n.label}</span>
-                <span class="tag">${n.type}</span>
-              </div>
-              <div class="body">${bodyText}</div>
-              <div class="ports"></div>
-            `;
-          }
-
-          canvas.appendChild(el);
-
-          // Render ports after element is in DOM so we can use its dimensions
-          const portsContainer = el.querySelector(".ports");
-          if(!portsContainer){
-            // For branch, create ports directly on node
-          }
-
-          // Input ports
-          pc.in.forEach((p, idx) => {
-            const portEl = document.createElement("div");
-            portEl.className = "port in";
-            portEl.dataset.port = p.id;
-            portEl.dataset.node = n.id;
-            portEl.dataset.kind = "in";
-            portEl.title = `Entrada ${p.sign || idx}`;
-
-            if(n.type === "sum"){
-              // Position multiple inputs vertically on left side
-              const totalIn = pc.in.length;
-              const spacing = 50 / (totalIn + 1);
-              const topPct = (spacing * (idx + 1));
-              portEl.style.left = "-8px";
-              portEl.style.top = `${topPct}px`;
-              portEl.style.position = "absolute";
-
-              // Sign label
-              if(p.sign){
-                const signEl = document.createElement("div");
-                signEl.className = "sign-label";
-                signEl.textContent = p.sign;
-                signEl.style.left = "-20px";
-                signEl.style.top = `${topPct - 5}px`;
-                signEl.style.position = "absolute";
-                el.appendChild(signEl);
-              }
-            } else if(n.type === "branch"){
-              portEl.style.left = "-8px";
-              portEl.style.top = "50%";
-              portEl.style.transform = "translateY(-50%)";
-              portEl.style.position = "absolute";
-            } else {
-              portEl.style.left = "-8px";
-              portEl.style.top = "50%";
-              portEl.style.transform = "translateY(-50%)";
-              portEl.style.position = "absolute";
-            }
-
-            el.appendChild(portEl);
-
-            portEl.addEventListener("mousedown",(ev)=>{
-              ev.stopPropagation();
-              setSel(n.id);
-              if(connectFrom && connectFrom.kind==="out"){
-                connect(connectFrom.nodeId, connectFrom.portId, n.id, p.id);
-              } else {
-                // Start connection from input (will need an output click next)
-                connectFrom = {nodeId: n.id, portId: p.id, kind:"in"};
-                portEl.classList.add("active");
-              }
-            });
-          });
-
-          // Output ports
-          pc.out.forEach((p, idx) => {
-            const portEl = document.createElement("div");
-            portEl.className = "port out";
-            portEl.dataset.port = p.id;
-            portEl.dataset.node = n.id;
-            portEl.dataset.kind = "out";
-            portEl.title = `Saida ${idx}`;
-
-            if(n.type === "branch"){
-              if(idx === 0){
-                portEl.style.right = "-8px";
-                portEl.style.top = "50%";
-                portEl.style.transform = "translateY(-50%)";
-              } else {
-                portEl.style.left = "50%";
-                portEl.style.bottom = "-8px";
-                portEl.style.transform = "translateX(-50%)";
-              }
-              portEl.style.position = "absolute";
-            } else if(n.type === "sum"){
-              portEl.style.right = "-8px";
-              portEl.style.top = "50%";
-              portEl.style.transform = "translateY(-50%)";
-              portEl.style.position = "absolute";
-            } else {
-              portEl.style.right = "-8px";
-              portEl.style.top = "50%";
-              portEl.style.transform = "translateY(-50%)";
-              portEl.style.position = "absolute";
-            }
-
-            el.appendChild(portEl);
-
-            portEl.addEventListener("mousedown",(ev)=>{
-              ev.stopPropagation();
-              setSel(n.id);
-              if(connectFrom && connectFrom.kind==="in"){
-                connect(n.id, p.id, connectFrom.nodeId, connectFrom.portId);
-              } else {
-                connectFrom = {nodeId: n.id, portId: p.id, kind:"out"};
-                portEl.classList.add("active");
-              }
-            });
-          });
-
-          // Drag
-          el.addEventListener("mousedown",(ev)=>{
-            if(ev.target.classList.contains("port")) return;
-            setSel(n.id);
-            const rect = el.getBoundingClientRect();
-            drag = {id:n.id, dx: ev.clientX - rect.left, dy: ev.clientY - rect.top};
-          });
-        });
-
-        document.querySelectorAll(".node").forEach(el=>{
-          el.classList.toggle("sel", el.dataset.id===selId);
-        });
-
-        updateCounters();
-        renderWires();
-        renderParams();
-      }
-
-      /* ---------- Mouse events ---------- */
-
-      window.addEventListener("mousemove",(ev)=>{
-        if(!drag) return;
-        const n = model.nodes.find(n=>n.id===drag.id);
-        if(!n) return;
-        const rw = wrap.getBoundingClientRect();
-        n.x = Math.max(10, Math.min(rw.width-40, ev.clientX - rw.left - drag.dx));
-        n.y = Math.max(10, Math.min(rw.height-40, ev.clientY - rw.top - drag.dy));
-        const el = document.querySelector(`.node[data-id="${n.id}"]`);
-        if(el){
-          el.style.left = `${n.x}px`;
-          el.style.top  = `${n.y}px`;
-        }
-        renderWires();
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Editor de Diagrama de Blocos</title>
+<!-- Plotly loaded async to not block rendering -->
+<style>
+:root{--bg:#0e1117;--sf:#1a1d2e;--sf2:#252840;--bd:#333654;--tx:#e0e4f0;--txm:#8890b0;
+--acc:#5b6be0;--grn:#34d399;--red:#f87171;--yel:#fbbf24;--blu:#60a5fa;--pur:#a78bfa;--pnk:#f472b6;--amb:#f59e0b}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:auto;min-height:100%;font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--tx);overflow-y:auto}
+
+.app{display:flex;flex-direction:column;min-height:100%}
+
+/* TOOLBAR */
+.toolbar{background:var(--sf);border-bottom:1px solid var(--bd);padding:6px 10px;display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-height:44px;z-index:50;position:sticky;top:0}
+.toolbar .sep{width:1px;height:26px;background:var(--bd);margin:0 3px;flex-shrink:0}
+.toolbar .lbl{font-size:10px;color:var(--txm);text-transform:uppercase;letter-spacing:.5px;margin-right:2px;white-space:nowrap}
+.tbtn{display:inline-flex;align-items:center;gap:4px;background:var(--sf2);color:#c8cad8;border:1px solid var(--bd);
+border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:nowrap;transition:all .15s;min-height:34px;touch-action:manipulation}
+.tbtn:hover,.tbtn:active{background:#2f3349;border-color:var(--acc);color:#fff}
+.tbtn.green{background:#16382a;border-color:#2d8a55;color:var(--grn)}
+.tbtn.red{background:#381620;border-color:#8a2d3a;color:var(--red)}
+.tbtn.blue{background:#162038;border-color:#2d558a;color:var(--blu)}
+.tbtn.purple{background:#201638;border-color:#5a2d8a;color:var(--pur)}
+.tbtn.amber{background:#382e16;border-color:#8a6a2d;color:var(--amb)}
+.tbtn.pink{background:#381628;border-color:#8a2d5a;color:var(--pnk)}
+.tbtn.gray{background:#282828;border-color:#555;color:#aaa}
+.tbtn.primary{background:var(--acc);border-color:#7080f0;color:#fff}
+.tbtn.danger{background:#3a1520;border-color:#8a3050;color:#ff8fa3}
+.tbtn.calc{background:#16a34a;border-color:#22c55e;color:#fff;font-weight:700;font-size:12px;padding:8px 16px;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.4)}50%{box-shadow:0 0 0 6px rgba(34,197,94,0)}}
+
+/* WORKSPACE */
+.workspace{display:flex;height:480px;min-height:350px;position:relative;flex-shrink:0}
+
+/* CANVAS */
+.canvas-wrap{flex:1;position:relative;overflow:hidden;background:radial-gradient(circle at 50% 50%,#141722,#0e1117);touch-action:none}
+.canvas-wrap::before{content:'';position:absolute;inset:0;
+background-image:radial-gradient(circle,#1e2235 1px,transparent 1px);background-size:24px 24px;opacity:.45;pointer-events:none}
+.canvas{position:absolute;inset:0}
+.wires{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
+.wires path{pointer-events:visibleStroke;cursor:pointer}
+
+/* BLOCKS */
+.block{position:absolute;z-index:10;border-radius:10px;cursor:grab;user-select:none;min-width:120px;
+box-shadow:0 4px 16px rgba(0,0,0,.35);transition:box-shadow .12s}
+.block:active{cursor:grabbing}
+.block.selected{box-shadow:0 0 0 2px var(--yel),0 0 20px rgba(251,191,36,.2)!important}
+.block-header{font-size:9px;text-transform:uppercase;letter-spacing:.7px;padding:6px 10px 2px;opacity:.6;border-radius:10px 10px 0 0}
+.block-body{padding:4px 10px 8px;font-weight:700;font-size:13px;color:#fff}
+.block-tf-disp{font-family:'Courier New',monospace;font-size:10px;margin-top:3px;padding:3px 6px;
+background:rgba(0,0,0,.3);border-radius:4px;color:#a0b8d8;text-align:center}
+.block-tf-disp .tf-num{border-bottom:1px solid rgba(255,255,255,.2);padding-bottom:2px;margin-bottom:2px}
+
+.block-tf{background:linear-gradient(135deg,#1e3a5f,#152844);border:1px solid #2a5a8f}
+.block-gain{background:linear-gradient(135deg,#2d1f4e,#1f1635);border:1px solid #5a3d8f}
+.block-int{background:linear-gradient(135deg,#3d3a1a,#2a2812);border:1px solid #8a7a2d}
+.block-der{background:linear-gradient(135deg,#2a2a2a,#1e1e1e);border:1px solid #555}
+.block-pid{background:linear-gradient(135deg,#2a1f4e,#1a1535);border:1px solid #5548a0}
+.block-sensor{background:linear-gradient(135deg,#4a1a2d,#351020);border:1px solid #8a2d50}
+.block-input{background:linear-gradient(135deg,#1a3d1a,#0f250f);border:1px solid #2d8a2d;border-radius:20px}
+.block-output{background:linear-gradient(135deg,#3d1a1a,#250f0f);border:1px solid #8a2d2d;border-radius:20px}
+.block-sum{background:linear-gradient(135deg,#1a3d3a,#122a28);border:2px solid #2d8a70;border-radius:50%;
+min-width:56px;width:56px;height:56px;display:flex;align-items:center;justify-content:center}
+.block-sum .block-header{display:none}
+.block-sum .block-body{padding:0;font-size:20px;text-align:center}
+.block-branch{background:linear-gradient(135deg,#0f1a35,#1a2a4a);border:2px solid #2563eb;border-radius:50%;
+min-width:56px;width:56px;height:56px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(59,130,246,.4)}
+.block-branch .block-header{display:none}
+.block-branch .block-body{padding:0;display:flex;align-items:center;justify-content:center;width:100%;height:100%}
+
+/* PORTS */
+.port{position:absolute;width:14px;height:14px;border-radius:50%;cursor:crosshair;z-index:20;transition:transform .12s,box-shadow .12s}
+.port::after{content:'';position:absolute;inset:3px;border-radius:50%;background:currentColor}
+.port-in{border:2px solid var(--grn);color:var(--grn);background:var(--bg)}
+.port-out{border:2px solid var(--blu);color:var(--blu);background:var(--bg)}
+.port:hover,.port:active{transform:scale(1.5)!important;box-shadow:0 0 10px currentColor}
+.port.active{border-color:var(--yel);color:var(--yel);transform:scale(1.4)!important;box-shadow:0 0 12px var(--yel)}
+.sign-label{position:absolute;font-size:11px;font-weight:700;color:var(--grn);pointer-events:none;user-select:none}
+
+/* PANEL */
+.panel{width:260px;background:var(--sf);border-left:1px solid var(--bd);display:flex;flex-direction:column;
+overflow-y:auto;z-index:30;font-size:12px}
+.panel-section{padding:10px 12px;border-bottom:1px solid var(--bd)}
+.panel-section h4{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--txm);margin-bottom:8px}
+.panel-kv{display:grid;grid-template-columns:1fr auto;gap:4px 8px;font-size:12px}
+.panel-kv .k{color:var(--txm)}.panel-kv .v{color:var(--tx);font-weight:600}
+.param-group{margin-bottom:8px}
+.param-group label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--txm);margin-bottom:3px}
+.param-group input,.param-group select{width:100%;padding:6px 8px;background:var(--sf2);border:1px solid var(--bd);
+border-radius:5px;color:var(--tx);font-size:12px;outline:none}
+.param-group input:focus{border-color:var(--acc)}
+.conn-item{display:flex;align-items:center;justify-content:space-between;padding:3px 0;font-size:11px}
+.conn-del{background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:2px 4px}
+.hint{font-size:11px;color:var(--txm);line-height:1.5}
+.hint b{color:var(--tx)}
+
+/* RESULTS SECTION */
+.results-section{background:var(--sf);border-top:2px solid var(--acc);padding:0;display:none}
+.results-section.visible{display:block}
+.results-header{padding:16px 20px 10px;display:flex;align-items:center;justify-content:space-between}
+.results-header h3{font-size:16px;color:var(--grn);letter-spacing:.5px}
+.results-close{background:none;border:1px solid var(--bd);color:var(--txm);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px}
+.results-close:hover{color:var(--red);border-color:var(--red)}
+.results-body{padding:0 20px 20px}
+.result-card{background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:16px;margin-bottom:16px}
+.result-card h4{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--acc);margin-bottom:10px}
+.tf-display{font-family:'Courier New',monospace;text-align:center;padding:12px;background:rgba(0,0,0,.3);border-radius:6px;font-size:14px;line-height:1.8}
+.tf-display .tf-line{border-bottom:2px solid var(--acc);padding-bottom:4px;margin-bottom:4px;display:inline-block}
+.metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.metric-box{background:rgba(0,0,0,.2);border-radius:8px;padding:10px 12px;text-align:center}
+.metric-box .metric-label{font-size:10px;text-transform:uppercase;color:var(--txm);margin-bottom:4px}
+.metric-box .metric-value{font-size:16px;font-weight:700;color:var(--grn)}
+.plot-container{width:100%;min-height:300px;border-radius:6px;overflow:hidden}
+.error-box{background:#3a1520;border:1px solid #8a3050;color:#ff8fa3;padding:12px;border-radius:8px;font-size:13px}
+.poles-zeros-list{font-family:'Courier New',monospace;font-size:12px;line-height:1.8;color:var(--tx)}
+.poles-zeros-list .pole{color:var(--red)}.poles-zeros-list .zero{color:var(--blu)}
+
+/* MOBILE */
+@media(max-width:768px){
+.workspace{flex-direction:column;height:380px}
+.panel{width:100%;max-height:160px;border-left:none;border-top:1px solid var(--bd)}
+.toolbar{padding:4px 6px;gap:3px}
+.tbtn{padding:5px 7px;font-size:10px;min-height:30px}
+.tbtn.calc{padding:6px 10px;font-size:11px}
+.toolbar .sep{height:20px}
+.toolbar .lbl{font-size:9px}
+.results-body{padding:0 10px 10px}
+.metrics-grid{grid-template-columns:repeat(2,1fr)}
+}
+
+/* CALC BAR */
+.calc-bar{background:var(--sf);border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);padding:12px 20px;text-align:center}
+.calc-bar button{background:#16a34a;border:2px solid #22c55e;color:#fff;font-weight:700;font-size:16px;
+padding:12px 40px;border-radius:10px;cursor:pointer;letter-spacing:1px;
+box-shadow:0 0 20px rgba(34,197,94,.3);transition:all .2s;touch-action:manipulation}
+.calc-bar button:hover,.calc-bar button:active{background:#22c55e;box-shadow:0 0 30px rgba(34,197,94,.5);transform:scale(1.03)}
+@media(max-width:768px){
+.calc-bar button{font-size:14px;padding:10px 30px;width:100%}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- TOOLBAR -->
+<div class="toolbar">
+<span class="lbl">Sinais:</span>
+<button class="tbtn green" data-add="input">&#9654; R(s)</button>
+<button class="tbtn red" data-add="output">&#9724; Y(s)</button>
+<div class="sep"></div>
+<span class="lbl">Blocos:</span>
+<button class="tbtn blue" data-add="tf">&#119891; G(s)</button>
+<button class="tbtn purple" data-add="gain">K Ganho</button>
+<button class="tbtn" data-add="sum">&#931; Somador</button>
+<button class="tbtn amber" data-add="int">&#8747; 1/s</button>
+<button class="tbtn gray" data-add="der">&#119889; s</button>
+<button class="tbtn purple" data-add="pid">PID</button>
+<button class="tbtn pink" data-add="sensor">H(s)</button>
+<button class="tbtn blue" data-add="branch">&#9679; Ramif.</button>
+<div class="sep"></div>
+<button class="tbtn danger" id="btnDel">&#10005; Del</button>
+<button class="tbtn danger" id="btnClear">&#8634; Limpar</button>
+<button class="tbtn" id="btnAuto">&#8644; Auto</button>
+<div class="sep"></div>
+<button class="tbtn calc" id="btnCalc">&#9654; CALCULAR</button>
+</div>
+
+<!-- WORKSPACE -->
+<div class="workspace">
+<div class="canvas-wrap" id="canvasWrap">
+<div class="canvas" id="canvas"></div>
+<!-- FLOATING CALC BUTTON -->
+<button id="btnCalcFloat" onclick="onCalculate()" style="
+  position:absolute;bottom:16px;right:16px;z-index:999;
+  background:#16a34a;border:2px solid #22c55e;color:#fff;
+  font-weight:700;font-size:15px;padding:14px 28px;
+  border-radius:12px;cursor:pointer;letter-spacing:1px;
+  box-shadow:0 4px 24px rgba(34,197,94,.5);
+  touch-action:manipulation;
+">&#9654; CALCULAR</button>
+<svg class="wires" id="wires">
+<defs>
+<marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+<polygon points="0 0,8 3,0 6" fill="#5b6be0"/></marker>
+<marker id="arr-g" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+<polygon points="0 0,8 3,0 6" fill="#34d399"/></marker>
+</defs>
+</svg>
+</div>
+
+<div class="panel" id="panel">
+<div class="panel-section">
+<h4>Sistema</h4>
+<div class="panel-kv">
+<span class="k">Blocos:</span><span class="v" id="pBlocks">0</span>
+<span class="k">Conex&#245;es:</span><span class="v" id="pEdges">0</span>
+<span class="k">Sele&#231;&#227;o:</span><span class="v" id="pSel">&#8212;</span>
+</div>
+</div>
+<div class="panel-section" id="paramSection">
+<h4>Par&#226;metros</h4>
+<div id="paramArea"><span class="hint">Selecione um bloco para editar.</span></div>
+</div>
+<div class="panel-section" id="connSection">
+<h4>Conex&#245;es do Bloco</h4>
+<div id="connArea"><span class="hint">Selecione um bloco.</span></div>
+</div>
+<div class="panel-section">
+<h4>Dicas</h4>
+<div class="hint">
+<b>Adicionar:</b> clique nos bot&#245;es acima<br>
+<b>Mover:</b> arraste os blocos<br>
+<b>Conectar:</b> toque na <span style="color:var(--blu)">porta azul</span> (sa&#237;da) depois na <span style="color:var(--grn)">porta verde</span> (entrada)<br>
+<b>Calcular:</b> clique <span style="color:#22c55e;font-weight:700">CALCULAR</span><br>
+<b>Mobile:</b> toque e arraste funciona!
+</div>
+</div>
+</div>
+</div>
+
+<!-- CALC BAR -->
+<div class="calc-bar">
+<button id="btnCalc2" onclick="onCalculate()">&#9654; CALCULAR DIAGRAMA</button>
+</div>
+
+<!-- RESULTS -->
+<div class="results-section" id="results">
+<div class="results-header">
+<h3>Resultados da An&#225;lise</h3>
+<button class="results-close" id="btnCloseResults">Fechar</button>
+</div>
+<div class="results-body" id="resultsBody"></div>
+</div>
+
+</div>
+
+<script>
+/* ============================================================
+   MINIMAL STREAMLIT COMPONENT PROTOCOL (inline, no CDN needed)
+   ============================================================ */
+(function(){
+  var S={};
+  S.RENDER_EVENT='streamlit:render';
+  S.events=document.createElement('div');
+  S.events._handlers={};
+  S.events.addEventListener=function(type,fn){
+    if(!this._handlers[type])this._handlers[type]=[];
+    this._handlers[type].push(fn);
+  };
+  S.events.dispatchEvent=function(evt){
+    var h=this._handlers[evt.type]||[];
+    h.forEach(function(fn){fn(evt);});
+  };
+  S.setComponentReady=function(){
+    window.parent.postMessage({isStreamlitMessage:true,type:'streamlit:componentReady',apiVersion:1},'*');
+  };
+  S.setComponentValue=function(value){
+    window.parent.postMessage({isStreamlitMessage:true,type:'streamlit:setComponentValue',value:value},'*');
+  };
+  S.setFrameHeight=function(h){
+    window.parent.postMessage({isStreamlitMessage:true,type:'streamlit:setFrameHeight',height:h},'*');
+  };
+  window.addEventListener('message',function(event){
+    if(event.data&&event.data.type==='streamlit:render'){
+      var evt={type:S.RENDER_EVENT,detail:event.data};
+      S.events.dispatchEvent(evt);
+    }
+  });
+  window.Streamlit=S;
+})();
+</script>
+
+<script>
+/* ============================================================
+   POLYNOMIAL ARITHMETIC
+   Polynomials: [a0, a1, a2, ...] = a0 + a1*s + a2*s^2 + ...
+   ============================================================ */
+function polyTrim(p){
+  var a=p.slice();
+  while(a.length>1&&Math.abs(a[a.length-1])<1e-14)a.pop();
+  return a.length?a:[0];
+}
+function polyAdd(a,b){
+  var len=Math.max(a.length,b.length),r=[];
+  for(var i=0;i<len;i++)r.push((a[i]||0)+(b[i]||0));
+  return polyTrim(r);
+}
+function polySub(a,b){
+  var len=Math.max(a.length,b.length),r=[];
+  for(var i=0;i<len;i++)r.push((a[i]||0)-(b[i]||0));
+  return polyTrim(r);
+}
+function polyMul(a,b){
+  if(!a.length||!b.length)return[0];
+  var r=[];for(var i=0;i<a.length+b.length-1;i++)r.push(0);
+  for(var i=0;i<a.length;i++)for(var j=0;j<b.length;j++)r[i+j]+=a[i]*b[j];
+  return polyTrim(r);
+}
+function polyScale(a,k){return a.map(function(c){return c*k;});}
+function polyEval(p,x){
+  var r=0;for(var i=p.length-1;i>=0;i--)r=r*x+p[i];return r;
+}
+function polyDeg(p){p=polyTrim(p);return p.length-1;}
+
+/* ============================================================
+   COMPLEX ARITHMETIC
+   ============================================================ */
+function cNew(re,im){return{re:re,im:im||0};}
+function cAdd(a,b){return{re:a.re+b.re,im:a.im+b.im};}
+function cSub(a,b){return{re:a.re-b.re,im:a.im-b.im};}
+function cMul(a,b){return{re:a.re*b.re-a.im*b.im,im:a.re*b.im+a.im*b.re};}
+function cDiv(a,b){
+  var d=b.re*b.re+b.im*b.im;
+  if(d<1e-30)return{re:0,im:0};
+  return{re:(a.re*b.re+a.im*b.im)/d,im:(a.im*b.re-a.re*b.im)/d};
+}
+function cAbs(a){return Math.sqrt(a.re*a.re+a.im*a.im);}
+function cArg(a){return Math.atan2(a.im,a.re);}
+
+function complexEvalPoly(poly,z){
+  var r={re:0,im:0};
+  for(var i=poly.length-1;i>=0;i--){r=cMul(r,z);r.re+=poly[i];}
+  return r;
+}
+
+/* ============================================================
+   POLYNOMIAL FRACTION ARITHMETIC
+   PF: {n: poly, d: poly} = n(s)/d(s)
+   ============================================================ */
+function pfNew(n,d){return{n:n||[0],d:d||[1]};}
+function pfConst(c){return{n:[c],d:[1]};}
+function pfIsZero(a){var t=polyTrim(a.n);return t.length===1&&Math.abs(t[0])<1e-14;}
+function pfAdd(a,b){return{n:polyAdd(polyMul(a.n,b.d),polyMul(b.n,a.d)),d:polyMul(a.d,b.d)};}
+function pfSub(a,b){return{n:polySub(polyMul(a.n,b.d),polyMul(b.n,a.d)),d:polyMul(a.d,b.d)};}
+function pfMul(a,b){return{n:polyMul(a.n,b.n),d:polyMul(a.d,b.d)};}
+function pfDiv(a,b){return{n:polyMul(a.n,b.d),d:polyMul(a.d,b.n)};}
+function pfNeg(a){return{n:polyScale(a.n,-1),d:a.d};}
+
+/* ============================================================
+   POLYNOMIAL PARSER
+   Parses strings like "s^2+3s+1", "2*s^3-s+5", "3", "s"
+   ============================================================ */
+function parsePoly(str){
+  str=(str||'').replace(/\s+/g,'');
+  if(!str)return[0];
+  if(!/s/i.test(str)){var v=parseFloat(str);return[isNaN(v)?0:v];}
+
+  // Normalize: insert '+' before '-' unless after '^' or start
+  var norm='';
+  for(var i=0;i<str.length;i++){
+    if(str[i]==='-'&&i>0&&str[i-1]!=='^'&&str[i-1]!=='+'&&str[i-1]!=='-'&&str[i-1]!=='*')norm+='+';
+    norm+=str[i];
+  }
+  var terms=norm.split('+').filter(function(t){return t;});
+  var coeffs={};
+
+  terms.forEach(function(term){
+    term=term.replace(/\*/g,'');
+    var m;
+    if(m=term.match(/^([+-]?\d*\.?\d*)s\^(\d+)$/)){
+      var c=m[1]===''||m[1]==='+'?1:m[1]==='-'?-1:parseFloat(m[1]);
+      coeffs[parseInt(m[2])]=(coeffs[parseInt(m[2])]||0)+c;
+    }else if(m=term.match(/^([+-]?\d*\.?\d*)s$/)){
+      var c=m[1]===''||m[1]==='+'?1:m[1]==='-'?-1:parseFloat(m[1]);
+      coeffs[1]=(coeffs[1]||0)+c;
+    }else{
+      var c=parseFloat(term);
+      if(!isNaN(c))coeffs[0]=(coeffs[0]||0)+c;
+    }
+  });
+
+  var keys=Object.keys(coeffs).map(Number);
+  if(!keys.length)return[0];
+  var maxP=Math.max.apply(null,keys);
+  var result=[];
+  for(var i=0;i<=maxP;i++)result.push(coeffs[i]||0);
+  return polyTrim(result);
+}
+
+/* ============================================================
+   POLYNOMIAL FORMATTING
+   ============================================================ */
+function formatNum(n){
+  if(Math.abs(n-Math.round(n))<1e-8)return Math.round(n).toString();
+  return n.toFixed(4).replace(/0+$/,'').replace(/\.$/,'');
+}
+function formatPoly(coeffs){
+  coeffs=polyTrim(coeffs);
+  var terms=[];
+  for(var i=coeffs.length-1;i>=0;i--){
+    var c=coeffs[i];
+    if(Math.abs(c)<1e-10)continue;
+    var t='';
+    if(i===0){t=formatNum(c);}
+    else if(i===1){
+      if(Math.abs(c-1)<1e-10)t='s';
+      else if(Math.abs(c+1)<1e-10)t='-s';
+      else t=formatNum(c)+'s';
+    }else{
+      if(Math.abs(c-1)<1e-10)t='s^'+i;
+      else if(Math.abs(c+1)<1e-10)t='-s^'+i;
+      else t=formatNum(c)+'s^'+i;
+    }
+    terms.push(t);
+  }
+  if(!terms.length)return'0';
+  var s=terms[0];
+  for(var i=1;i<terms.length;i++){
+    if(terms[i][0]==='-')s+=' - '+terms[i].slice(1);
+    else s+=' + '+terms[i];
+  }
+  return s;
+}
+
+/* ============================================================
+   BLOCK TRANSFER FUNCTION EXTRACTION
+   ============================================================ */
+function getBlockTF(node){
+  var p=node.params||{};
+  var type=node.type;
+  if(type==='tf'||type==='sensor')return pfNew(parsePoly(p.num||'1'),parsePoly(p.den||'1'));
+  if(type==='gain')return pfConst(parseFloat(p.k)||1);
+  if(type==='int')return pfNew([1],[0,1]);
+  if(type==='der')return pfNew([0,1],[1]);
+  if(type==='pid'){
+    var kp=parseFloat(p.kp)||0,ki=parseFloat(p.ki)||0,kd=parseFloat(p.kd)||0;
+    if(ki===0&&kd===0)return pfConst(kp||1);
+    if(ki===0)return pfNew([kp,kd],[1]);
+    return pfNew([ki,kp,kd],[0,1]);
+  }
+  return pfConst(1);
+}
+
+/* ============================================================
+   SIGNAL FLOW GRAPH SOLVER
+   Builds a linear system of polynomial-fraction equations
+   and solves via Gaussian elimination to find T(s) = Y(s)/R(s)
+   ============================================================ */
+function solveDiagram(nodes,edges){
+  if(!nodes.length)return{error:'Adicione blocos ao diagrama.'};
+
+  var inputNode=null,outputNode=null;
+  nodes.forEach(function(n){
+    if(n.type==='input')inputNode=n;
+    if(n.type==='output')outputNode=n;
+  });
+  if(!inputNode)return{error:'Adicione um bloco de Entrada R(s).'};
+  if(!outputNode)return{error:'Adicione um bloco de Sa\u00edda Y(s).'};
+  if(!edges.length)return{error:'Conecte os blocos entre si.'};
+
+  var n=nodes.length;
+  var idxMap={};
+  nodes.forEach(function(nd,i){idxMap[nd.id]=i;});
+
+  // Build augmented matrix [A | b] where A*x = b
+  var A=[],b=[];
+  for(var i=0;i<n;i++){
+    A.push([]);
+    for(var j=0;j<n;j++)A[i].push(pfConst(0));
+    b.push(pfConst(0));
+  }
+
+  for(var i=0;i<n;i++){
+    var nd=nodes[i];
+    A[i][i]=pfConst(1);
+
+    if(nd.type==='input'){
+      b[i]=pfConst(1);
+      continue;
+    }
+
+    var incoming=edges.filter(function(e){return e.dst===nd.id;});
+
+    if(nd.type==='sum'){
+      var signs=((nd.params||{}).signs||'+ -').trim().split(/\s+/);
+      incoming.forEach(function(e){
+        var srcIdx=idxMap[e.src];
+        if(srcIdx===undefined)return;
+        var portIdx=parseInt((e.dstPort||'in0').replace('in',''))||0;
+        var sign=(signs[portIdx]==='-')?-1:1;
+        A[i][srcIdx]=pfSub(A[i][srcIdx],pfConst(sign));
       });
-
-      window.addEventListener("mouseup", ()=>{
-        if(drag){
-          drag = null;
-          pushToStreamlit();
-        }
+    }else{
+      var tf=getBlockTF(nd);
+      incoming.forEach(function(e){
+        var srcIdx=idxMap[e.src];
+        if(srcIdx===undefined)return;
+        A[i][srcIdx]=pfSub(A[i][srcIdx],tf);
       });
+    }
+  }
 
-      // Click on empty canvas cancels connection
-      canvas.addEventListener("mousedown",(ev)=>{
-        if(ev.target === canvas){
-          if(connectFrom){
-            connectFrom = null;
-            clearPortHighlights();
-          }
-          setSel(null);
-        }
-      });
+  // Gaussian elimination - forward
+  for(var col=0;col<n;col++){
+    var pivotRow=-1;
+    for(var row=col;row<n;row++){
+      if(!pfIsZero(A[row][col])){pivotRow=row;break;}
+    }
+    if(pivotRow<0)return{error:'Sistema singular - verifique as conex\u00f5es do diagrama.'};
+    if(pivotRow!==col){
+      var tmpA=A[col];A[col]=A[pivotRow];A[pivotRow]=tmpA;
+      var tmpB=b[col];b[col]=b[pivotRow];b[pivotRow]=tmpB;
+    }
+    for(var row=col+1;row<n;row++){
+      if(pfIsZero(A[row][col]))continue;
+      var factor=pfDiv(A[row][col],A[col][col]);
+      for(var j=col;j<n;j++)A[row][j]=pfSub(A[row][j],pfMul(factor,A[col][j]));
+      b[row]=pfSub(b[row],pfMul(factor,b[col]));
+    }
+  }
 
-      window.addEventListener("keydown",(ev)=>{
-        // Don't capture if focus is in an input field
-        if(ev.target.tagName === "INPUT") return;
-        if(ev.key==="Delete" || ev.key==="Backspace") removeSelected();
-        if(ev.ctrlKey && (ev.key==="d" || ev.key==="D")){
-          ev.preventDefault();
-          duplicateSelected();
-        }
-      });
+  // Back substitution
+  var x=[];
+  for(var i=0;i<n;i++)x.push(pfConst(0));
+  for(var i=n-1;i>=0;i--){
+    var sum=b[i];
+    for(var j=i+1;j<n;j++)sum=pfSub(sum,pfMul(A[i][j],x[j]));
+    x[i]=pfDiv(sum,A[i][i]);
+  }
 
-      /* ---------- Toolbar buttons ---------- */
+  var outputIdx=idxMap[outputNode.id];
+  var tf={n:polyTrim(x[outputIdx].n),d:polyTrim(x[outputIdx].d)};
 
-      document.querySelectorAll("button[data-add]").forEach(btn=>{
-        btn.addEventListener("click", ()=> addNode(btn.getAttribute("data-add")));
-      });
-      document.getElementById("btnDelete").addEventListener("click", removeSelected);
-      document.getElementById("btnDuplicate").addEventListener("click", duplicateSelected);
-      document.getElementById("btnClear").addEventListener("click", clearAll);
-      document.getElementById("btnAuto").addEventListener("click", autoArrange);
+  // Normalize: positive leading coefficient in denominator
+  if(tf.d[tf.d.length-1]<0){
+    tf.n=polyScale(tf.n,-1);
+    tf.d=polyScale(tf.d,-1);
+  }
 
-      /* ---------- Streamlit communication ---------- */
+  // Normalize coefficients by leading den coefficient
+  var lc=tf.d[tf.d.length-1];
+  if(Math.abs(lc)>1e-14&&Math.abs(lc-1)>1e-10){
+    tf.n=polyScale(tf.n,1/lc);
+    tf.d=polyScale(tf.d,1/lc);
+  }
 
-      let sendTimer = null;
-      function pushToStreamlit(){
-        if(window.Streamlit){
-          window.Streamlit.setComponentValue(JSON.stringify(model));
-          window.Streamlit.setFrameHeight(document.body.scrollHeight);
-        }
+  return{tf:tf,error:null};
+}
+
+/* ============================================================
+   ROOT FINDING (Durand-Kerner method)
+   ============================================================ */
+function findRoots(poly){
+  poly=polyTrim(poly);
+  var n=poly.length-1;
+  if(n<=0)return[];
+
+  var lc=poly[n];
+  var p=poly.map(function(c){return c/lc;});
+
+  if(n===1)return[cNew(-p[0],0)];
+  if(n===2){
+    var a=1,bb=p[1],cc=p[0];
+    var disc=bb*bb-4*a*cc;
+    if(disc>=0)return[cNew((-bb+Math.sqrt(disc))/2,0),cNew((-bb-Math.sqrt(disc))/2,0)];
+    return[cNew(-bb/2,Math.sqrt(-disc)/2),cNew(-bb/2,-Math.sqrt(-disc)/2)];
+  }
+
+  // Durand-Kerner iteration
+  var roots=[];
+  for(var i=0;i<n;i++){
+    var angle=2*Math.PI*i/n+0.4;
+    var r=1.0+0.5*i/n;
+    roots.push(cNew(r*Math.cos(angle),r*Math.sin(angle)));
+  }
+
+  for(var iter=0;iter<2000;iter++){
+    var maxDelta=0;
+    for(var i=0;i<n;i++){
+      var val=complexEvalPoly(p,roots[i]);
+      var prod=cNew(1,0);
+      for(var j=0;j<n;j++){
+        if(j===i)continue;
+        prod=cMul(prod,cSub(roots[i],roots[j]));
       }
-      function pushToStreamlitDebounced(){
-        clearTimeout(sendTimer);
-        sendTimer = setTimeout(pushToStreamlit, 250);
-      }
+      if(cAbs(prod)<1e-30)continue;
+      var delta=cDiv(val,prod);
+      roots[i].re-=delta.re;
+      roots[i].im-=delta.im;
+      maxDelta=Math.max(maxDelta,cAbs(delta));
+    }
+    if(maxDelta<1e-12)break;
+  }
 
-      function onRender(event){
-        const data = event.detail.args || {};
-        try{
-          const incoming = JSON.parse(data.model || "{}");
-          if(incoming && incoming.nodes && incoming.edges){
-            model = incoming;
-          }
-        }catch(err){}
+  roots.forEach(function(r){if(Math.abs(r.im)<1e-8)r.im=0;});
+  return roots;
+}
+
+/* ============================================================
+   STEP RESPONSE (Stehfest numerical inverse Laplace)
+   ============================================================ */
+function factorial(n){var r=1;for(var i=2;i<=n;i++)r*=i;return r;}
+
+function stehfestWeights(N){
+  var V=[];
+  for(var i=1;i<=N;i++){
+    var sum=0;
+    var kMin=Math.floor((i+1)/2);
+    var kMax=Math.min(i,N/2);
+    for(var k=kMin;k<=kMax;k++){
+      var num=Math.pow(k,N/2)*factorial(2*k);
+      var den=factorial(N/2-k)*factorial(k)*factorial(k-1)*factorial(i-k)*factorial(2*k-i);
+      sum+=num/den;
+    }
+    V.push(Math.pow(-1,N/2+i)*sum);
+  }
+  return V;
+}
+
+var STEHFEST_N=14;
+var STEHFEST_V=stehfestWeights(STEHFEST_N);
+
+function computeStepResponse(tf,tMax,nPoints){
+  var ln2=Math.LN2;
+  var times=[],values=[];
+
+  for(var i=0;i<nPoints;i++){
+    var t=(i+1)*tMax/nPoints;
+    times.push(t);
+    var sum=0;
+    for(var j=0;j<STEHFEST_N;j++){
+      var s_val=(j+1)*ln2/t;
+      var numVal=polyEval(tf.n,s_val);
+      var denVal=polyEval(tf.d,s_val)*s_val; // T(s)/s for step
+      if(Math.abs(denVal)<1e-30)continue;
+      sum+=STEHFEST_V[j]*numVal/denVal;
+    }
+    values.push(sum*ln2/t);
+  }
+  return{t:times,y:values};
+}
+
+/* ============================================================
+   BODE COMPUTATION
+   ============================================================ */
+function computeBode(tf,wMin,wMax,nPoints){
+  var freqs=[],mags=[],phases=[];
+  var logMin=Math.log10(wMin),logMax=Math.log10(wMax);
+
+  for(var i=0;i<nPoints;i++){
+    var w=Math.pow(10,logMin+i*(logMax-logMin)/(nPoints-1));
+    freqs.push(w);
+    var jw=cNew(0,w);
+    var numC=complexEvalPoly(tf.n,jw);
+    var denC=complexEvalPoly(tf.d,jw);
+    var T=cDiv(numC,denC);
+    var mag=cAbs(T);
+    mags.push(mag>1e-30?20*Math.log10(mag):-600);
+    phases.push(cArg(T)*180/Math.PI);
+  }
+
+  // Unwrap phase
+  for(var i=1;i<phases.length;i++){
+    while(phases[i]-phases[i-1]>180)phases[i]-=360;
+    while(phases[i]-phases[i-1]<-180)phases[i]+=360;
+  }
+
+  return{w:freqs,mag:mags,phase:phases};
+}
+
+/* ============================================================
+   AUTO RANGES
+   ============================================================ */
+function autoTimeRange(tf){
+  var poles=findRoots(tf.d);
+  if(!poles.length)return 10;
+  var minAbsReal=Infinity;
+  poles.forEach(function(p){if(Math.abs(p.re)>1e-6)minAbsReal=Math.min(minAbsReal,Math.abs(p.re));});
+  if(minAbsReal===Infinity)return 10;
+  return Math.min(100,Math.max(2,7/minAbsReal));
+}
+
+function autoFreqRange(tf){
+  var poles=findRoots(tf.d);
+  var zeros=findRoots(tf.n);
+  var all=poles.concat(zeros);
+  if(!all.length)return{wMin:0.01,wMax:1000};
+  var freqs=all.map(function(r){return Math.sqrt(r.re*r.re+r.im*r.im);}).filter(function(f){return f>1e-6;});
+  if(!freqs.length)return{wMin:0.01,wMax:1000};
+  var minF=Math.min.apply(null,freqs),maxF=Math.max.apply(null,freqs);
+  return{wMin:Math.max(0.001,minF/20),wMax:Math.min(100000,maxF*20)};
+}
+
+/* ============================================================
+   PERFORMANCE METRICS
+   ============================================================ */
+function computePerformance(t,y){
+  if(!y.length)return{};
+  // Estimate final value from last 10%
+  var last=y.slice(Math.floor(y.length*0.9));
+  var yf=last.reduce(function(a,b){return a+b;},0)/last.length;
+  var yMax=Math.max.apply(null,y);
+  var yMin=Math.min.apply(null,y);
+
+  var overshoot=Math.abs(yf)>1e-6?Math.max(0,((yMax-yf)/Math.abs(yf))*100):0;
+
+  // Rise time (10% to 90%)
+  var y10=yf*0.1,y90=yf*0.9;
+  var t10=null,t90=null;
+  if(yf>0){
+    for(var i=0;i<y.length;i++){if(t10===null&&y[i]>=y10)t10=t[i];if(t90===null&&y[i]>=y90){t90=t[i];break;}}
+  }
+  var riseTime=(t10!==null&&t90!==null)?(t90-t10):NaN;
+
+  // Settling time (2% band)
+  var settleTime=NaN;
+  if(Math.abs(yf)>1e-6){
+    for(var i=y.length-1;i>=0;i--){
+      if(Math.abs(y[i]-yf)>0.02*Math.abs(yf)){settleTime=i<y.length-1?t[i+1]:t[i];break;}
+    }
+  }
+
+  // Peak time
+  var peakTime=NaN;
+  var peakIdx=y.indexOf(yMax);
+  if(peakIdx>=0)peakTime=t[peakIdx];
+
+  return{
+    'Valor Final':formatNum(yf),
+    'Sobressinal':formatNum(overshoot)+'%',
+    'Tempo Subida':isNaN(riseTime)?'N/A':formatNum(riseTime)+' s',
+    'Tempo Acomoda\u00e7\u00e3o':isNaN(settleTime)?'N/A':formatNum(settleTime)+' s',
+    'Valor Pico':formatNum(yMax),
+    'Tempo Pico':isNaN(peakTime)?'N/A':formatNum(peakTime)+' s'
+  };
+}
+
+/* ============================================================
+   RESULTS RENDERING
+   ============================================================ */
+function renderResults(tf){
+  var resultsDiv=document.getElementById('results');
+  var body=document.getElementById('resultsBody');
+  resultsDiv.classList.add('visible');
+  body.innerHTML='';
+
+  var hasPlotly=typeof Plotly!=='undefined';
+  var darkLayout={
+    paper_bgcolor:'#1a1d2e',plot_bgcolor:'#0e1117',
+    font:{color:'#e0e4f0',size:12},
+    xaxis:{gridcolor:'#252840',zerolinecolor:'#333654'},
+    yaxis:{gridcolor:'#252840',zerolinecolor:'#333654'},
+    margin:{l:60,r:30,t:40,b:50}
+  };
+
+  // 1. Transfer Function display
+  var numStr=formatPoly(tf.n);
+  var denStr=formatPoly(tf.d);
+  var maxLen=Math.max(numStr.length,denStr.length);
+  var line='';for(var i=0;i<maxLen+4;i++)line+='\u2500';
+
+  var card1=document.createElement('div');
+  card1.className='result-card';
+  card1.innerHTML='<h4>Fun\u00e7\u00e3o de Transfer\u00eancia T(s)</h4>'+
+    '<div class="tf-display"><div style="margin-bottom:6px;color:var(--txm);font-size:12px">T(s) =</div>'+
+    '<div style="display:inline-block;text-align:center">'+
+    '<div style="padding:0 8px">'+escHtml(numStr)+'</div>'+
+    '<div style="border-top:2px solid var(--acc);padding:4px 8px 0">'+escHtml(denStr)+'</div>'+
+    '</div></div>';
+  body.appendChild(card1);
+
+  // 2. Poles and Zeros
+  var poles=findRoots(tf.d);
+  var zeros=findRoots(tf.n);
+  var stable=poles.every(function(p){return p.re<1e-6;});
+
+  var card2=document.createElement('div');
+  card2.className='result-card';
+  var pzHtml='<h4>Polos e Zeros</h4>';
+  pzHtml+='<div style="display:flex;gap:20px;flex-wrap:wrap">';
+  pzHtml+='<div><b style="color:var(--red)">Polos ('+poles.length+'):</b><div class="poles-zeros-list">';
+  poles.forEach(function(p){
+    pzHtml+='<div class="pole">'+formatComplex(p)+'</div>';
+  });
+  if(!poles.length)pzHtml+='<div>Nenhum</div>';
+  pzHtml+='</div></div>';
+  pzHtml+='<div><b style="color:var(--blu)">Zeros ('+zeros.length+'):</b><div class="poles-zeros-list">';
+  zeros.forEach(function(z){
+    pzHtml+='<div class="zero">'+formatComplex(z)+'</div>';
+  });
+  if(!zeros.length)pzHtml+='<div>Nenhum</div>';
+  pzHtml+='</div></div></div>';
+  pzHtml+='<div style="margin-top:8px;padding:6px 10px;border-radius:6px;font-weight:700;font-size:13px;'+
+    (stable?'background:#16382a;color:#34d399">Sistema EST\u00c1VEL':
+    'background:#3a1520;color:#f87171">Sistema INST\u00c1VEL')+
+    '</div>';
+  card2.innerHTML=pzHtml;
+  body.appendChild(card2);
+
+  // 3. Step Response
+  var tMax=autoTimeRange(tf);
+  var step=computeStepResponse(tf,tMax,500);
+
+  var card3=document.createElement('div');
+  card3.className='result-card';
+  card3.innerHTML='<h4>Resposta ao Degrau</h4><div id="plotStep" class="plot-container"></div>';
+  body.appendChild(card3);
+
+  if(hasPlotly){
+    var stepLayout=JSON.parse(JSON.stringify(darkLayout));
+    stepLayout.title={text:'Resposta ao Degrau Unit\u00e1rio',font:{size:14}};
+    stepLayout.xaxis.title='Tempo (s)';
+    stepLayout.yaxis.title='Amplitude';
+    stepLayout.shapes=[{type:'line',x0:0,x1:tMax,y0:step.y[step.y.length-1],y1:step.y[step.y.length-1],
+      line:{color:'rgba(251,191,36,0.4)',width:1,dash:'dash'}}];
+    Plotly.newPlot('plotStep',[{x:step.t,y:step.y,type:'scatter',mode:'lines',
+      line:{color:'#5b6be0',width:2.5},name:'y(t)'}],stepLayout,{responsive:true,displayModeBar:false});
+  }else{
+    document.getElementById('plotStep').innerHTML='<canvas id="canvasStep"></canvas>';
+    drawCanvasChart('canvasStep',step.t,step.y,'Tempo (s)','Amplitude','#5b6be0');
+  }
+
+  // 4. Performance Metrics
+  var perf=computePerformance(step.t,step.y);
+  var card4=document.createElement('div');
+  card4.className='result-card';
+  var perfHtml='<h4>Desempenho</h4><div class="metrics-grid">';
+  Object.keys(perf).forEach(function(k){
+    perfHtml+='<div class="metric-box"><div class="metric-label">'+k+'</div><div class="metric-value">'+perf[k]+'</div></div>';
+  });
+  perfHtml+='</div>';
+  card4.innerHTML=perfHtml;
+  body.appendChild(card4);
+
+  // 5. Bode Plot
+  var fr=autoFreqRange(tf);
+  var bode=computeBode(tf,fr.wMin,fr.wMax,500);
+
+  var card5=document.createElement('div');
+  card5.className='result-card';
+  card5.innerHTML='<h4>Diagrama de Bode</h4><div id="plotBodeMag" class="plot-container" style="margin-bottom:10px"></div>'+
+    '<div id="plotBodePhase" class="plot-container"></div>';
+  body.appendChild(card5);
+
+  if(hasPlotly){
+    var magLayout=JSON.parse(JSON.stringify(darkLayout));
+    magLayout.title={text:'Bode - Magnitude',font:{size:14}};
+    magLayout.xaxis.title='\u03c9 (rad/s)';magLayout.xaxis.type='log';
+    magLayout.yaxis.title='Magnitude (dB)';
+    magLayout.shapes=[{type:'line',x0:fr.wMin,x1:fr.wMax,y0:0,y1:0,
+      line:{color:'rgba(251,191,36,0.3)',width:1,dash:'dash'}}];
+    Plotly.newPlot('plotBodeMag',[{x:bode.w,y:bode.mag,type:'scatter',mode:'lines',
+      line:{color:'#60a5fa',width:2.5},name:'|T(j\u03c9)|'}],magLayout,{responsive:true,displayModeBar:false});
+
+    var phLayout=JSON.parse(JSON.stringify(darkLayout));
+    phLayout.title={text:'Bode - Fase',font:{size:14}};
+    phLayout.xaxis.title='\u03c9 (rad/s)';phLayout.xaxis.type='log';
+    phLayout.yaxis.title='Fase (\u00b0)';
+    phLayout.shapes=[{type:'line',x0:fr.wMin,x1:fr.wMax,y0:-180,y1:-180,
+      line:{color:'rgba(248,113,113,0.3)',width:1,dash:'dash'}}];
+    Plotly.newPlot('plotBodePhase',[{x:bode.w,y:bode.phase,type:'scatter',mode:'lines',
+      line:{color:'#f472b6',width:2.5},name:'\u2220T(j\u03c9)'}],phLayout,{responsive:true,displayModeBar:false});
+  }else{
+    document.getElementById('plotBodeMag').innerHTML='<canvas id="canvasBodeMag"></canvas>';
+    document.getElementById('plotBodePhase').innerHTML='<canvas id="canvasBodePhase"></canvas>';
+    drawCanvasChart('canvasBodeMag',bode.w.map(function(w){return Math.log10(w);}),bode.mag,'log \u03c9','dB','#60a5fa');
+    drawCanvasChart('canvasBodePhase',bode.w.map(function(w){return Math.log10(w);}),bode.phase,'log \u03c9','\u00b0','#f472b6');
+  }
+
+  // 6. Poles/Zeros plot
+  if(hasPlotly&&(poles.length||zeros.length)){
+    var card6=document.createElement('div');
+    card6.className='result-card';
+    card6.innerHTML='<h4>Mapa de Polos e Zeros</h4><div id="plotPZ" class="plot-container"></div>';
+    body.appendChild(card6);
+
+    var traces=[];
+    if(poles.length){
+      traces.push({x:poles.map(function(p){return p.re;}),y:poles.map(function(p){return p.im;}),
+        mode:'markers',marker:{symbol:'x',size:14,color:'#f87171',line:{width:2}},name:'Polos',type:'scatter'});
+    }
+    if(zeros.length){
+      traces.push({x:zeros.map(function(z){return z.re;}),y:zeros.map(function(z){return z.im;}),
+        mode:'markers',marker:{symbol:'circle-open',size:14,color:'#60a5fa',line:{width:2}},name:'Zeros',type:'scatter'});
+    }
+    var pzLayout=JSON.parse(JSON.stringify(darkLayout));
+    pzLayout.title={text:'Plano s - Polos (\u00d7) e Zeros (\u25cb)',font:{size:14}};
+    pzLayout.xaxis.title='Real';pzLayout.yaxis.title='Imagin\u00e1rio';
+    pzLayout.yaxis.scaleanchor='x';
+    pzLayout.shapes=[{type:'line',x0:0,x1:0,y0:-1e6,y1:1e6,line:{color:'rgba(251,191,36,0.2)',width:1}}];
+    Plotly.newPlot('plotPZ',traces,pzLayout,{responsive:true,displayModeBar:false});
+  }
+
+  // Scroll to results
+  resultsDiv.scrollIntoView({behavior:'smooth'});
+
+  // Update Streamlit frame height
+  try{Streamlit.setFrameHeight(document.body.scrollHeight+50);}catch(ex){}
+}
+
+function formatComplex(c){
+  if(Math.abs(c.im)<1e-8)return formatNum(c.re);
+  var sign=c.im>=0?' + ':' - ';
+  return formatNum(c.re)+sign+formatNum(Math.abs(c.im))+'j';
+}
+
+/* ============================================================
+   CANVAS FALLBACK CHARTS (if Plotly CDN fails)
+   ============================================================ */
+function drawCanvasChart(canvasId,xData,yData,xLabel,yLabel,color){
+  var canvas=document.getElementById(canvasId);
+  if(!canvas)return;
+  var parent=canvas.parentElement;
+  var w=canvas.width=parent.clientWidth||600;
+  var h=canvas.height=300;
+  var ctx=canvas.getContext('2d');
+
+  var margin={left:60,right:20,top:20,bottom:40};
+  var pw=w-margin.left-margin.right;
+  var ph=h-margin.top-margin.bottom;
+
+  var validY=yData.filter(function(v){return isFinite(v);});
+  if(!validY.length)return;
+  var xMin=Math.min.apply(null,xData),xMax=Math.max.apply(null,xData);
+  var yMin=Math.min.apply(null,validY),yMax=Math.max.apply(null,validY);
+  var yPad=(yMax-yMin)*0.1||1;yMin-=yPad;yMax+=yPad;
+
+  function mapX(x){return margin.left+(x-xMin)/(xMax-xMin)*pw;}
+  function mapY(y){return margin.top+ph-(y-yMin)/(yMax-yMin)*ph;}
+
+  ctx.fillStyle='#0e1117';ctx.fillRect(0,0,w,h);
+
+  // Grid
+  ctx.strokeStyle='#252840';ctx.lineWidth=0.5;
+  for(var i=0;i<=5;i++){
+    var gy=margin.top+ph*i/5;
+    ctx.beginPath();ctx.moveTo(margin.left,gy);ctx.lineTo(w-margin.right,gy);ctx.stroke();
+    ctx.fillStyle='#8890b0';ctx.font='10px system-ui';ctx.textAlign='right';
+    ctx.fillText(formatNum(yMax-(yMax-yMin)*i/5),margin.left-5,gy+4);
+  }
+
+  // Data
+  ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();
+  var started=false;
+  for(var i=0;i<xData.length;i++){
+    if(!isFinite(yData[i])){started=false;continue;}
+    var px=mapX(xData[i]),py=mapY(yData[i]);
+    py=Math.max(margin.top,Math.min(margin.top+ph,py));
+    if(!started){ctx.moveTo(px,py);started=true;}else ctx.lineTo(px,py);
+  }
+  ctx.stroke();
+
+  // Labels
+  ctx.fillStyle='#8890b0';ctx.font='11px system-ui';ctx.textAlign='center';
+  ctx.fillText(xLabel,margin.left+pw/2,h-5);
+  ctx.save();ctx.translate(12,margin.top+ph/2);ctx.rotate(-Math.PI/2);ctx.fillText(yLabel,0,0);ctx.restore();
+}
+
+/* ============================================================
+   CALCULAR BUTTON HANDLER
+   ============================================================ */
+function onCalculate(){
+  var result=solveDiagram(model.nodes,model.edges);
+  if(result.error){
+    var resultsDiv=document.getElementById('results');
+    var body=document.getElementById('resultsBody');
+    resultsDiv.classList.add('visible');
+    body.innerHTML='<div class="error-box">'+escHtml(result.error)+'</div>';
+    resultsDiv.scrollIntoView({behavior:'smooth'});
+    try{Streamlit.setFrameHeight(document.body.scrollHeight+50);}catch(ex){}
+    return;
+  }
+  renderResults(result.tf);
+}
+
+document.getElementById('btnCalc').addEventListener('click',onCalculate);
+document.getElementById('btnCloseResults').addEventListener('click',function(){
+  document.getElementById('results').classList.remove('visible');
+  try{Streamlit.setFrameHeight(document.body.scrollHeight+50);}catch(ex){}
+});
+
+/* ============================================================
+   EDITOR STATE
+   ============================================================ */
+var model = {nodes:[], edges:[]};
+var selId = null;
+var dragState = null;
+var connectState = null;
+
+var canvasWrap = document.getElementById('canvasWrap');
+var canvasEl = document.getElementById('canvas');
+var wiresSvg = document.getElementById('wires');
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+function nextId(){
+  var mx=0; model.nodes.forEach(function(n){var v=parseInt(n.id.replace('n',''))||0;if(v>mx)mx=v;});
+  return 'n'+(mx+1);
+}
+function ptr(e){
+  if(e.touches&&e.touches.length>0) return {x:e.touches[0].clientX,y:e.touches[0].clientY};
+  if(e.changedTouches&&e.changedTouches.length>0) return {x:e.changedTouches[0].clientX,y:e.changedTouches[0].clientY};
+  return {x:e.clientX,y:e.clientY};
+}
+
+/* ============================================================
+   BLOCK TYPE CONFIG
+   ============================================================ */
+var BLOCK_LABELS={tf:'Fun\u00e7\u00e3o Transf.',gain:'Ganho',sum:'Somador',int:'Integrador',der:'Derivador',
+pid:'PID',sensor:'Sensor',input:'Entrada',output:'Sa\u00edda',branch:'Ramifica\u00e7\u00e3o'};
+
+function defaultParams(type){
+  if(type==='tf') return {num:'1',den:'s+1'};
+  if(type==='gain') return {k:'1'};
+  if(type==='sum') return {signs:'+ -'};
+  if(type==='int') return {};
+  if(type==='der') return {};
+  if(type==='pid') return {kp:'1',ki:'0',kd:'0'};
+  if(type==='sensor') return {num:'1',den:'1'};
+  if(type==='input') return {label:'R(s)'};
+  if(type==='output') return {label:'Y(s)'};
+  if(type==='branch') return {};
+  return {};
+}
+
+function getPortConfig(type,params){
+  if(type==='input') return {in:[],out:[{id:'out0'}]};
+  if(type==='output') return {in:[{id:'in0'}],out:[]};
+  if(type==='branch') return {in:[{id:'in0'}],out:[{id:'out0'},{id:'out1'}]};
+  if(type==='sum'){
+    var signs=(params&&params.signs?params.signs:'+ -').trim().split(/\s+/);
+    return {in:signs.map(function(s,i){return {id:'in'+i,sign:s};}),out:[{id:'out0'}]};
+  }
+  return {in:[{id:'in0'}],out:[{id:'out0'}]};
+}
+
+function bodyText(n){
+  var p=n.params||{};
+  if(n.type==='tf') return '<div class="block-tf-disp"><div class="tf-num">'+(p.num||'1')+'</div><div>'+(p.den||'1')+'</div></div>';
+  if(n.type==='gain') return 'K = '+(p.k||'1');
+  if(n.type==='pid') return '<div class="block-tf-disp">Kp='+(p.kp||'0')+' Ki='+(p.ki||'0')+' Kd='+(p.kd||'0')+'</div>';
+  if(n.type==='sensor') return '<div class="block-tf-disp"><div class="tf-num">'+(p.num||'1')+'</div><div>'+(p.den||'1')+'</div></div>';
+  if(n.type==='input') return p.label||'R(s)';
+  if(n.type==='output') return p.label||'Y(s)';
+  if(n.type==='sum') return '\u03a3';
+  if(n.type==='int') return '1/s';
+  if(n.type==='der') return 's';
+  return '';
+}
+
+/* ============================================================
+   ADD / DELETE / CLEAR
+   ============================================================ */
+function addBlock(type){
+  var r=canvasWrap.getBoundingClientRect();
+  var n={id:nextId(),type:type,
+    x:40+Math.random()*(r.width-200),
+    y:40+Math.random()*(r.height-140),
+    params:defaultParams(type)};
+  if(type==='input'){n.x=30;n.y=r.height/2-30;}
+  if(type==='output'){n.x=r.width-160;n.y=r.height/2-30;}
+  model.nodes.push(n);
+  render(); setSel(n.id); send();
+}
+
+function deleteSelected(){
+  if(!selId)return;
+  model.edges=model.edges.filter(function(e){return e.src!==selId&&e.dst!==selId;});
+  model.nodes=model.nodes.filter(function(n){return n.id!==selId;});
+  selId=null; cancelConnect(); render(); send();
+}
+
+function clearAll(){
+  model={nodes:[],edges:[]}; selId=null; cancelConnect(); render(); send();
+  document.getElementById('results').classList.remove('visible');
+}
+
+function deleteEdge(idx){
+  model.edges.splice(idx,1); render(); send();
+}
+
+/* ============================================================
+   AUTO-LAYOUT
+   ============================================================ */
+function autoLayout(){
+  if(!model.nodes.length)return;
+  var levels={};
+  var adj={};
+  model.edges.forEach(function(e){if(!adj[e.src])adj[e.src]=[];adj[e.src].push(e.dst);});
+  var inputs=model.nodes.filter(function(n){return n.type==='input';}).map(function(n){return n.id;});
+  if(!inputs.length) inputs=[model.nodes[0].id];
+  var queue=inputs.map(function(id){return {id:id,lv:0};});
+  var visited={}; inputs.forEach(function(id){visited[id]=true;});
+  while(queue.length){
+    var cur=queue.shift(); levels[cur.id]=cur.lv;
+    (adj[cur.id]||[]).forEach(function(nid){
+      if(!visited[nid]){visited[nid]=true;queue.push({id:nid,lv:cur.lv+1});}
+    });
+  }
+  model.nodes.forEach(function(n){if(!(n.id in levels))levels[n.id]=3;});
+  var byLv={};
+  Object.keys(levels).forEach(function(id){var lv=levels[id];if(!byLv[lv])byLv[lv]=[];byLv[lv].push(id);});
+  var sx=170,sy=100,mx=50,my=50;
+  Object.keys(byLv).forEach(function(lv){
+    byLv[lv].forEach(function(id,i){
+      var n=model.nodes.find(function(nd){return nd.id===id;});
+      if(n){n.x=mx+parseInt(lv)*sx;n.y=my+i*sy;}
+    });
+  });
+  render(); send();
+}
+
+/* ============================================================
+   SELECTION
+   ============================================================ */
+function setSel(id){
+  selId=id;
+  document.querySelectorAll('.block').forEach(function(el){el.classList.toggle('selected',el.dataset.id===id);});
+  updatePanel();
+}
+
+/* ============================================================
+   RENDER BLOCKS
+   ============================================================ */
+function render(){
+  canvasEl.querySelectorAll('.block').forEach(function(el){el.remove();});
+
+  model.nodes.forEach(function(n){
+    var el=document.createElement('div');
+    el.className='block block-'+n.type;
+    el.dataset.id=n.id;
+    el.style.left=n.x+'px';
+    el.style.top=n.y+'px';
+
+    var pc=getPortConfig(n.type,n.params);
+    var html='';
+
+    if(n.type==='sum'){
+      html='<div class="block-body">\u03a3</div>';
+    } else if(n.type==='branch'){
+      html='<div class="block-body"><svg width="34" height="34" viewBox="0 0 34 34"><circle cx="10" cy="20" r="6" fill="#1e3a5f" stroke="#3b82f6" stroke-width="2"/><circle cx="26" cy="12" r="6" fill="#1e3d2a" stroke="#4ade80" stroke-width="2"/><circle cx="26" cy="28" r="6" fill="#1a3d2a" stroke="#34d399" stroke-width="2"/><line x1="16" y1="18" x2="20" y2="14" stroke="#64748b" stroke-width="1.5"/><line x1="16" y1="22" x2="20" y2="26" stroke="#64748b" stroke-width="1.5"/></svg></div>';
+    } else {
+      html='<div class="block-header">'+BLOCK_LABELS[n.type]+'</div><div class="block-body">'+bodyText(n)+'</div>';
+    }
+
+    pc.in.forEach(function(p,i){
+      var st=portStyle(n.type,'in',i,pc.in.length);
+      html+='<div class="port port-in" data-port="'+p.id+'" data-nid="'+n.id+'" data-kind="in" style="'+st+'"></div>';
+      if(n.type==='sum'&&p.sign){
+        var sst=signStyle(n.type,i,pc.in.length);
+        html+='<span class="sign-label" style="'+sst+'">'+p.sign+'</span>';
+      }
+    });
+    pc.out.forEach(function(p,i){
+      var st=portStyle(n.type,'out',i,pc.out.length);
+      html+='<div class="port port-out" data-port="'+p.id+'" data-nid="'+n.id+'" data-kind="out" style="'+st+'"></div>';
+    });
+
+    el.innerHTML=html;
+    canvasEl.appendChild(el);
+
+    el.addEventListener('mousedown',function(ev){onBlockDown(ev,n.id);});
+    el.addEventListener('touchstart',function(ev){onBlockDown(ev,n.id);},{passive:false});
+
+    el.querySelectorAll('.port').forEach(function(pel){
+      pel.addEventListener('mousedown',function(ev){ev.stopPropagation();onPortClick(ev,pel);});
+      pel.addEventListener('touchstart',function(ev){ev.stopPropagation();ev.preventDefault();onPortClick(ev,pel);},{passive:false});
+    });
+  });
+
+  document.querySelectorAll('.block').forEach(function(el){el.classList.toggle('selected',el.dataset.id===selId);});
+  renderWires();
+  updatePanel();
+}
+
+function portStyle(type,kind,idx,total){
+  if(type==='sum'){
+    if(kind==='in'&&idx===0) return 'left:-7px;top:50%;transform:translateY(-50%)';
+    if(kind==='in'&&idx===1) return 'left:50%;bottom:-7px;transform:translateX(-50%)';
+    if(kind==='in'&&idx>=2){var t=8+idx*14;return 'left:-7px;top:'+t+'px';}
+    if(kind==='out') return 'right:-7px;top:50%;transform:translateY(-50%)';
+  }
+  if(type==='branch'){
+    if(kind==='in') return 'left:-7px;top:50%;transform:translateY(-50%)';
+    if(kind==='out'&&idx===0) return 'right:-7px;top:50%;transform:translateY(-50%)';
+    if(kind==='out'&&idx===1) return 'left:50%;bottom:-7px;transform:translateX(-50%)';
+  }
+  if(type==='input'&&kind==='out') return 'right:-7px;top:50%;transform:translateY(-50%)';
+  if(type==='output'&&kind==='in') return 'left:-7px;top:50%;transform:translateY(-50%)';
+  if(kind==='in') return 'left:-7px;top:50%;transform:translateY(-50%)';
+  return 'right:-7px;top:50%;transform:translateY(-50%)';
+}
+
+function signStyle(type,idx,total){
+  if(idx===0) return 'left:-20px;top:50%;transform:translateY(-50%)';
+  if(idx===1) return 'left:50%;bottom:-18px;transform:translateX(-50%)';
+  return 'left:-20px;top:'+(8+idx*14)+'px';
+}
+
+/* ============================================================
+   RENDER WIRES
+   ============================================================ */
+function renderWires(){
+  wiresSvg.querySelectorAll('path').forEach(function(p){p.remove();});
+  var wr=canvasWrap.getBoundingClientRect();
+  wiresSvg.setAttribute('width',wr.width);
+  wiresSvg.setAttribute('height',wr.height);
+
+  model.edges.forEach(function(e,idx){
+    var a=getPortPos(e.src,e.srcPort||'out0');
+    var b=getPortPos(e.dst,e.dstPort||'in0');
+    if(!a||!b)return;
+
+    var path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    var dx=Math.max(50,Math.abs(b.x-a.x)*0.4);
+
+    if(b.x < a.x - 20){
+      var midY=Math.max(a.y,b.y)+60;
+      path.setAttribute('d','M '+a.x+' '+a.y+' C '+(a.x+40)+' '+a.y+', '+(a.x+40)+' '+midY+', '+((a.x+b.x)/2)+' '+midY+' S '+(b.x-40)+' '+b.y+', '+b.x+' '+b.y);
+      path.setAttribute('stroke','#e8a035');
+      path.setAttribute('stroke-dasharray','8 4');
+      path.setAttribute('marker-end','url(#arr-g)');
+    } else {
+      path.setAttribute('d','M '+a.x+' '+a.y+' C '+(a.x+dx)+' '+a.y+', '+(b.x-dx)+' '+b.y+', '+b.x+' '+b.y);
+      path.setAttribute('stroke','#5b6be0');
+      path.setAttribute('marker-end','url(#arr)');
+    }
+    path.setAttribute('fill','none');
+    path.setAttribute('stroke-width','2.5');
+    path.setAttribute('stroke-linecap','round');
+
+    path.style.pointerEvents='visibleStroke';
+    path.style.cursor='pointer';
+    path.setAttribute('data-eidx',idx);
+    path.addEventListener('click',function(){deleteEdge(idx);});
+    path.addEventListener('touchend',function(ev){ev.preventDefault();deleteEdge(idx);});
+
+    wiresSvg.appendChild(path);
+  });
+}
+
+function getPortPos(nodeId,portId){
+  var bel=document.querySelector('.block[data-id="'+nodeId+'"]');
+  if(!bel)return null;
+  var pel=bel.querySelector('.port[data-port="'+portId+'"]');
+  if(!pel){
+    var isOut=portId.indexOf('out')===0;
+    pel=bel.querySelector('.port.port-'+(isOut?'out':'in'));
+  }
+  if(!pel)return null;
+  var cr=canvasWrap.getBoundingClientRect();
+  var pr=pel.getBoundingClientRect();
+  return {x:pr.left+pr.width/2-cr.left, y:pr.top+pr.height/2-cr.top};
+}
+
+/* ============================================================
+   POINTER / DRAG
+   ============================================================ */
+function onBlockDown(e,id){
+  if(e.target.classList.contains('port'))return;
+  if(e.button===2)return;
+  e.preventDefault();
+  setSel(id);
+  var p=ptr(e);
+  var el=document.querySelector('.block[data-id="'+id+'"]');
+  if(!el)return;
+  var r=el.getBoundingClientRect();
+  dragState={id:id,ox:p.x-r.left,oy:p.y-r.top};
+}
+
+function onPointerMove(e){
+  if(!dragState)return;
+  e.preventDefault();
+  var p=ptr(e);
+  var wr=canvasWrap.getBoundingClientRect();
+  var el=document.querySelector('.block[data-id="'+dragState.id+'"]');
+  if(!el)return;
+  var nx=Math.max(0,Math.min(wr.width-el.offsetWidth, p.x-wr.left-dragState.ox));
+  var ny=Math.max(0,Math.min(wr.height-el.offsetHeight, p.y-wr.top-dragState.oy));
+  el.style.left=nx+'px';
+  el.style.top=ny+'px';
+  var nd=model.nodes.find(function(n){return n.id===dragState.id;});
+  if(nd){nd.x=nx;nd.y=ny;}
+  renderWires();
+}
+
+function onPointerUp(e){
+  if(dragState){dragState=null;send();}
+}
+
+document.addEventListener('mousemove',onPointerMove);
+document.addEventListener('mouseup',onPointerUp);
+document.addEventListener('touchmove',onPointerMove,{passive:false});
+document.addEventListener('touchend',onPointerUp);
+
+canvasEl.addEventListener('mousedown',function(e){
+  if(e.target===canvasEl){cancelConnect();setSel(null);}
+});
+canvasEl.addEventListener('touchstart',function(e){
+  if(e.target===canvasEl){cancelConnect();setSel(null);}
+},{passive:false});
+
+/* ============================================================
+   PORT CONNECTION
+   ============================================================ */
+function onPortClick(e,pel){
+  e.preventDefault();
+  var nid=pel.dataset.nid;
+  var portId=pel.dataset.port;
+  var kind=pel.dataset.kind;
+  setSel(nid);
+
+  if(connectState){
+    if(connectState.nodeId===nid){cancelConnect();return;}
+    var srcId,srcPort,dstId,dstPort;
+    if(connectState.kind==='out'&&kind==='in'){
+      srcId=connectState.nodeId;srcPort=connectState.portId;dstId=nid;dstPort=portId;
+    } else if(connectState.kind==='in'&&kind==='out'){
+      srcId=nid;srcPort=portId;dstId=connectState.nodeId;dstPort=connectState.portId;
+    } else {cancelConnect();return;}
+    var dup=model.edges.some(function(ed){return ed.src===srcId&&ed.srcPort===srcPort&&ed.dst===dstId&&ed.dstPort===dstPort;});
+    if(!dup){
+      model.edges.push({id:'e'+(Math.random().toString(36).slice(2)),src:srcId,srcPort:srcPort,dst:dstId,dstPort:dstPort});
+    }
+    cancelConnect(); render(); send();
+  } else {
+    connectState={nodeId:nid,portId:portId,kind:kind};
+    pel.classList.add('active');
+  }
+}
+
+function cancelConnect(){
+  connectState=null;
+  document.querySelectorAll('.port.active').forEach(function(p){p.classList.remove('active');});
+}
+
+/* ============================================================
+   PANEL UPDATE
+   ============================================================ */
+function updatePanel(){
+  document.getElementById('pBlocks').textContent=model.nodes.length;
+  document.getElementById('pEdges').textContent=model.edges.length;
+  document.getElementById('pSel').textContent=selId?(model.nodes.find(function(n){return n.id===selId;})||{}).type||'\u2014':'\u2014';
+
+  var paramArea=document.getElementById('paramArea');
+  var connArea=document.getElementById('connArea');
+
+  if(!selId){
+    paramArea.innerHTML='<span class="hint">Selecione um bloco para editar.</span>';
+    connArea.innerHTML='<span class="hint">Selecione um bloco.</span>';
+    return;
+  }
+  var nd=model.nodes.find(function(n){return n.id===selId;});
+  if(!nd){paramArea.innerHTML='';connArea.innerHTML='';return;}
+  var p=nd.params||{};
+  var html='<div style="font-size:11px;color:var(--txm);margin-bottom:6px;">'+BLOCK_LABELS[nd.type]+' <b style="color:var(--tx)">'+nd.id+'</b></div>';
+
+  if(nd.type==='tf'||nd.type==='sensor'){
+    html+=paramInput('Numerador (em s)','num',p.num||'1');
+    html+=paramInput('Denominador (em s)','den',p.den||'1');
+  } else if(nd.type==='gain'){
+    html+=paramInput('Ganho K','k',p.k||'1');
+  } else if(nd.type==='sum'){
+    html+=paramInput('Sinais (ex: + - ou + +)','signs',p.signs||'+ -');
+  } else if(nd.type==='pid'){
+    html+=paramInput('Kp (proporcional)','kp',p.kp||'1');
+    html+=paramInput('Ki (integral)','ki',p.ki||'0');
+    html+=paramInput('Kd (derivativo)','kd',p.kd||'0');
+  } else if(nd.type==='input'||nd.type==='output'){
+    html+=paramInput('Label','label',p.label||'');
+  } else {
+    html+='<span class="hint">Sem par\u00e2metros edit\u00e1veis.</span>';
+  }
+
+  paramArea.innerHTML=html;
+  paramArea.querySelectorAll('input[data-key]').forEach(function(inp){
+    inp.addEventListener('input',function(){
+      nd.params[inp.dataset.key]=inp.value;
+      if(inp.dataset.key==='signs'){render();}
+      else{
+        var bel=document.querySelector('.block[data-id="'+nd.id+'"] .block-body');
+        if(bel)bel.innerHTML=bodyText(nd);
+      }
+      sendDebounced();
+    });
+  });
+
+  var chtml='';
+  var edges=model.edges;
+  edges.forEach(function(e,i){
+    if(e.src===nd.id){
+      var dst=model.nodes.find(function(n){return n.id===e.dst;});
+      chtml+='<div class="conn-item"><span>\u2192 '+(dst?BLOCK_LABELS[dst.type]:'?')+' ('+e.dstPort+')</span><button class="conn-del" data-ci="'+i+'">\u2715</button></div>';
+    }
+    if(e.dst===nd.id){
+      var src=model.nodes.find(function(n){return n.id===e.src;});
+      chtml+='<div class="conn-item"><span>\u2190 '+(src?BLOCK_LABELS[src.type]:'?')+' ('+e.srcPort+')</span><button class="conn-del" data-ci="'+i+'">\u2715</button></div>';
+    }
+  });
+  if(!chtml) chtml='<span class="hint">Nenhuma conex\u00e3o.</span>';
+  connArea.innerHTML=chtml;
+  connArea.querySelectorAll('.conn-del').forEach(function(btn){
+    btn.addEventListener('click',function(){deleteEdge(parseInt(btn.dataset.ci));});
+  });
+}
+
+function paramInput(label,key,value){
+  return '<div class="param-group"><label>'+label+'</label><input data-key="'+key+'" value="'+escHtml(String(value))+'"></div>';
+}
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+/* ============================================================
+   KEYBOARD
+   ============================================================ */
+document.addEventListener('keydown',function(e){
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  if(e.key==='Delete'||e.key==='Backspace')deleteSelected();
+  if(e.key==='Escape')cancelConnect();
+  if(e.key==='Enter'||e.key===' '){e.preventDefault();onCalculate();}
+});
+
+/* ============================================================
+   TOOLBAR BUTTONS
+   ============================================================ */
+document.querySelectorAll('.tbtn[data-add]').forEach(function(btn){
+  btn.addEventListener('click',function(){addBlock(btn.dataset.add);});
+});
+document.getElementById('btnDel').addEventListener('click',deleteSelected);
+document.getElementById('btnClear').addEventListener('click',clearAll);
+document.getElementById('btnAuto').addEventListener('click',autoLayout);
+
+/* ============================================================
+   STREAMLIT COMMUNICATION
+   ============================================================ */
+var sendTimer=null;
+function send(){
+  try{
+    Streamlit.setComponentValue(JSON.stringify(model));
+    Streamlit.setFrameHeight(document.body.scrollHeight+50);
+  }catch(ex){}
+}
+function sendDebounced(){clearTimeout(sendTimer);sendTimer=setTimeout(send,300);}
+
+function onStreamlitRender(event){
+  var data=(event.detail&&event.detail.args)||{};
+  try{
+    var incoming=JSON.parse(data.model||'{}');
+    if(incoming&&incoming.nodes&&incoming.edges){
+      if(JSON.stringify(incoming)!==JSON.stringify(model)){
+        model=incoming;
         render();
-        pushToStreamlit();
       }
+    }
+  }catch(ex){}
+  try{Streamlit.setFrameHeight(document.body.scrollHeight+50);}catch(ex){}
+}
 
-      window.Streamlit.events.addEventListener(window.Streamlit.RENDER_EVENT, onRender);
-      window.Streamlit.setComponentReady();
-      window.Streamlit.setFrameHeight(document.body.scrollHeight);
+/* ============================================================
+   INIT
+   ============================================================ */
+try{
+  Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, onStreamlitRender);
+  Streamlit.setComponentReady();
+  Streamlit.setFrameHeight(600);
+}catch(ex){}
 
-      new ResizeObserver(()=>{ renderWires(); window.Streamlit.setFrameHeight(document.body.scrollHeight); }).observe(wrap);
-    </script>
-  </body>
+render();
+
+new ResizeObserver(function(){
+  renderWires();
+  try{Streamlit.setFrameHeight(document.body.scrollHeight+50);}catch(ex){}
+}).observe(canvasWrap);
+
+// Load Plotly asynchronously - page works without it (canvas fallback)
+(function(){
+  var s=document.createElement('script');
+  s.src='https://cdn.plot.ly/plotly-basic-2.27.0.min.js';
+  s.async=true;
+  s.onerror=function(){console.log('Plotly CDN unavailable, using canvas fallback');};
+  document.body.appendChild(s);
+})();
+</script>
+</body>
 </html>
