@@ -708,7 +708,7 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 .block-output{background:linear-gradient(135deg,#3d1a1a,#250f0f);border:1px solid #8a2d2d;border-radius:20px}
 .block-sum{background:linear-gradient(135deg,#1a3d3a,#122a28);border:2px solid #2d8a70;border-radius:50%;min-width:56px;width:56px;height:56px;display:flex;align-items:center;justify-content:center}
 .block-sum .block-header{display:none}.block-sum .block-body{padding:0;font-size:20px;text-align:center}
-.block-branch{background:linear-gradient(135deg,#0f1a35,#1a2a4a);border:2px solid #2563eb;border-radius:50%;min-width:56px;width:56px;height:56px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(59,130,246,.4)}
+.block-branch{background:linear-gradient(135deg,#0f1a35,#1a2a4a);border:2px solid #2563eb;border-radius:50%;min-width:20px;width:20px;height:20px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(59,130,246,.4)}
 .block-branch .block-header{display:none}.block-branch .block-body{padding:0;display:flex;align-items:center;justify-content:center;width:100%;height:100%}
 .port{position:absolute;width:14px;height:14px;border-radius:50%;cursor:crosshair;z-index:20;transition:transform .12s}
 .port::after{content:"";position:absolute;inset:3px;border-radius:50%;background:currentColor}
@@ -766,8 +766,8 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 <div id="modalGrid">
 <div class="cat-label">Sinais</div>
 <div class="block-grid">
-<div class="block-option" onclick="pickBlock('input')"><div class="bo-icon" style="color:var(--grn)">R(s)</div><div class="bo-label">R(s)</div><div class="bo-desc">Entrada</div></div>
-<div class="block-option" onclick="pickBlock('output')"><div class="bo-icon" style="color:var(--red)">Y(s)</div><div class="bo-label">Y(s)</div><div class="bo-desc">Saida</div></div>
+<div class="block-option" onclick="pickBlock('input')"><div class="bo-icon" style="color:var(--grn)">R(s)</div><div class="bo-label">Entrada</div><div class="bo-desc">Sinal de referencia</div></div>
+<div class="block-option" onclick="pickBlock('output')"><div class="bo-icon" style="color:var(--red)">Y(s)</div><div class="bo-label">Saida</div><div class="bo-desc">Sinal de saida</div></div>
 </div>
 <div class="cat-label">Blocos de Transferencia</div>
 <div class="block-grid">
@@ -1367,7 +1367,7 @@ function pSty(t,k,i){if(t==="sum"){if(k==="in"&&i===0)return"left:-7px;top:50%;t
 function render(){cv.querySelectorAll(".block").forEach(function(el){el.remove()});
   model.nodes.forEach(function(n){var el=document.createElement("div");el.className="block block-"+n.type;el.dataset.id=n.id;el.style.left=n.x+"px";el.style.top=n.y+"px";
     var pc=gPC(n.type,n.params),h="";
-    if(n.type==="sum")h='<div class="block-body">\u03a3</div>';else if(n.type==="branch")h='<div class="block-body"><svg width="34" height="34" viewBox="0 0 34 34"><circle cx="10" cy="20" r="6" fill="#1e3a5f" stroke="#3b82f6" stroke-width="2"/><circle cx="26" cy="12" r="6" fill="#1e3d2a" stroke="#4ade80" stroke-width="2"/><circle cx="26" cy="28" r="6" fill="#1a3d2a" stroke="#34d399" stroke-width="2"/><line x1="16" y1="18" x2="20" y2="14" stroke="#64748b" stroke-width="1.5"/><line x1="16" y1="22" x2="20" y2="26" stroke="#64748b" stroke-width="1.5"/></svg></div>';
+    if(n.type==="sum")h='<div class="block-body">\u03a3</div>';else if(n.type==="branch")h='<div class="block-body">\u2022</div>';
     else h='<div class="block-header">'+BL[n.type]+'</div><div class="block-body">'+bTxt(n)+'</div>';
     pc.i.forEach(function(p,i){h+='<div class="port port-in" data-port="'+p.id+'" data-nid="'+n.id+'" data-kind="in" style="'+pSty(n.type,"in",i)+'"></div>';
       if(n.type==="sum"&&p.sign)h+='<span class="sign-label" style="'+(i===0?"left:-20px;top:50%;transform:translateY(-50%)":i===1?"left:50%;bottom:-18px;transform:translateX(-50%)":"left:-20px;top:"+(8+i*14)+"px")+'">'+p.sign+'</span>'});
