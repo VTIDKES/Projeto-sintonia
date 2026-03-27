@@ -768,8 +768,11 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 .man-row{grid-template-columns:1fr}.man-tabs{flex-wrap:wrap}
 .block-grid{grid-template-columns:1fr}
 }
-.conn-item{display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:4px;background:var(--sf2);border:1px solid var(--bd);border-radius:8px;cursor:pointer;font-size:12px;transition:all .15s}
+.conn-item{display:flex;align-items:center;gap:8px;padding:10px 12px;margin-bottom:5px;background:var(--sf2);border:2px solid var(--bd);border-radius:8px;cursor:pointer;font-size:13px;transition:all .15s;user-select:none}
 .conn-item:hover{border-color:var(--acc);background:#2f3349}
+.conn-item.conn-sel{border-color:#5b6be0;background:#2a2f4a;box-shadow:0 0 8px rgba(91,107,224,.3)}
+.conn-item .conn-chk{font-size:16px;color:var(--txm);min-width:18px;text-align:center}
+.conn-item.conn-sel .conn-chk{color:#5b6be0}
 </style></head><body><div class="app">
 
 <!-- MODAL DE ADICIONAR BLOCO -->
@@ -815,10 +818,11 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 <div class="modal-hdr"><h3 id="connModalTitle">Conectar Blocos</h3><button class="modal-close" onclick="closeConnModal()">&times;</button></div>
 <div class="modal-body">
 <p style="font-size:12px;color:var(--txm);margin-bottom:12px" id="connModalHint">Selecione os blocos na ordem desejada.</p>
-<div id="connBlockList" style="max-height:250px;overflow-y:auto"></div>
-<div style="margin-top:12px;display:flex;gap:8px">
-<button class="cfg-btn" onclick="applyConn()">Aplicar Conexao</button>
-<button class="cfg-btn" style="background:var(--sf2);border:1px solid var(--bd)" onclick="closeConnModal()">Cancelar</button>
+<div id="connBlockList" style="max-height:280px;overflow-y:auto;padding:4px"></div>
+<p id="connSelCount" style="font-size:11px;color:var(--txm);margin:8px 0 4px;text-align:center">0 blocos selecionados</p>
+<div style="margin-top:8px;display:flex;gap:8px">
+<button class="cfg-btn" style="padding:12px 28px;font-size:14px" onclick="applyConn()">&#10003; Aplicar Conexao</button>
+<button class="cfg-btn" style="background:var(--sf2);border:1px solid var(--bd);padding:12px 20px" onclick="closeConnModal()">Cancelar</button>
 </div>
 </div></div></div>
 
@@ -1545,91 +1549,100 @@ var connType=null,connSel=[];
 function openConnModal(tipo){
   connType=tipo;connSel=[];
   var titles={serie:'Serie: blocos em cadeia',paralelo:'Paralelo: blocos somados',fb_neg:'Realimentacao Negativa: G/(1+GH)',fb_pos:'Realimentacao Positiva: G/(1-GH)'};
-  var hints={serie:'Selecione 2 ou mais blocos na ordem da cadeia.',paralelo:'Selecione 2 ou mais blocos para conectar em paralelo.',fb_neg:'Selecione 2 blocos: primeiro = G(s) direto, segundo = H(s) feedback.',fb_pos:'Selecione 2 blocos: primeiro = G(s) direto, segundo = H(s) feedback.'};
+  var hints={serie:'Selecione 2+ blocos na ordem da cadeia.',paralelo:'Selecione 2+ blocos para somar em paralelo.',fb_neg:'Selecione exatamente 2 blocos: 1o = G(s), 2o = H(s).',fb_pos:'Selecione exatamente 2 blocos: 1o = G(s), 2o = H(s).'};
   document.getElementById('connModalTitle').textContent=titles[tipo]||'Conexao';
   document.getElementById('connModalHint').textContent=hints[tipo]||'';
-  /* Lista blocos disponiveis (tf, ss, gain, pid, sensor, actuator, int, der) */
   var avail=model.nodes.filter(function(n){return['tf','ss','gain','pid','sensor','actuator','int','der'].indexOf(n.type)>=0});
   var cl=document.getElementById('connBlockList');
   var h='';
-  if(!avail.length){h='<p style="color:var(--red);font-size:12px">Adicione blocos primeiro.</p>'}
+  if(!avail.length){h='<p style="color:#ef4444;font-size:13px;padding:12px">Nenhum bloco disponivel. Adicione blocos primeiro.</p>'}
   else{avail.forEach(function(n){
     var lbl=BL[n.type]+' ('+n.id+')';
     var det='';if(n.params){if(n.params.num)det=n.params.num+'/'+n.params.den;else if(n.params.k)det='K='+n.params.k;else if(n.params.ssA)det='SS'}
-    h+='<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:4px;background:var(--sf2);border:1px solid var(--bd);border-radius:8px;cursor:pointer;font-size:12px;transition:all .15s" data-connid="'+n.id+'" onclick="toggleConnSel(this,\''+n.id+'\')">';
-    h+='<input type="checkbox" style="pointer-events:none"> ';
+    h+='<div class="conn-item" data-connid="'+n.id+'" onclick="toggleConnSel(this,\''+n.id+'\')">';
+    h+='<span class="conn-chk">&#9744;</span> ';
     h+='<span style="font-weight:600;color:var(--tx)">'+esc(lbl)+'</span>';
     if(det)h+='<span style="color:var(--txm);font-size:10px;margin-left:auto">'+esc(det)+'</span>';
-    h+='</label>'})}
+    h+='</div>'})}
   cl.innerHTML=h;
   document.getElementById('connModal').classList.add('vis')}
 function closeConnModal(){document.getElementById('connModal').classList.remove('vis');connType=null;connSel=[]}
 function toggleConnSel(el,nid){
   var idx=connSel.indexOf(nid);
-  var cb=el.querySelector('input[type=checkbox]');
-  if(idx>=0){connSel.splice(idx,1);el.style.borderColor='var(--bd)';if(cb)cb.checked=false}
+  var chk=el.querySelector('.conn-chk');
+  if(idx>=0){connSel.splice(idx,1);el.classList.remove('conn-sel');if(chk)chk.innerHTML='&#9744;'}
   else{
-    if((connType==='fb_neg'||connType==='fb_pos')&&connSel.length>=2)return;
-    connSel.push(nid);el.style.borderColor='var(--acc)';if(cb)cb.checked=true}}
+    if((connType==='fb_neg'||connType==='fb_pos')&&connSel.length>=2){alert('Feedback: maximo 2 blocos (G e H).');return}
+    connSel.push(nid);el.classList.add('conn-sel');if(chk)chk.innerHTML='&#9745;'}
+  var cnt=document.getElementById('connSelCount');
+  if(cnt)cnt.textContent=connSel.length+' bloco'+(connSel.length!==1?'s':'')+' selecionado'+(connSel.length!==1?'s':'')}
 function applyConn(){
   if(connSel.length<2){alert('Selecione pelo menos 2 blocos.');return}
-  if(connType==='serie')buildSerie(connSel);
-  else if(connType==='paralelo')buildParalelo(connSel);
-  else if(connType==='fb_neg')buildFeedback(connSel,false);
-  else if(connType==='fb_pos')buildFeedback(connSel,true);
+  if(connType==='serie')buildSerie(connSel.slice());
+  else if(connType==='paralelo')buildParalelo(connSel.slice());
+  else if(connType==='fb_neg')buildFeedback(connSel.slice(),false);
+  else if(connType==='fb_pos')buildFeedback(connSel.slice(),true);
   closeConnModal();render()}
 
+function mkEid(){return 'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
+
 function buildSerie(ids){
-  /* Remove edges existentes entre esses blocos e reconecta em serie */
+  /* Conecta blocos em cadeia: B1 -> B2 -> B3 -> ... */
   for(var i=0;i<ids.length-1;i++){
-    var already=model.edges.some(function(e){return e.src===ids[i]&&e.dst===ids[i+1]});
-    if(!already)model.edges.push({id:'e'+Math.random().toString(36).slice(2),src:ids[i],srcPort:'out0',dst:ids[i+1],dstPort:'in0'})}
-  /* Reposiciona em linha */
-  var baseX=100,baseY=180;
-  ids.forEach(function(id,i){var nd=model.nodes.find(function(n){return n.id===id});if(nd){nd.x=baseX+i*180;nd.y=baseY}})}
+    var a=ids[i],b=ids[i+1];
+    var already=model.edges.some(function(e){return e.src===a&&e.dst===b});
+    if(!already)model.edges.push({id:mkEid(),src:a,srcPort:'out0',dst:b,dstPort:'in0'})}
+  /* Reposiciona em linha horizontal */
+  var baseX=80,baseY=180;
+  ids.forEach(function(id,i){var nd=model.nodes.find(function(n){return n.id===id});if(nd){nd.x=baseX+i*200;nd.y=baseY}})}
 
 function buildParalelo(ids){
-  /* Cria branch, blocos paralelos, e somador */
-  var baseX=100,baseY=100;
-  /* Encontra posicao media dos blocos selecionados */
-  var sumX=0;ids.forEach(function(id){var nd=model.nodes.find(function(n){return n.id===id});if(nd)sumX+=nd.x});
-  baseX=Math.max(100,sumX/ids.length-100);
-  /* Cria branches encadeados */
-  var brIds=[];var nb=ids.length;
+  /* Paralelo: entrada -> branch -> [B1, B2, ...] -> somador -> saida */
+  var nb=ids.length;
+  /* Posicao base */
+  var minX=9999;ids.forEach(function(id){var nd=model.nodes.find(function(n){return n.id===id});if(nd&&nd.x<minX)minX=nd.x});
+  var baseX=Math.max(60,minX-60),baseY=80;
+  /* Cria um unico branch de entrada com nb saidas simuladas via encadeamento */
+  var brIds=[];
   for(var i=0;i<nb-1;i++){
-    var br={id:nxtId(),type:'branch',x:baseX+i*25,y:150+i*40,params:{}};
+    var br={id:nxtId(),type:'branch',x:baseX,y:baseY+50+i*50,params:{}};
     model.nodes.push(br);brIds.push(br.id);
-    if(i>0)model.edges.push({id:'e'+Math.random().toString(36).slice(2),src:brIds[i-1],srcPort:'out0',dst:br.id,dstPort:'in0'})}
-  /* Cria somador */
+    if(i>0)model.edges.push({id:mkEid(),src:brIds[i-1],srcPort:'out0',dst:br.id,dstPort:'in0'})}
+  /* Cria somador com nb entradas (todas +) */
   var signs='';for(var i=0;i<nb;i++)signs+=(i>0?' ':'')+'+';
-  var sm={id:nxtId(),type:'sum',x:baseX+380,y:150+(nb-1)*50,params:{signs:signs}};model.nodes.push(sm);
-  /* Conecta blocos */
+  var smX=baseX+420,smY=baseY+(nb-1)*55;
+  var sm={id:nxtId(),type:'sum',x:smX,y:smY,params:{signs:signs}};model.nodes.push(sm);
+  /* Posiciona blocos e conecta: branch.outX -> bloco -> somador.inX */
   ids.forEach(function(id,i){
     var nd=model.nodes.find(function(n){return n.id===id});
-    if(nd){nd.x=baseX+160;nd.y=baseY+i*110}
-    if(i<nb-1){model.edges.push({id:'e'+Math.random().toString(36).slice(2),src:brIds[i],srcPort:'out1',dst:id,dstPort:'in0'})}
-    else{model.edges.push({id:'e'+Math.random().toString(36).slice(2),src:brIds[nb-2],srcPort:'out0',dst:id,dstPort:'in0'})}
-    model.edges.push({id:'e'+Math.random().toString(36).slice(2),src:id,srcPort:'out0',dst:sm.id,dstPort:'in'+i})})}
+    if(nd){nd.x=baseX+200;nd.y=baseY+i*120}
+    /* branch -> bloco */
+    if(i===0){model.edges.push({id:mkEid(),src:brIds[0],srcPort:'out1',dst:id,dstPort:'in0'})}
+    else if(i<nb-1){model.edges.push({id:mkEid(),src:brIds[i],srcPort:'out1',dst:id,dstPort:'in0'})}
+    else{model.edges.push({id:mkEid(),src:brIds[nb-2],srcPort:'out0',dst:id,dstPort:'in0'})}
+    /* bloco -> somador */
+    model.edges.push({id:mkEid(),src:id,srcPort:'out0',dst:sm.id,dstPort:'in'+i})})}
 
 function buildFeedback(ids,positive){
+  /* Feedback: somador(+/-) -> G -> branch -> saida, branch -> H -> somador */
   if(ids.length<2)return;
   var gId=ids[0],hId=ids[1];
   var gNd=model.nodes.find(function(n){return n.id===gId});
   var hNd=model.nodes.find(function(n){return n.id===hId});
-  var baseX=gNd?gNd.x-100:100,baseY=gNd?gNd.y:180;
-  /* Cria somador */
+  var baseX=gNd?Math.max(60,gNd.x-120):80,baseY=gNd?gNd.y:160;
+  /* Somador com sinais + e +/- */
   var signStr=positive?'+ +':'+ -';
-  var sm={id:nxtId(),type:'sum',x:baseX,y:baseY+10,params:{signs:signStr}};model.nodes.push(sm);
-  /* Cria branch */
-  var br={id:nxtId(),type:'branch',x:baseX+340,y:baseY+20,params:{}};model.nodes.push(br);
-  /* Posiciona G e H */
-  if(gNd){gNd.x=baseX+160;gNd.y=baseY}
-  if(hNd){hNd.x=baseX+200;hNd.y=baseY+150}
-  /* Edges: somador -> G -> branch, branch.out1 -> H -> somador.in1 */
-  model.edges.push({id:'e'+Math.random().toString(36).slice(2),src:sm.id,srcPort:'out0',dst:gId,dstPort:'in0'});
-  model.edges.push({id:'e'+Math.random().toString(36).slice(2),src:gId,srcPort:'out0',dst:br.id,dstPort:'in0'});
-  model.edges.push({id:'e'+Math.random().toString(36).slice(2),src:br.id,srcPort:'out1',dst:hId,dstPort:'in0'});
-  model.edges.push({id:'e'+Math.random().toString(36).slice(2),src:hId,srcPort:'out0',dst:sm.id,dstPort:'in1'})}
+  var sm={id:nxtId(),type:'sum',x:baseX,y:baseY+15,params:{signs:signStr}};model.nodes.push(sm);
+  /* Branch apos G para bifurcar saida e feedback */
+  var br={id:nxtId(),type:'branch',x:baseX+380,y:baseY+15,params:{}};model.nodes.push(br);
+  /* Posiciona G (direto) e H (feedback) */
+  if(gNd){gNd.x=baseX+180;gNd.y=baseY}
+  if(hNd){hNd.x=baseX+220;hNd.y=baseY+160}
+  /* Arestas: somador -> G -> branch, branch -> H -> somador (loop) */
+  model.edges.push({id:mkEid(),src:sm.id,srcPort:'out0',dst:gId,dstPort:'in0'});
+  model.edges.push({id:mkEid(),src:gId,srcPort:'out0',dst:br.id,dstPort:'in0'});
+  model.edges.push({id:mkEid(),src:br.id,srcPort:'out1',dst:hId,dstPort:'in0'});
+  model.edges.push({id:mkEid(),src:hId,srcPort:'out0',dst:sm.id,dstPort:'in1'})}
 
 document.querySelectorAll(".tb[data-add]").forEach(function(b){b.addEventListener("click",function(){addB(b.dataset.add)})});
 document.getElementById("btnDel").addEventListener("click",delSel);document.getElementById("btnClear").addEventListener("click",clrAll);document.getElementById("btnAuto").addEventListener("click",autoLay);
