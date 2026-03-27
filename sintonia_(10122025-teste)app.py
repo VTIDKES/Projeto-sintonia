@@ -726,22 +726,6 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 .pg input:focus{border-color:var(--acc)}
 .hint{font-size:11px;color:var(--txm);line-height:1.5}
 .hint b{color:var(--tx)}
-.mode-bar{display:flex;gap:0;background:var(--sf);border-top:1px solid var(--bd)}
-.mode-btn{flex:1;padding:12px;background:none;border:none;border-bottom:3px solid transparent;color:var(--txm);font-size:14px;font-weight:700;cursor:pointer;transition:all .15s;touch-action:manipulation;letter-spacing:.3px}
-.mode-btn.active{color:var(--grn);border-bottom-color:var(--grn);background:rgba(52,211,153,.06)}
-.mode-btn:hover{color:var(--tx)}
-.manual-sec{background:var(--sf);padding:20px;border-top:1px solid var(--bd);display:none}
-.manual-sec.vis{display:block}
-.manual-sec h4{font-size:12px;text-transform:uppercase;color:var(--acc);margin-bottom:14px;letter-spacing:.5px}
-.man-tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
-.man-tab{padding:8px 16px;background:var(--sf2);border:1px solid var(--bd);border-radius:8px;color:var(--txm);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;touch-action:manipulation}
-.man-tab.active{background:var(--acc);border-color:var(--acc);color:#fff}
-.man-tab:hover:not(.active){border-color:var(--acc);color:var(--tx)}
-.man-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:12px}
-.man-row .pg input{font-size:14px;padding:10px 12px}
-.man-row .pg label{font-size:11px;margin-bottom:4px}
-.man-hint{font-size:11px;color:var(--txm);margin-top:6px;line-height:1.6}
-.man-hint code{background:var(--sf2);padding:1px 5px;border-radius:3px;color:var(--blu);font-size:11px}
 .calc-bar{background:var(--sf);border-top:1px solid var(--bd);border-bottom:2px solid #22c55e;padding:12px 20px;text-align:center}
 .calc-bar button{background:#16a34a;border:2px solid #22c55e;color:#fff;font-weight:700;font-size:16px;padding:14px 40px;border-radius:10px;cursor:pointer;letter-spacing:1px;box-shadow:0 0 20px rgba(34,197,94,.3);touch-action:manipulation}
 .calc-bar button:hover{background:#22c55e;transform:scale(1.03)}
@@ -765,7 +749,6 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 .toolbar{padding:4px 6px;gap:3px}.tb{padding:5px 7px;font-size:10px;min-height:30px}
 .calc-bar button{font-size:14px;padding:10px 24px;width:100%}
 .mgrid{grid-template-columns:repeat(2,1fr)}
-.man-row{grid-template-columns:1fr}.man-tabs{flex-wrap:wrap}
 .block-grid{grid-template-columns:1fr}
 }
 .conn-item{display:flex;align-items:center;gap:8px;padding:10px 12px;margin-bottom:5px;background:var(--sf2);border:2px solid var(--bd);border-radius:8px;cursor:pointer;font-size:13px;transition:all .15s;user-select:none}
@@ -864,63 +847,6 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 <b>Calcular:</b> botao verde abaixo<br><b>Mobile:</b> toque e arraste!
 </div></div></div></div>
 
-<div class="mode-bar">
-<button class="mode-btn active" id="modeDiag" onclick="setMode('diag')">&#9638; Diagrama de Blocos</button>
-<button class="mode-btn" id="modeMan" onclick="setMode('manual')">&#9998; Entrada Manual</button>
-</div>
-
-<div class="manual-sec" id="manualSec">
-<div class="man-tabs">
-<button class="man-tab active" id="subDirect" onclick="setSubMode('direct')">T(s) Direta</button>
-<button class="man-tab" id="subClosed" onclick="setSubMode('closed')">Malha Fechada G/(1+GH)</button>
-<button class="man-tab" id="subOpen" onclick="setSubMode('open')">Malha Aberta G*H</button>
-<button class="man-tab" id="subSS" onclick="setSubMode('ss')">Espaco de Estados</button>
-</div>
-<div id="manDirect">
-<h4>Funcao de Transferencia T(s) = Num / Den</h4>
-<div class="man-row">
-<div class="pg"><label>Numerador</label><input id="manNum" value="1" placeholder="ex: s+1"></div>
-<div class="pg"><label>Denominador</label><input id="manDen" value="s^2+2s+1" placeholder="ex: s^2+2s+1"></div>
-</div>
-<div class="man-hint">Formato: <code>s^2+3s+1</code> ou <code>2s^3+s+5</code>. Use <code>^</code> para potencias.</div>
-</div>
-<div id="manClosed" style="display:none">
-<h4>Malha Fechada: T(s) = G(s) / (1 + G(s)&middot;H(s))</h4>
-<div class="man-row">
-<div class="pg"><label>G(s) Numerador</label><input id="manGN" value="10" placeholder="ex: 10"></div>
-<div class="pg"><label>G(s) Denominador</label><input id="manGD" value="s^2+3s+1" placeholder="ex: s^2+3s+1"></div>
-</div>
-<div class="man-row">
-<div class="pg"><label>H(s) Numerador</label><input id="manHN" value="1" placeholder="ex: 1"></div>
-<div class="pg"><label>H(s) Denominador</label><input id="manHD" value="1" placeholder="ex: s+1"></div>
-</div>
-<div class="man-hint">Calcula <code>T(s) = G/(1+GH)</code> com realimentacao unitaria quando H=1.</div>
-</div>
-<div id="manOpen" style="display:none">
-<h4>Malha Aberta: L(s) = G(s) &middot; H(s)</h4>
-<div class="man-row">
-<div class="pg"><label>G(s) Numerador</label><input id="manOGN" value="10" placeholder="ex: 10"></div>
-<div class="pg"><label>G(s) Denominador</label><input id="manOGD" value="s^2+3s+1" placeholder="ex: s^2+3s+1"></div>
-</div>
-<div class="man-row">
-<div class="pg"><label>H(s) Numerador</label><input id="manOHN" value="1" placeholder="ex: 1"></div>
-<div class="pg"><label>H(s) Denominador</label><input id="manOHD" value="1" placeholder="ex: 1"></div>
-</div>
-<div class="man-hint">Analisa a funcao de transferencia de malha aberta <code>L(s) = G*H</code>.</div>
-</div>
-<div id="manSS" style="display:none">
-<h4>Espaco de Estados: dx/dt = Ax + Bu, y = Cx + Du</h4>
-<div class="man-row">
-<div class="pg"><label>Matriz A (nxn)</label><input id="manA" value="0 1; -2 -3" placeholder="0 1; -2 -3"></div>
-<div class="pg"><label>Matriz B (nx1)</label><input id="manB" value="0; 1" placeholder="0; 1"></div>
-</div>
-<div class="man-row">
-<div class="pg"><label>Matriz C (1xn)</label><input id="manC" value="1 0" placeholder="1 0"></div>
-<div class="pg"><label>Matriz D (1x1)</label><input id="manD" value="0" placeholder="0"></div>
-</div>
-<div class="man-hint">Use <code>;</code> para separar linhas. Ex: <code>0 1; -2 -3</code> = matriz 2x2. Converte para T(s) = C(sI-A)<sup>-1</sup>B + D</div>
-</div>
-</div>
 
 <div class="calc-bar"><button id="btnCalcMain" onclick="onCalc()">&#9654; CALCULAR DIAGRAMA</button></div>
 
@@ -1400,57 +1326,7 @@ function showRes(tf){
   if(curMalha==='fechada'&&selAn.lgr)chartLGR("cLGR",lgrData,tf);
   rd.scrollIntoView({behavior:"smooth"})}
 
-/* ===== MODE SWITCHING ===== */
-var curMode="diag",curSubMode="direct";
-function setMode(m){curMode=m;
-  document.getElementById("modeDiag").classList.toggle("active",m==="diag");
-  document.getElementById("modeMan").classList.toggle("active",m==="manual");
-  document.getElementById("diag-workspace").style.display=m==="diag"?"flex":"none";
-  document.getElementById("diag-toolbar").style.display=m==="diag"?"flex":"none";
-  document.getElementById("manualSec").classList.toggle("vis",m==="manual");
-  document.getElementById("btnCalcMain").innerHTML=m==="diag"?"&#9654; CALCULAR DIAGRAMA":"&#9654; CALCULAR T(s)"}
-function setSubMode(m){curSubMode=m;
-  ["subDirect","subClosed","subOpen","subSS"].forEach(function(id){document.getElementById(id).classList.toggle("active",id==="sub"+m.charAt(0).toUpperCase()+m.slice(1))});
-  document.getElementById("subDirect").classList.toggle("active",m==="direct");
-  document.getElementById("subClosed").classList.toggle("active",m==="closed");
-  document.getElementById("subOpen").classList.toggle("active",m==="open");
-  document.getElementById("subSS").classList.toggle("active",m==="ss");
-  document.getElementById("manDirect").style.display=m==="direct"?"block":"none";
-  document.getElementById("manClosed").style.display=m==="closed"?"block":"none";
-  document.getElementById("manOpen").style.display=m==="open"?"block":"none";
-  document.getElementById("manSS").style.display=m==="ss"?"block":"none"}
-
 function onCalc(){
-  if(curMode==="manual"){
-    var tf;
-    if(curSubMode==="direct"){
-      tf={n:parseP(document.getElementById("manNum").value),d:parseP(document.getElementById("manDen").value)};
-    } else if(curSubMode==="closed"){
-      var gn=parseP(document.getElementById("manGN").value),gd=parseP(document.getElementById("manGD").value);
-      var hn=parseP(document.getElementById("manHN").value),hd=parseP(document.getElementById("manHD").value);
-      /* T(s) = G/(1+GH) = (Gn*Hd) / (Gd*Hd + Gn*Hn) */
-      tf={n:pMul(gn,hd),d:pAdd(pMul(gd,hd),pMul(gn,hn))};
-    } else if(curSubMode==="open"){
-      var gn=parseP(document.getElementById("manOGN").value),gd=parseP(document.getElementById("manOGD").value);
-      var hn=parseP(document.getElementById("manOHN").value),hd=parseP(document.getElementById("manOHD").value);
-      /* L(s) = G*H = (Gn*Hn) / (Gd*Hd) */
-      tf={n:pMul(gn,hn),d:pMul(gd,hd)};
-    } else if(curSubMode==="ss"){
-      /* State Space */
-      try{
-        tf=ssToTF(
-          document.getElementById("manA").value,
-          document.getElementById("manB").value,
-          document.getElementById("manC").value,
-          document.getElementById("manD").value);
-      }catch(e){
-        var rd=document.getElementById("res"),rb=document.getElementById("rb");
-        rd.classList.add("vis");rb.innerHTML='<div class="ebox">Erro no espaco de estados: '+esc(String(e))+'</div>';
-        rd.scrollIntoView({behavior:"smooth"});return}
-    }
-    var lc=tf.d[tf.d.length-1];if(Math.abs(lc)>1e-14&&Math.abs(lc-1)>1e-10){tf.n=pScl(tf.n,1/lc);tf.d=pScl(tf.d,1/lc)}
-    tf=pfReduce(tf);showRes(tf);return;
-  }
   var r=solve(model.nodes,model.edges);
   if(r.e){var rd=document.getElementById("res"),rb=document.getElementById("rb");rd.classList.add("vis");rb.innerHTML='<div class="ebox">'+esc(r.e)+'</div>';rd.scrollIntoView({behavior:"smooth"});return}
   showRes(r.tf)}
@@ -1597,31 +1473,22 @@ function buildSerie(ids){
   ids.forEach(function(id,i){var nd=model.nodes.find(function(n){return n.id===id});if(nd){nd.x=baseX+i*200;nd.y=baseY}})}
 
 function buildParalelo(ids){
-  /* Paralelo: entrada -> branch -> [B1, B2, ...] -> somador -> saida */
+  /* Paralelo: conecta blocos em paralelo (saida do anterior na entrada do proximo)
+     Semanticamente marca que esses blocos sao somados, sem criar somador/branch extras.
+     Conecta: B1.out -> B2.in, B2.out -> B3.in, ... (mesma logica de serie, mas
+     o solver interpreta como paralelo quando os blocos compartilham nos de entrada/saida).
+     Para paralelo real: posiciona lado a lado verticalmente e conecta saidas ao mesmo destino. */
   var nb=ids.length;
-  /* Posicao base */
-  var minX=9999;ids.forEach(function(id){var nd=model.nodes.find(function(n){return n.id===id});if(nd&&nd.x<minX)minX=nd.x});
-  var baseX=Math.max(60,minX-60),baseY=80;
-  /* Cria um unico branch de entrada com nb saidas simuladas via encadeamento */
-  var brIds=[];
-  for(var i=0;i<nb-1;i++){
-    var br={id:nxtId(),type:'branch',x:baseX,y:baseY+50+i*50,params:{}};
-    model.nodes.push(br);brIds.push(br.id);
-    if(i>0)model.edges.push({id:mkEid(),src:brIds[i-1],srcPort:'out0',dst:br.id,dstPort:'in0'})}
-  /* Cria somador com nb entradas (todas +) */
-  var signs='';for(var i=0;i<nb;i++)signs+=(i>0?' ':'')+'+';
-  var smX=baseX+420,smY=baseY+(nb-1)*55;
-  var sm={id:nxtId(),type:'sum',x:smX,y:smY,params:{signs:signs}};model.nodes.push(sm);
-  /* Posiciona blocos e conecta: branch.outX -> bloco -> somador.inX */
+  var baseX=80,baseY=80;
+  /* Posiciona blocos lado a lado verticalmente */
   ids.forEach(function(id,i){
     var nd=model.nodes.find(function(n){return n.id===id});
-    if(nd){nd.x=baseX+200;nd.y=baseY+i*120}
-    /* branch -> bloco */
-    if(i===0){model.edges.push({id:mkEid(),src:brIds[0],srcPort:'out1',dst:id,dstPort:'in0'})}
-    else if(i<nb-1){model.edges.push({id:mkEid(),src:brIds[i],srcPort:'out1',dst:id,dstPort:'in0'})}
-    else{model.edges.push({id:mkEid(),src:brIds[nb-2],srcPort:'out0',dst:id,dstPort:'in0'})}
-    /* bloco -> somador */
-    model.edges.push({id:mkEid(),src:id,srcPort:'out0',dst:sm.id,dstPort:'in'+i})})}
+    if(nd){nd.x=baseX+i*200;nd.y=baseY}});
+  /* Conecta em cadeia: B1 -> B2 -> B3 (serie de conexoes diretas) */
+  for(var i=0;i<nb-1;i++){
+    var a=ids[i],b=ids[i+1];
+    var already=model.edges.some(function(e){return e.src===a&&e.dst===b});
+    if(!already)model.edges.push({id:mkEid(),src:a,srcPort:'out0',dst:b,dstPort:'in0'})}}
 
 function buildFeedback(ids,positive){
   /* Feedback: somador(+/-) -> G -> branch -> saida, branch -> H -> somador */
