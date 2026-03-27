@@ -708,7 +708,7 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 .block-output{background:linear-gradient(135deg,#3d1a1a,#250f0f);border:1px solid #8a2d2d;border-radius:20px}
 .block-sum{background:linear-gradient(135deg,#1a3d3a,#122a28);border:2px solid #2d8a70;border-radius:50%;min-width:56px;width:56px;height:56px;display:flex;align-items:center;justify-content:center}
 .block-sum .block-header{display:none}.block-sum .block-body{padding:0;font-size:20px;text-align:center}
-.block-branch{background:#3b82f6;border:2px solid #2563eb;border-radius:50%;min-width:20px;width:20px;height:20px}
+.block-branch{background:#3b82f6;border:2px solid #2563eb;border-radius:50%;min-width:56px;width:56px;height:56px}
 .block-branch .block-header,.block-branch .block-body{display:none}
 .port{position:absolute;width:14px;height:14px;border-radius:50%;cursor:crosshair;z-index:20;transition:transform .12s}
 .port::after{content:"";position:absolute;inset:3px;border-radius:50%;background:currentColor}
