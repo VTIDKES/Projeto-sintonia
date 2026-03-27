@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 """
 Sistema de Modelagem e Analise de Sistemas de Controle v2.0
@@ -2467,7 +2468,7 @@ def modo_classico():
 # ══════════════════════════════════════════════════
 
 def modo_canvas():
-    st.title("Modo Canvas - Editor Visual")
+    st.title("Modo Diagrama de Blocos")
 
     with st.sidebar:
         st.header("Navegacao")
@@ -2476,42 +2477,222 @@ def modo_canvas():
             st.rerun()
 
         st.markdown("---")
-        st.markdown("### Como usar")
-        st.markdown("""
-        **Diagrama de Blocos:**
-        1. Clique **+ Adicionar Bloco** ou use os botoes rapidos
-        2. Arraste para posicionar
-        3. Conecte: porta azul (saida) -> porta verde (entrada)
-        4. Edite parametros no painel lateral
-        5. Clique **CALCULAR** para ver resultados
 
-        **Entrada Manual:**
-        1. Clique em "Entrada Manual"
-        2. Escolha: T(s) Direta, Malha Fechada, Malha Aberta ou Espaco de Estados
-        3. Preencha os campos
-        4. Clique **CALCULAR T(s)**
-        """)
+        # ── Adicionar blocos ──
+        st.header("Adicionar Bloco")
+        nome_cv = st.text_input("Nome do bloco",
+                                value=f"B{len(st.session_state.blocos)+1}",
+                                key="nome_canvas")
+        tipo_cv = st.selectbox("Tipo", list(BLOCK_TYPES.keys()), key="tipo_canvas")
 
-    html_content = _load_visual_editor_html()
+        repr_cv = st.radio(
+            "Representacao",
+            ['Funcao de Transferencia', 'Espaco de Estados'],
+            horizontal=True, key="repr_canvas")
 
-    # Injeta blocos do modo classico no canvas
-    if not st.session_state.blocos.empty:
-        blocks_data = []
-        tipo_map = {
-            'Planta': 'tf', 'Controlador': 'tf', 'Sensor': 'sensor',
-            'Atuador': 'actuator', 'Pre-filtro': 'tf', 'Perturbacao': 'tf',
-        }
-        for _, row in st.session_state.blocos.iterrows():
-            tf_obj = row['tf']
-            bt = tipo_map.get(row['tipo'], 'tf')
-            num_s = _coeffs_to_poly_str(tf_obj.num[0][0])
-            den_s = _coeffs_to_poly_str(tf_obj.den[0][0])
-            blocks_data.append({'type': bt, 'params': {'num': num_s, 'den': den_s}})
-        html_content = html_content.replace('__INITIAL_BLOCKS__', json.dumps(blocks_data))
+        if repr_cv == 'Funcao de Transferencia':
+            num_cv = st.text_input("Numerador", placeholder="ex: s+1", key="num_canvas")
+            den_cv = st.text_input("Denominador", placeholder="ex: s^2+2*s+3", key="den_canvas")
+            A_cv = B_cv = C_cv = D_cv = ''
+        else:
+            st.caption("Use `;` para separar linhas. Ex: `0 1; -2 -3`")
+            A_cv = st.text_input("Matriz A", placeholder="0 1; -2 -3", key="A_canvas")
+            B_cv = st.text_input("Matriz B", placeholder="0; 1", key="B_canvas")
+            C_cv = st.text_input("Matriz C", placeholder="1 0", key="C_canvas")
+            D_cv = st.text_input("Matriz D", placeholder="0", key="D_canvas")
+            num_cv = den_cv = ''
+
+        if st.button("Adicionar Bloco", type="primary", use_container_width=True, key="btn_add_canvas"):
+            if not nome_cv.strip():
+                st.error("Informe um nome.")
+            elif not st.session_state.blocos.empty and any(st.session_state.blocos['nome'] == nome_cv):
+                st.error(f"Bloco '{nome_cv}' ja existe.")
+            else:
+                ok, msg = adicionar_bloco(
+                    nome_cv, tipo_cv, repr_cv, num_cv, den_cv,
+                    A_cv, B_cv, C_cv, D_cv)
+                if ok:
+                    st.success(msg)
+                    st.rerun()
+                else:
+                    st.error(msg)
+
+        # ── Remover blocos ──
+        if not st.session_state.blocos.empty:
+            st.markdown("---")
+            st.header("Remover Blocos")
+            excluir_cv = st.selectbox("Selecionar bloco",
+                                      st.session_state.blocos['nome'],
+                                      key="excluir_canvas")
+            if st.button("Excluir", key="btn_excluir_canvas"):
+                remover_bloco(excluir_cv)
+                st.rerun()
+
+        # ── Definir conexoes ──
+        st.markdown("---")
+        st.header("Conexoes entre Blocos")
+        if len(st.session_state.blocos) >= 2:
+            tipo_conexao_cv = st.selectbox(
+                "Tipo de conexao", CONNECTION_TYPES, key="conn_tipo_canvas")
+            nomes_disp_cv = list(st.session_state.blocos['nome'])
+
+            if tipo_conexao_cv in ['Realimentacao Negativa', 'Realimentacao Positiva']:
+                st.caption("Bloco 1 = caminho direto G(s), Bloco 2 = realimentacao H(s)")
+                max_sel_cv = 2
+            else:
+                max_sel_cv = len(nomes_disp_cv)
+
+            blocos_conexao_cv = st.multiselect(
+                "Blocos (na ordem)", nomes_disp_cv,
+                max_selections=max_sel_cv, key="conn_blocos_canvas")
+
+            if st.button("Adicionar Conexao", key="btn_add_conn_canvas"):
+                if len(blocos_conexao_cv) < 2:
+                    st.error("Selecione pelo menos 2 blocos.")
+                else:
+                    st.session_state.conexoes.append({
+                        'tipo': tipo_conexao_cv,
+                        'blocos': blocos_conexao_cv,
+                    })
+                    st.success(f"Conexao '{tipo_conexao_cv}' adicionada.")
+                    st.rerun()
+
+            if st.session_state.conexoes:
+                st.markdown("**Conexoes definidas:**")
+                simbolos_cv = {'Serie': ' \u2192 ', 'Paralelo': ' || ',
+                               'Realimentacao Negativa': ' -fb\u2192 ',
+                               'Realimentacao Positiva': ' +fb\u2192 '}
+                for i, con in enumerate(st.session_state.conexoes):
+                    st.markdown(
+                        f"**{i+1}.** {con['tipo']}: "
+                        f"`{simbolos_cv.get(con['tipo'], ' \u2192 ').join(con['blocos'])}`")
+                    if st.button("Remover", key=f"rmcon_cv_{i}"):
+                        st.session_state.conexoes.pop(i)
+                        st.rerun()
+        else:
+            st.caption("Adicione pelo menos 2 blocos para definir conexoes.")
+
+    # ══════════════════════════════════════════════════
+    # AREA PRINCIPAL - Diagrama + Analise
+    # ══════════════════════════════════════════════════
+
+    if st.session_state.blocos.empty:
+        st.info("Adicione blocos pela barra lateral para comecar.")
     else:
-        html_content = html_content.replace('__INITIAL_BLOCKS__', '[]')
+        # ── Cards dos blocos ──
+        st.markdown(VISUAL_BLOCKS_CSS, unsafe_allow_html=True)
+        st.subheader("Blocos do Sistema")
+        html_cards = '<div class="vb-container">'
+        for idx, row in st.session_state.blocos.iterrows():
+            html_cards += _html_bloco_visual(row, is_new=(idx == len(st.session_state.blocos) - 1))
+        html_cards += '</div>'
+        st.markdown(html_cards, unsafe_allow_html=True)
 
-    components.html(html_content, height=1200, scrolling=True)
+        # ── Conexoes resumo ──
+        if st.session_state.conexoes:
+            simbolos_res = {'Serie': '\u2192', 'Paralelo': '||',
+                            'Realimentacao Negativa': '-fb\u2192',
+                            'Realimentacao Positiva': '+fb\u2192'}
+            conn_txt = " | ".join(
+                f"**{c['tipo']}**: {simbolos_res.get(c['tipo'], '\u2192').join(c['blocos'])}"
+                for c in st.session_state.conexoes)
+            st.markdown(f"**Conexoes:** {conn_txt}")
+
+        # ── Diagrama SVG ──
+        st.subheader("Diagrama de Blocos")
+        svg_diagram = _svg_diagrama_blocos(
+            st.session_state.blocos, st.session_state.conexoes)
+        if svg_diagram:
+            st.markdown(f'<div class="conn-diagram-wrap">{svg_diagram}</div>',
+                        unsafe_allow_html=True)
+
+        st.markdown("---")
+
+        # ── Editor visual (canvas HTML/JS) ──
+        with st.expander("Editor Visual Interativo (arrastar e conectar)", expanded=False):
+            html_content = _load_visual_editor_html()
+            if not st.session_state.blocos.empty:
+                blocks_data = []
+                tipo_map = {
+                    'Planta': 'tf', 'Controlador': 'tf', 'Sensor': 'sensor',
+                    'Atuador': 'actuator', 'Pre-filtro': 'tf', 'Perturbacao': 'tf',
+                }
+                for _, row in st.session_state.blocos.iterrows():
+                    tf_obj = row['tf']
+                    bt = tipo_map.get(row['tipo'], 'tf')
+                    num_s = _coeffs_to_poly_str(tf_obj.num[0][0])
+                    den_s = _coeffs_to_poly_str(tf_obj.den[0][0])
+                    blocks_data.append({'type': bt, 'params': {'num': num_s, 'den': den_s}})
+                html_content = html_content.replace('__INITIAL_BLOCKS__', json.dumps(blocks_data))
+            else:
+                html_content = html_content.replace('__INITIAL_BLOCKS__', '[]')
+            components.html(html_content, height=900, scrolling=True)
+
+        st.markdown("---")
+
+        # ── Painel de analise ──
+        st.subheader("Analise do Sistema")
+        col1, col2 = st.columns(2)
+        with col1:
+            tipo_malha_cv = st.selectbox("Tipo de analise",
+                                         ["Malha Aberta", "Malha Fechada"],
+                                         key="malha_canvas")
+            usar_ganho_cv = st.checkbox("Ganho K ajustavel", key="ganho_canvas")
+            K_cv = st.slider("K", 0.1, 100.0, 1.0, 0.1, key="K_canvas") if usar_ganho_cv else 1.0
+        with col2:
+            chave_cv = "malha_fechada" if tipo_malha_cv == "Malha Fechada" else "malha_aberta"
+            analise_opcoes_cv = ANALYSIS_OPTIONS[chave_cv]
+            analises_cv = st.multiselect("Analises", analise_opcoes_cv,
+                                         default=[analise_opcoes_cv[0]],
+                                         key="analises_canvas")
+            entrada_cv = st.selectbox("Sinal de entrada", INPUT_SIGNALS,
+                                      key="entrada_canvas")
+
+        if st.button("Calcular e Analisar", type="primary",
+                     use_container_width=True, key="btn_calc_canvas"):
+            try:
+                df = st.session_state.blocos
+                if df.empty:
+                    st.warning("Adicione blocos primeiro.")
+                    st.stop()
+
+                ganho_tf = TransferFunction([K_cv], [1])
+
+                if st.session_state.conexoes:
+                    sistema = simplificar_diagrama(
+                        st.session_state.blocos, st.session_state.conexoes)
+                    if usar_ganho_cv and K_cv != 1.0:
+                        sistema = ganho_tf * sistema
+                    if tipo_malha_cv == "Malha Fechada" and not any(
+                            c['tipo'].startswith('Realimentacao')
+                            for c in st.session_state.conexoes):
+                        sistema = ctrl.feedback(sistema, TransferFunction([1], [1]))
+                else:
+                    planta = obter_bloco_por_tipo('Planta')
+                    controlador = obter_bloco_por_tipo('Controlador')
+                    sensor = obter_bloco_por_tipo('Sensor')
+                    if planta is None:
+                        st.error("Adicione pelo menos uma Planta ou defina conexoes.")
+                        st.stop()
+                    if tipo_malha_cv == "Malha Aberta":
+                        sistema = ganho_tf * planta
+                        if controlador is not None:
+                            sistema = controlador * sistema
+                    else:
+                        sistema = calcular_malha_fechada(
+                            ganho_tf * planta, controlador, sensor)
+
+                sistema = ctrl.minreal(sistema, verbose=False)
+
+                st.markdown("### Funcao de Transferencia Equivalente")
+                num_str = _tf_to_str(sistema.num[0][0])
+                den_str = _tf_to_str(sistema.den[0][0])
+                st.latex(f"T(s) = \\frac{{{num_str}}}{{{den_str}}}")
+
+                executar_analises(sistema, analises_cv, entrada_cv, tipo_malha_cv)
+
+            except Exception as e:
+                st.error(f"Erro durante a simulacao: {e}")
 
 
 # ══════════════════════════════════════════════════
