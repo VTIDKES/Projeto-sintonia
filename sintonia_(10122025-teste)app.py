@@ -3,6 +3,32 @@
 Sistema de Modelagem e Analise de Sistemas de Controle v2.0
 Refatorado com: tela inicial, espaco de estados, modal de blocos,
 logica corrigida de serie/paralelo/feedback, simplificacao automatica.
+
+Motor de Simulacao:
+    A aplicacao converte a disposicao grafica dos blocos (serie, paralelo,
+    realimentacao negativa/positiva) em uma unica Funcao de Transferencia
+    de Malha Fechada (FTMF) no back-end, utilizando algebra de diagramas
+    de blocos via biblioteca python-control.
+
+Interatividade:
+    Widgets interativos permitem alterar ganhos K e constantes de tempo
+    em tempo real, atualizando instantaneamente os diagramas de resposta
+    sem necessidade de recarregar a pagina.
+
+Responsividade e Acessibilidade Web:
+    Construido com Streamlit e Plotly, o diagrama de blocos e os graficos
+    funcionam tanto em desktops quanto em tablets e celulares, sendo
+    acessivel via navegador sem instalacao local.
+
+Funcionalidades de Analise:
+    - Analise de Estabilidade: geracao automatica do Diagrama de Polos e
+      Zeros e do Lugar das Raizes (Root Locus / LGR).
+    - Resposta em Frequencia: Diagramas de Bode com calculo automatico
+      de Margem de Ganho e Margem de Fase.
+    - Simulacao no Dominio do Tempo: resposta ao degrau, rampa, impulso
+      e senoidal, com extracao automatica de Mp, ts e tr.
+    - Suporte a sistemas em Funcao de Transferencia e Espaco de Estados
+      (A, B, C, D), com conversao automatica entre representacoes.
 """
 
 import streamlit as st
@@ -45,7 +71,9 @@ BLOCK_TYPES = {
     'Perturbacao': {'icon': 'D(s)', 'desc': 'Perturbacao/disturbio'},
 }
 
-CONNECTION_TYPES = ['Serie', 'Paralelo', 'Realimentacao Negativa', 'Realimentacao Positiva']
+CONNECTION_TYPES = ['Serie', 'Paralelo', 'Realimentacao Negativa', 'Realimentacao Positiva', 'Append']
+
+PID_FORMAS = ['Paralelo', 'Ideal', 'Serie']
 
 # ══════════════════════════════════════════════════
 # INICIALIZACAO DO SESSION STATE
@@ -56,11 +84,14 @@ def inicializar_estado():
         'modo_selecionado': None,
         'blocos': pd.DataFrame(columns=[
             'nome', 'tipo', 'representacao', 'numerador', 'denominador',
-            'A', 'B', 'C', 'D', 'tf', 'tf_simbolico'
+            'A', 'B', 'C', 'D', 'tf', 'tf_simbolico',
+            'ss_sys', 'is_mimo', 'num_inputs', 'num_outputs',
         ]),
         'conexoes': [],
+        'etapas_composicao': [],
         'calculo_erro_habilitado': False,
         'representacao_classico': 'Funcao de Transferencia',
+        'par_io_selecionado': (0, 0),
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -118,26 +149,185 @@ def converter_para_tf(numerador_str, denominador_str):
 def converter_ss_para_tf(A_str, B_str, C_str, D_str):
     """Converte espaco de estados (A,B,C,D) para funcao de transferencia.
     T(s) = C(sI - A)^(-1)B + D
+
+    Suporta MIMO: se B tem m colunas e C tem p linhas, retorna
+    uma matriz p x m de funcoes de transferencia.
+
+    Retorna: (tf_sys, (num_sym, den_sym), ss_sys, is_mimo, num_inputs, num_outputs)
+      - Para SISO: tf_sys eh TransferFunction escalar
+      - Para MIMO: tf_sys eh TransferFunction matricial (python-control)
     """
     A = parse_matrix(A_str)
     B = parse_matrix(B_str)
     C = parse_matrix(C_str)
     D = parse_matrix(D_str)
+
+    # Garantir dimensoes corretas para vetores 1D
+    if A.ndim == 1:
+        A = A.reshape(1, 1)
+    if B.ndim == 1:
+        B = B.reshape(-1, 1)
+    if C.ndim == 1:
+        C = C.reshape(1, -1)
+    if D.ndim == 0:
+        D = D.reshape(1, 1)
+    elif D.ndim == 1:
+        D = D.reshape(1, -1)
+
     n = A.shape[0]
+    m = B.shape[1]   # numero de entradas
+    p = C.shape[0]   # numero de saidas
+
     if A.shape != (n, n):
         raise ValueError(f"Matriz A deve ser quadrada ({n}x{n})")
     if B.shape[0] != n:
-        raise ValueError(f"Matriz B deve ter {n} linhas")
+        raise ValueError(f"Matriz B deve ter {n} linhas (tem {B.shape[0]})")
     if C.shape[1] != n:
-        raise ValueError(f"Matriz C deve ter {n} colunas")
+        raise ValueError(f"Matriz C deve ter {n} colunas (tem {C.shape[1]})")
+    if D.shape != (p, m):
+        raise ValueError(f"Matriz D deve ser {p}x{m} (tem {D.shape[0]}x{D.shape[1]})")
+
     ss_sys = ctrl.ss(A, B, C, D)
     tf_sys = ctrl.tf(ss_sys)
+
+    is_mimo = (m > 1 or p > 1)
+
+    # Representacao simbolica (elemento [0][0] como referencia)
     s = sp.Symbol('s')
     num_coeffs = list(tf_sys.num[0][0])
     den_coeffs = list(tf_sys.den[0][0])
     num_sym = sum(c * s**i for i, c in enumerate(reversed(num_coeffs)))
     den_sym = sum(c * s**i for i, c in enumerate(reversed(den_coeffs)))
-    return tf_sys, (num_sym, den_sym), ss_sys
+
+    return tf_sys, (num_sym, den_sym), ss_sys, is_mimo, m, p
+
+
+def extrair_tf_elemento(tf_sys, i, j):
+    """Extrai a funcao de transferencia do elemento (i,j) de um sistema MIMO."""
+    num = list(tf_sys.num[i][j])
+    den = list(tf_sys.den[i][j])
+    return TransferFunction(num, den)
+
+
+def formatar_matriz_tf(tf_sys, num_outputs, num_inputs):
+    """Formata a matriz de funcoes de transferencia para exibicao LaTeX."""
+    s = sp.Symbol('s')
+    linhas = []
+    for i in range(num_outputs):
+        cols = []
+        for j in range(num_inputs):
+            num_c = list(tf_sys.num[i][j])
+            den_c = list(tf_sys.den[i][j])
+            num_sym = sum(c * s**k for k, c in enumerate(reversed(num_c)))
+            den_sym = sum(c * s**k for k, c in enumerate(reversed(den_c)))
+            cols.append(f"\\frac{{{sp.latex(num_sym)}}}{{{sp.latex(den_sym)}}}")
+        linhas.append(" & ".join(cols))
+    corpo = " \\\\ ".join(linhas)
+    return f"G(s) = \\begin{{bmatrix}} {corpo} \\end{{bmatrix}}"
+
+
+def formatar_matriz_np(mat, nome):
+    """Formata uma matriz numpy para exibicao LaTeX."""
+    rows, cols = mat.shape
+    linhas = []
+    for i in range(rows):
+        vals = [f"{mat[i, j]:.4g}" for j in range(cols)]
+        linhas.append(" & ".join(vals))
+    corpo = " \\\\ ".join(linhas)
+    return f"{nome} = \\begin{{bmatrix}} {corpo} \\end{{bmatrix}}"
+
+
+def construir_pid(Kp=1.0, Ki=0.0, Kd=0.0, forma='Paralelo', N=None, Ti=None, Td=None):
+    """Constroi funcao de transferencia do controlador PID.
+
+    Formas classicas (ref. Ogata, Dorf & Bishop, Nise):
+
+    Paralelo (padrao):
+        C(s) = Kp + Ki/s + Kd*s
+        => C(s) = (Kd*s^2 + Kp*s + Ki) / s
+
+    Ideal (ISA/academica):
+        C(s) = Kp * [1 + 1/(Ti*s) + Td*s]
+        => C(s) = Kp * (Ti*Td*s^2 + Ti*s + 1) / (Ti*s)
+        Equivalencia: Ki = Kp/Ti,  Kd = Kp*Td
+
+    Serie (industrial/interatuante):
+        C(s) = Kp * (1 + 1/(Ti*s)) * (1 + Td*s)
+        => C(s) = Kp * (Ti*Td*s^2 + (Ti+Td)*s + 1) / (Ti*s)
+
+    Filtro derivativo (N > 0):
+        Substitui a acao derivativa pura Kd*s por Kd*N*s / (s + N),
+        limitando a amplificacao em alta frequencia.
+        Valor tipico de N: 5 a 20 (Astrom & Murray, 2008).
+
+    Retorna: (TransferFunction, descricao_str)
+    """
+    desc_parts = []
+
+    if forma == 'Ideal':
+        if Ti is None or Td is None or Ti == 0:
+            raise ValueError("Forma Ideal requer Ti > 0 e Td >= 0.")
+        # C(s) = Kp * (Ti*Td*s^2 + Ti*s + 1) / (Ti*s)
+        num = [Kp * Ti * Td, Kp * Ti, Kp]
+        den = [Ti, 0]
+        desc_parts.append(f"PID Ideal: Kp={Kp}, Ti={Ti}, Td={Td}")
+        # Equivalencias
+        Ki_eq = Kp / Ti
+        Kd_eq = Kp * Td
+        desc_parts.append(f"  (Ki={Ki_eq:.4g}, Kd={Kd_eq:.4g})")
+
+    elif forma == 'Serie':
+        if Ti is None or Td is None or Ti == 0:
+            raise ValueError("Forma Serie requer Ti > 0 e Td >= 0.")
+        # C(s) = Kp * (Ti*Td*s^2 + (Ti+Td)*s + 1) / (Ti*s)
+        num = [Kp * Ti * Td, Kp * (Ti + Td), Kp]
+        den = [Ti, 0]
+        desc_parts.append(f"PID Serie: Kp={Kp}, Ti={Ti}, Td={Td}")
+
+    else:  # Paralelo
+        # C(s) = (Kd*s^2 + Kp*s + Ki) / s  (se Ki != 0)
+        # C(s) = Kd*s + Kp                   (se Ki == 0)
+        if Ki == 0 and Kd == 0:
+            return TransferFunction([Kp], [1]), f"P: Kp={Kp}"
+        elif Ki == 0:
+            num = [Kd, Kp]
+            den = [1]
+            desc_parts.append(f"PD Paralelo: Kp={Kp}, Kd={Kd}")
+        elif Kd == 0:
+            num = [Kp, Ki]
+            den = [1, 0]
+            desc_parts.append(f"PI Paralelo: Kp={Kp}, Ki={Ki}")
+        else:
+            num = [Kd, Kp, Ki]
+            den = [1, 0]
+            desc_parts.append(f"PID Paralelo: Kp={Kp}, Ki={Ki}, Kd={Kd}")
+
+    tf_pid = TransferFunction(num, den)
+
+    # Filtro derivativo: C_filtrado(s) = C_pid(s) com Kd*s -> Kd*N*s/(s+N)
+    if N is not None and N > 0 and Kd != 0:
+        if forma == 'Paralelo':
+            # Reconstroi: P + I + D_filtrado
+            tf_p = TransferFunction([Kp], [1])
+            tf_i = TransferFunction([Ki], [1, 0]) if Ki != 0 else TransferFunction([0], [1])
+            tf_d = TransferFunction([Kd * N, 0], [1, N])
+            tf_pid = tf_p + tf_i + tf_d
+        else:
+            # Para Ideal/Serie, aplica filtro como fator multiplicativo
+            # C_filt(s) = C(s) * (s + N) / (s + N) com derivativo filtrado
+            # Abordagem: recalcula com Td_eff = Td / (1 + Td*s/N) na TF
+            tf_filtro = TransferFunction([1, N], [1, N])  # unidade (simplificado)
+            # Mais precisamente: substitui Td*s por Td*N*s/(s+N)
+            # Para Ideal: C(s) = Kp[1 + 1/(Ti*s) + Td*N*s/(s+N)]
+            tf_p = TransferFunction([Kp], [1])
+            tf_i = TransferFunction([Kp], [Ti, 0]) if Ti and Ti > 0 else TransferFunction([0], [1])
+            Td_val = Td if Td else 0
+            tf_d = TransferFunction([Kp * Td_val * N, 0], [1, N])
+            tf_pid = tf_p + tf_i + tf_d
+        desc_parts.append(f"  Filtro derivativo: N={N}")
+
+    tf_pid = ctrl.minreal(tf_pid, verbose=False)
+    return tf_pid, " | ".join(desc_parts)
 
 
 def tipo_do_sistema(G):
@@ -201,9 +391,26 @@ def realimentacao(G, H=None, positiva=False):
     return ctrl.feedback(G, H, sign=sign)
 
 
+def sistemas_append(sys_list):
+    """Composicao por append: combina sistemas em um sistema MIMO diagonal.
+    Equivalente a ctrl.append(sys1, sys2, ...).
+    Preserva a estrutura matricial sem conectar entradas/saidas.
+    Util para montar sistemas MIMO maiores a partir de subsistemas.
+    """
+    if len(sys_list) == 1:
+        return sys_list[0]
+    resultado = sys_list[0]
+    for sys in sys_list[1:]:
+        resultado = ctrl.append(resultado, sys)
+    return resultado
+
+
 def simplificar_diagrama(blocos_df, conexoes):
     """Simplifica um diagrama de blocos baseado nas conexoes definidas.
-    Retorna a funcao de transferencia equivalente.
+    Retorna: (funcao_transferencia_final, etapas)
+    onde etapas eh uma lista de dicts descrevendo cada passo intermediario:
+      {'nome': 'H1', 'operacao': 'Serie', 'blocos': ['G1','G2'],
+       'tf': TransferFunction, 'formula': 'H1 = G1 * G2'}
     """
     if blocos_df.empty:
         raise ValueError("Nenhum bloco definido.")
@@ -212,11 +419,26 @@ def simplificar_diagrama(blocos_df, conexoes):
     for _, row in blocos_df.iterrows():
         tf_map[row['nome']] = row['tf']
 
+    etapas = []
+    contador_h = [0]  # usando lista para closure
+
+    def _nome_intermediario():
+        contador_h[0] += 1
+        return f"H{contador_h[0]}"
+
+    def _tf_label(tf_obj):
+        """Retorna representacao compacta de uma TF para exibicao."""
+        try:
+            num = tf_obj.num[0][0]
+            den = tf_obj.den[0][0]
+            return f"({_tf_to_str(num)}) / ({_tf_to_str(den)})"
+        except Exception:
+            return "..."
+
     if not conexoes:
         tfs = list(tf_map.values())
-        if len(tfs) == 1:
-            return tfs[0]
-        return blocos_em_serie(tfs)
+        resultado = tfs[0] if len(tfs) == 1 else blocos_em_serie(tfs)
+        return resultado, etapas
 
     resultado = None
     for con in conexoes:
@@ -231,29 +453,81 @@ def simplificar_diagrama(blocos_df, conexoes):
 
         if tipo_con == 'Serie':
             parcial = blocos_em_serie(tfs)
+            formula = " * ".join(nomes)
+            op_desc = "Serie"
         elif tipo_con == 'Paralelo':
             parcial = blocos_em_paralelo(tfs)
+            formula = " + ".join(nomes)
+            op_desc = "Paralelo"
         elif tipo_con == 'Realimentacao Negativa':
             G = tfs[0]
             H = tfs[1] if len(tfs) > 1 else TransferFunction([1], [1])
             parcial = realimentacao(G, H, positiva=False)
+            formula = f"{nomes[0]} / (1 + {nomes[0]}*{nomes[1]})"
+            op_desc = "Realimentacao Negativa"
         elif tipo_con == 'Realimentacao Positiva':
             G = tfs[0]
             H = tfs[1] if len(tfs) > 1 else TransferFunction([1], [1])
             parcial = realimentacao(G, H, positiva=True)
+            formula = f"{nomes[0]} / (1 - {nomes[0]}*{nomes[1]})"
+            op_desc = "Realimentacao Positiva"
+        elif tipo_con == 'Append':
+            parcial = sistemas_append(tfs)
+            formula = f"append({', '.join(nomes)})"
+            op_desc = "Append (MIMO diagonal)"
         else:
             parcial = blocos_em_serie(tfs)
+            formula = " * ".join(nomes)
+            op_desc = "Serie"
+
+        nome_h = _nome_intermediario()
+
+        etapa = {
+            'nome': nome_h,
+            'operacao': op_desc,
+            'blocos': nomes,
+            'tf': parcial,
+            'formula': f"{nome_h} = {formula}",
+            'tf_str': _tf_label(parcial),
+        }
+        etapas.append(etapa)
+
+        # Registra resultado intermediario para reutilizacao em etapas seguintes
+        tf_map[nome_h] = parcial
 
         if resultado is None:
             resultado = parcial
         else:
+            # Combina com resultado anterior em serie
+            nome_comb = _nome_intermediario()
             resultado = resultado * parcial
+            etapa_comb = {
+                'nome': nome_comb,
+                'operacao': 'Composicao',
+                'blocos': [etapas[-2]['nome'] if len(etapas) >= 2 else '...', nome_h],
+                'tf': resultado,
+                'formula': f"{nome_comb} = {etapas[-2]['nome'] if len(etapas) >= 2 else '...'} * {nome_h}",
+                'tf_str': _tf_label(resultado),
+            }
+            etapas.append(etapa_comb)
+            tf_map[nome_comb] = resultado
 
     if resultado is None:
         tfs = list(tf_map.values())
         resultado = blocos_em_serie(tfs) if len(tfs) > 1 else tfs[0]
 
-    return ctrl.minreal(resultado, verbose=False)
+    try:
+        resultado = ctrl.minreal(resultado, verbose=False)
+    except Exception:
+        pass
+
+    return resultado, etapas
+
+
+def simplificar_diagrama_compat(blocos_df, conexoes):
+    """Wrapper compativel com chamadas antigas que esperam apenas a TF."""
+    resultado, _ = simplificar_diagrama(blocos_df, conexoes)
+    return resultado
 
 
 def calcular_malha_fechada(planta, controlador=None, sensor=None):
@@ -547,25 +821,55 @@ def plot_nyquist(sistema):
 # ══════════════════════════════════════════════════
 
 def adicionar_bloco(nome, tipo, representacao, numerador='', denominador='',
-                    A_str='', B_str='', C_str='', D_str=''):
+                    A_str='', B_str='', C_str='', D_str='',
+                    pid_params=None):
+    """Adiciona um bloco ao sistema.
+    pid_params: dict com {Kp, Ki, Kd, forma, N, Ti, Td} (se representacao == 'PID')
+    """
     try:
-        if representacao == 'Funcao de Transferencia':
+        ss_sys = None
+        is_mimo = False
+        num_inputs = 1
+        num_outputs = 1
+
+        if representacao == 'PID':
+            if pid_params is None:
+                pid_params = {}
+            tf_obj, pid_desc = construir_pid(**pid_params)
+            s = sp.Symbol('s')
+            num_c = list(tf_obj.num[0][0])
+            den_c = list(tf_obj.den[0][0])
+            num_sym = sum(c * s**i for i, c in enumerate(reversed(num_c)))
+            den_sym = sum(c * s**i for i, c in enumerate(reversed(den_c)))
+            tf_symb = (num_sym, den_sym)
+            numerador = pid_desc
+            denominador = ''
+
+        elif representacao == 'Funcao de Transferencia':
             tf_obj, tf_symb = converter_para_tf(numerador, denominador)
-            ss_sys = None
-        else:
-            tf_obj, tf_symb, ss_sys = converter_ss_para_tf(A_str, B_str, C_str, D_str)
-            numerador = str(list(tf_obj.num[0][0]))
-            denominador = str(list(tf_obj.den[0][0]))
+
+        else:  # Espaco de Estados
+            tf_obj, tf_symb, ss_sys, is_mimo, num_inputs, num_outputs = \
+                converter_ss_para_tf(A_str, B_str, C_str, D_str)
+            if not is_mimo:
+                numerador = str(list(tf_obj.num[0][0]))
+                denominador = str(list(tf_obj.den[0][0]))
 
         novo = pd.DataFrame([{
             'nome': nome, 'tipo': tipo, 'representacao': representacao,
             'numerador': numerador, 'denominador': denominador,
             'A': A_str, 'B': B_str, 'C': C_str, 'D': D_str,
             'tf': tf_obj, 'tf_simbolico': tf_symb,
+            'ss_sys': ss_sys, 'is_mimo': is_mimo,
+            'num_inputs': num_inputs, 'num_outputs': num_outputs,
         }])
         st.session_state.blocos = pd.concat(
             [st.session_state.blocos, novo], ignore_index=True)
-        return True, f"Bloco '{nome}' adicionado com sucesso."
+
+        msg = f"Bloco '{nome}' adicionado com sucesso."
+        if is_mimo:
+            msg += f" (MIMO: {num_inputs} entradas, {num_outputs} saidas)"
+        return True, msg
     except Exception as e:
         return False, f"Erro: {e}"
 
