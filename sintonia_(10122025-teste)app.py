@@ -989,16 +989,59 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 <div class="man-hint">Analisa a funcao de transferencia de malha aberta <code>L(s) = G*H</code>.</div>
 </div>
 <div id="manSS" style="display:none">
-<h4>Espaco de Estados: dx/dt = Ax + Bu, y = Cx + Du</h4>
-<div class="man-row">
-<div class="pg"><label>Matriz A (nxn)</label><input id="manA" value="0 1; -2 -3" placeholder="0 1; -2 -3"></div>
-<div class="pg"><label>Matriz B (nx1)</label><input id="manB" value="0; 1" placeholder="0; 1"></div>
+<h4>Espaco de Estados: &#7819; = Ax + Bu &nbsp;|&nbsp; y = Cx + Du</h4>
+<style>
+.ss-size-row{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.ss-size-lbl{font-size:10px;text-transform:uppercase;color:var(--txm);letter-spacing:.5px}
+.ss-pill{padding:4px 12px;border-radius:12px;border:1.5px solid var(--bd);background:var(--sf2);color:var(--txm);font-size:11px;font-weight:600;cursor:pointer;transition:all .12s;font-family:monospace}
+.ss-pill:hover{border-color:var(--acc);color:var(--acc)}
+.ss-pill.ss-active{background:var(--acc);border-color:var(--acc);color:#fff}
+.ss-mats-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px}
+@media(max-width:600px){.ss-mats-grid{grid-template-columns:1fr}}
+.ss-card{background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:10px}
+.ss-card-hdr{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.ss-badge{width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;font-family:monospace}
+.ss-badge-A{background:#162038;color:var(--blu)}
+.ss-badge-B{background:#3a1520;color:var(--red)}
+.ss-badge-C{background:#0f2518;color:var(--grn)}
+.ss-badge-D{background:#2d1f4e;color:var(--pur)}
+.ss-card-name{font-size:11px;color:var(--tx);font-weight:600}
+.ss-card-dim{font-size:9px;color:var(--txm);font-family:monospace;background:rgba(0,0,0,.25);padding:1px 5px;border-radius:3px}
+.ss-tbl{border-collapse:collapse}
+.ss-tbl td{padding:2px}
+.ss-inp{width:54px;height:36px;border:1.5px solid var(--bd);border-radius:5px;background:var(--sf);color:var(--tx);font-family:monospace;font-size:12px;text-align:center;outline:none;transition:all .12s;padding:0 2px}
+.ss-inp:focus{border-color:var(--acc);background:#1e2545;box-shadow:0 0 0 2px rgba(91,107,224,.2)}
+.ss-inp.ss-filled{background:#1a2d4a;border-color:#3a5a8a}
+.ss-inp.ss-err{background:#3a1520;border-color:var(--red)}
+.ss-brk{font-size:2rem;color:var(--txm);font-weight:200;padding:0 2px;line-height:1;vertical-align:middle}
+.ss-statusbar{display:flex;gap:10px;font-size:10px;color:var(--txm);margin-bottom:10px;flex-wrap:wrap}
+.ss-stat{display:flex;align-items:center;gap:4px}
+.ss-dot{width:6px;height:6px;border-radius:50%;background:var(--bd);flex-shrink:0}
+.ss-dot-ok{background:var(--grn)}
+.ss-dot-partial{background:var(--yel)}
+.ss-hint-kb{font-size:10px;color:var(--txm);margin-top:4px;display:flex;gap:8px;flex-wrap:wrap}
+.ss-key{background:var(--sf2);border:1px solid var(--bd);border-radius:3px;padding:1px 5px;font-family:monospace;font-size:9px}
+</style>
+<div class="ss-size-row">
+  <span class="ss-size-lbl">Ordem n:</span>
+  <button class="ss-pill" onclick="ssSetN(1)">1×1</button>
+  <button class="ss-pill ss-active" onclick="ssSetN(2)">2×2</button>
+  <button class="ss-pill" onclick="ssSetN(3)">3×3</button>
+  <button class="ss-pill" onclick="ssSetN(4)">4×4</button>
 </div>
-<div class="man-row">
-<div class="pg"><label>Matriz C (1xn)</label><input id="manC" value="1 0" placeholder="1 0"></div>
-<div class="pg"><label>Matriz D (1x1)</label><input id="manD" value="0" placeholder="0"></div>
+<div class="ss-statusbar" id="ssManStatus">
+  <span class="ss-stat"><span class="ss-dot" id="ssDotA"></span>A —</span>
+  <span class="ss-stat"><span class="ss-dot" id="ssDotB"></span>B —</span>
+  <span class="ss-stat"><span class="ss-dot" id="ssDotC"></span>C —</span>
+  <span class="ss-stat"><span class="ss-dot" id="ssDotD"></span>D —</span>
 </div>
-<div class="man-hint">Use <code>;</code> para separar linhas. Ex: <code>0 1; -2 -3</code> = matriz 2x2. Converte para T(s) = C(sI-A)<sup>-1</sup>B + D</div>
+<div class="ss-mats-grid" id="ssManGrid"></div>
+<div class="ss-hint-kb">
+  <span><span class="ss-key">Tab</span> proxima</span>
+  <span><span class="ss-key">↑↓←→</span> navegar</span>
+  <span><span class="ss-key">Enter</span> confirmar</span>
+</div>
+<div class="man-hint" style="margin-top:8px">Editor visual. Converte para T(s) = C(sI&minus;A)<sup>&minus;1</sup>B + D. Maximo 4&times;4.</div>
 </div>
 </div>
 
@@ -1027,11 +1070,15 @@ function pickBlock(t){
     h+='<div class="cfg-row"><div><label>Numerador</label><input id="cfgNum" value="1" placeholder="ex: s+1"></div>';
     h+='<div><label>Denominador</label><input id="cfgDen" value="s+1" placeholder="ex: s^2+2s+1"></div></div>'}
   else if(t==="ss"){
-    h+='<div class="cfg-row"><div><label>Matriz A (nxn)</label><input id="cfgSSA" value="0 1; -2 -3" placeholder="0 1; -2 -3"></div>';
-    h+='<div><label>Matriz B (nx1)</label><input id="cfgSSB" value="0; 1" placeholder="0; 1"></div></div>';
-    h+='<div class="cfg-row"><div><label>Matriz C (1xn)</label><input id="cfgSSC" value="1 0" placeholder="1 0"></div>';
-    h+='<div><label>Matriz D (1x1)</label><input id="cfgSSD" value="0" placeholder="0"></div></div>';
-    h+='<div style="font-size:10px;color:var(--txm);margin-top:4px">Use <code>;</code> para separar linhas. Dimensoes livres (1x1, 2x2, 3x3, etc). Converte para T(s)=C(sI-A)<sup>-1</sup>B+D</div>'}
+    h+='<div id="cfgSSBuilder"></div>';
+    h+='<div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">';
+    h+='<span style="font-size:10px;color:var(--txm);align-self:center">Ordem n:</span>';
+    h+='<button class="ss-pill ss-active" style="font-size:10px;padding:3px 8px" onclick="cfgSSSetN(1)">1</button>';
+    h+='<button class="ss-pill" style="font-size:10px;padding:3px 8px" onclick="cfgSSSetN(2)">2</button>';
+    h+='<button class="ss-pill" style="font-size:10px;padding:3px 8px" onclick="cfgSSSetN(3)">3</button>';
+    h+='<button class="ss-pill" style="font-size:10px;padding:3px 8px" onclick="cfgSSSetN(4)">4</button>';
+    h+='</div>';
+    h+='<div style="font-size:10px;color:var(--txm);margin-top:4px">Editor visual. Max 4x4. T(s)=C(sI-A)<sup>-1</sup>B+D</div>';}
   else if(t==="gain"){h+='<div class="cfg-row"><div><label>Ganho K</label><input id="cfgK" value="1" placeholder="ex: 10"></div><div></div></div>'}
   else if(t==="pid"){
     h+='<div class="cfg-row"><div><label>Kp</label><input id="cfgKp" value="1"></div><div><label>Ki</label><input id="cfgKi" value="0"></div></div>';
@@ -1042,7 +1089,7 @@ function confirmAdd(){
   if(!pendingType)return;
   var t=pendingType,p={};
   if(t==="tf"||t==="sensor"||t==="actuator"){p.num=(document.getElementById("cfgNum")||{}).value||"1";p.den=(document.getElementById("cfgDen")||{}).value||"1"}
-  else if(t==="ss"){p.ssA=(document.getElementById("cfgSSA")||{}).value||"0";p.ssB=(document.getElementById("cfgSSB")||{}).value||"0";p.ssC=(document.getElementById("cfgSSC")||{}).value||"1";p.ssD=(document.getElementById("cfgSSD")||{}).value||"0"}
+  else if(t==="ss"){p.ssA=cfgSSGetStr('A');p.ssB=cfgSSGetStr('B');p.ssC=cfgSSGetStr('C');p.ssD=cfgSSGetStr('D')}
   else if(t==="gain"){p.k=(document.getElementById("cfgK")||{}).value||"1"}
   else if(t==="pid"){p.kp=(document.getElementById("cfgKp")||{}).value||"1";p.ki=(document.getElementById("cfgKi")||{}).value||"0";p.kd=(document.getElementById("cfgKd")||{}).value||"0"}
   else if(t==="sum"){p.signs=(document.getElementById("cfgSigns")||{}).value||"+ -"}
@@ -1500,6 +1547,155 @@ function setSubMode(m){curSubMode=m;
   document.getElementById("manOpen").style.display=m==="open"?"block":"none";
   document.getElementById("manSS").style.display=m==="ss"?"block":"none"}
 
+/* ===== SS VISUAL GRID ENGINE ===== */
+var ssManN=2,ssManData={A:null,B:null,C:null,D:null};
+var cfgSSN=2,cfgSSData={A:null,B:null,C:null,D:null};
+var panelSSN=2,panelSSData={A:null,B:null,C:null,D:null};
+
+function ssDims(n){return{A:[n,n],B:[n,1],C:[1,n],D:[1,1]}}
+function ssInitData(store,n){var d=ssDims(n);for(var m in d){store[m]=[];for(var r=0;r<d[m][0];r++){store[m].push([]);for(var c=0;c<d[m][1];c++)store[m][r].push(null)}}}
+function ssCellId(pfx,m,r,c){return pfx+'_'+m+'_'+r+'_'+c}
+function ssParseVal(v){if(v===''||v===null||v===undefined)return null;if(v.indexOf('/')>=0){var p=v.split('/');if(p.length===2){var a=parseFloat(p[0]),b=parseFloat(p[1]);if(!isNaN(a)&&!isNaN(b)&&b!==0)return a/b}}var n=parseFloat(v);return isNaN(n)?NaN:n}
+function ssFmtNum(v){if(v===null||v===undefined)return'';if(Number.isInteger(v))return String(v);var r=Math.round(v*1e8)/1e8;return String(r)}
+
+function ssBuildTable(pfx,store,mat,rows,cols){
+  var bColors={A:'#162038',B:'#3a1520',C:'#0f2518',D:'#2d1f4e'};
+  var bText={A:'#60a5fa',B:'#f87171',C:'#34d399',D:'#a78bfa'};
+  var bNames={A:'Matriz de estados','B':'Entrada','C':'Saida','D':'Transmissao'};
+  var bDesc={A:rows+'×'+cols,'B':rows+'×1','C':'1×'+cols,'D':'1×1'};
+  var h='<div class="ss-card">';
+  h+='<div class="ss-card-hdr"><div class="ss-badge" style="background:'+bColors[mat]+';color:'+bText[mat]+'">'+mat+'</div>';
+  h+='<span class="ss-card-name">'+bNames[mat]+'</span>';
+  h+='<span class="ss-card-dim">'+bDesc[mat]+'</span></div>';
+  h+='<table class="ss-tbl"><tbody>';
+  for(var r=0;r<rows;r++){
+    h+='<tr>';
+    if(r===0)h+='<td rowspan="'+rows+'" class="ss-brk" style="line-height:'+(rows*40)+'px;font-size:'+(Math.min(2.2,rows*1.1))+'rem">[</td>';
+    for(var c=0;c<cols;c++){
+      var val=store[mat]&&store[mat][r]?store[mat][r][c]:null;
+      var filled=val!==null&&!isNaN(val)?'ss-filled':'';
+      var w=pfx==='man'?54:46;
+      h+='<td><input class="ss-inp '+filled+'" id="'+ssCellId(pfx,mat,r,c)+'" type="text" placeholder="0" value="'+ssFmtNum(val)+'"';
+      h+=' style="width:'+w+'px" data-pfx="'+pfx+'" data-mat="'+mat+'" data-r="'+r+'" data-c="'+c+'"></td>';
+    }
+    if(r===0)h+='<td rowspan="'+rows+'" class="ss-brk" style="line-height:'+(rows*40)+'px;font-size:'+(Math.min(2.2,rows*1.1))+'rem">]</td>';
+    h+='</tr>';
+  }
+  h+='</tbody></table></div>';
+  return h}
+
+function ssRenderGrid(pfx,store,n,containerId){
+  var d=ssDims(n);
+  var h='';
+  h+=ssBuildTable(pfx,store,'A',d.A[0],d.A[1]);
+  h+=ssBuildTable(pfx,store,'B',d.B[0],d.B[1]);
+  h+=ssBuildTable(pfx,store,'C',d.C[0],d.C[1]);
+  h+=ssBuildTable(pfx,store,'D',d.D[0],d.D[1]);
+  var el=document.getElementById(containerId);
+  if(el)el.innerHTML=h;
+  /* attach events */
+  document.querySelectorAll('input[data-pfx="'+pfx+'"]').forEach(function(inp){
+    var m=inp.dataset.mat,r=parseInt(inp.dataset.r),c=parseInt(inp.dataset.c);
+    inp.addEventListener('focus',function(){inp.select()});
+    inp.addEventListener('input',function(){
+      var v=inp.value.trim(),parsed=ssParseVal(v);
+      if(store[m]&&store[m][r])store[m][r][c]=parsed;
+      inp.classList.toggle('ss-filled',v!==''&&!isNaN(parsed));
+      inp.classList.toggle('ss-err',v!==''&&isNaN(parsed));
+      ssUpdateStatus(pfx,store,n)});
+    inp.addEventListener('keydown',function(e){ssNavKey(e,pfx,m,r,c,n)})});}
+
+function ssNavKey(e,pfx,mat,r,c,n){
+  var d=ssDims(n);var mats=['A','B','C','D'];
+  var nr=r,nc=c,nm=mat;
+  var rows=d[mat][0],cols=d[mat][1];
+  if(e.key==='ArrowRight'||(e.key==='Tab'&&!e.shiftKey)){e.preventDefault();
+    if(c+1<cols)nc=c+1;else{var ni=mats.indexOf(mat)+1;if(ni<mats.length){nm=mats[ni];nr=0;nc=0}}}
+  else if(e.key==='ArrowLeft'||(e.key==='Tab'&&e.shiftKey)){e.preventDefault();if(c-1>=0)nc=c-1;}
+  else if(e.key==='ArrowDown'||e.key==='Enter'){e.preventDefault();if(r+1<rows)nr=r+1;}
+  else if(e.key==='ArrowUp'){e.preventDefault();if(r-1>=0)nr=r-1;}
+  else return;
+  var tgt=document.getElementById(ssCellId(pfx,nm,nr,nc));
+  if(tgt){tgt.focus();tgt.select()}}
+
+function ssUpdateStatus(pfx,store,n){
+  var d=ssDims(n);
+  ['A','B','C','D'].forEach(function(mat){
+    var dot=document.getElementById(pfx+'DotSS'+mat)||document.getElementById('ssDot'+mat);
+    if(!dot)return;
+    var rows=d[mat][0],cols=d[mat][1],filled=0,err=false;
+    for(var r=0;r<rows;r++)for(var c=0;c<cols;c++){
+      var v=store[mat]&&store[mat][r]?store[mat][r][c]:null;
+      if(v!==null){if(isNaN(v))err=true;else filled++}}
+    var total=rows*cols;
+    if(err)dot.style.background='#f87171';
+    else if(filled===total)dot.style.background='#34d399';
+    else if(filled>0)dot.style.background='#fbbf24';
+    else dot.style.background='var(--bd)'})}
+
+function ssGetStr(store,mat){
+  if(!store[mat])return'0';
+  return store[mat].map(function(row){return row.map(function(v){return v===null?'0':ssFmtNum(v)}).join(' ')}).join('; ')}
+
+/* --- MAN SS (modo Entrada Manual tab SS) --- */
+function ssSetN(newN){
+  var oldData={};['A','B','C','D'].forEach(function(m){oldData[m]=ssManData[m]?ssManData[m].map(function(r){return r.slice()}):null});
+  ssManN=newN;ssInitData(ssManData,newN);
+  /* preserve old values */
+  var d=ssDims(newN);
+  ['A','B','C','D'].forEach(function(mat){
+    if(!oldData[mat])return;
+    var rows=d[mat][0],cols=d[mat][1];
+    for(var r=0;r<Math.min(rows,oldData[mat].length);r++)
+      for(var c=0;c<Math.min(cols,(oldData[mat][r]||[]).length);c++)
+        ssManData[mat][r][c]=oldData[mat][r][c]});
+  document.querySelectorAll('.ss-size-row .ss-pill').forEach(function(p,i){p.classList.toggle('ss-active',i+1===newN)});
+  ssRenderGrid('man',ssManData,newN,'ssManGrid');
+  /* restore values to DOM */
+  var d2=ssDims(newN);
+  ['A','B','C','D'].forEach(function(mat){
+    for(var r=0;r<d2[mat][0];r++)for(var c=0;c<d2[mat][1];c++){
+      var v=ssManData[mat][r][c];
+      if(v!==null&&!isNaN(v)){var el=document.getElementById(ssCellId('man',mat,r,c));if(el){el.value=ssFmtNum(v);el.classList.add('ss-filled')}}}});
+  ssUpdateStatus('man',ssManData,newN)}
+
+function ssGetManStr(){return{A:ssGetStr(ssManData,'A'),B:ssGetStr(ssManData,'B'),C:ssGetStr(ssManData,'C'),D:ssGetStr(ssManData,'D')}}
+
+/* --- CFG SS (modal de adicionar bloco) --- */
+function cfgSSSetN(newN){
+  cfgSSN=newN;ssInitData(cfgSSData,newN);
+  document.querySelectorAll('#cfgPanel .ss-pill').forEach(function(p,i){p.classList.toggle('ss-active',i+1===newN)});
+  ssRenderGrid('cfg',cfgSSData,newN,'cfgSSBuilder')}
+function cfgSSGetStr(mat){return ssGetStr(cfgSSData,mat)}
+
+/* --- PANEL SS (painel lateral de bloco selecionado) --- */
+var _panelSSNid=null;
+function panelSSSetN(newN,nid){
+  panelSSN=newN;_panelSSNid=nid;ssInitData(panelSSData,newN);
+  document.querySelectorAll('#pA .ss-pill').forEach(function(p,i){p.classList.toggle('ss-active',i+1===newN)});
+  ssRenderGrid('pss',panelSSData,newN,'panelSSBuilder')}
+function panelSSApply(nid){
+  var nd=model.nodes.find(function(n){return n.id===nid});if(!nd)return;
+  nd.params.ssA=ssGetStr(panelSSData,'A');nd.params.ssB=ssGetStr(panelSSData,'B');
+  nd.params.ssC=ssGetStr(panelSSData,'C');nd.params.ssD=ssGetStr(panelSSData,'D');
+  var bl=document.querySelector('.block[data-id="'+nid+'"] .block-body');if(bl)bl.innerHTML=bTxt(nd)}
+
+/* init manual SS on load */
+(function(){ssInitData(ssManData,ssManN);ssInitData(cfgSSData,cfgSSN);ssInitData(panelSSData,panelSSN)})();
+
+/* hook into setSubMode to init grid when switching to SS tab */
+var _origSetSubMode=null;
+function _installSSHook(){
+  if(typeof setSubMode==='function'&&!_origSetSubMode){
+    _origSetSubMode=setSubMode;
+    setSubMode=function(m){_origSetSubMode(m);if(m==='ss'){setTimeout(function(){ssRenderGrid('man',ssManData,ssManN,'ssManGrid');ssUpdateStatus('man',ssManData,ssManN)},30)}}}}
+_installSSHook();
+/* hook pickBlock to init cfgSSBuilder when ss modal opens */
+var _origPickBlock=pickBlock;
+pickBlock=function(t){_origPickBlock(t);if(t==='ss'){setTimeout(function(){cfgSSN=2;ssInitData(cfgSSData,cfgSSN);ssRenderGrid('cfg',cfgSSData,cfgSSN,'cfgSSBuilder')},30)}};
+
+/* ===== END SS VISUAL GRID ===== */
+
 function onCalc(){
   if(curMode==="manual"){
     var tf;
@@ -1516,13 +1712,10 @@ function onCalc(){
       /* L(s) = G*H = (Gn*Hn) / (Gd*Hd) */
       tf={n:pMul(gn,hn),d:pMul(gd,hd)};
     } else if(curSubMode==="ss"){
-      /* State Space */
+      /* State Space - read from visual grid */
       try{
-        tf=ssToTF(
-          document.getElementById("manA").value,
-          document.getElementById("manB").value,
-          document.getElementById("manC").value,
-          document.getElementById("manD").value);
+        var ssStr=ssGetManStr();
+        tf=ssToTF(ssStr.A,ssStr.B,ssStr.C,ssStr.D);
       }catch(e){
         var rd=document.getElementById("res"),rb=document.getElementById("rb");
         rd.classList.add("vis");rb.innerHTML='<div class="ebox">Erro no espaco de estados: '+esc(String(e))+'</div>';
@@ -1615,13 +1808,44 @@ function updP(){document.getElementById("pB").textContent=model.nodes.length;doc
   var nd=model.nodes.find(function(n){return n.id===selId});if(!nd){pa.innerHTML="";return}var p=nd.params||{};
   var h='<div style="font-size:11px;color:var(--txm);margin-bottom:6px">'+BL[nd.type]+' <b style="color:var(--tx)">'+nd.id+'</b></div>';
   if(nd.type==="tf"||nd.type==="sensor"||nd.type==="actuator"){h+=pI("Num","num",p.num||"1");h+=pI("Den","den",p.den||"1")}
-  else if(nd.type==="ss"){h+=pI("Matriz A","ssA",p.ssA||"0 1; -2 -3");h+=pI("Matriz B","ssB",p.ssB||"0; 1");h+=pI("Matriz C","ssC",p.ssC||"1 0");h+=pI("Matriz D","ssD",p.ssD||"0")}
+  else if(nd.type==="ss"){
+    h+='<div id="panelSSBuilder" style="margin-bottom:6px"></div>';
+    h+='<div style="display:flex;gap:4px;margin-bottom:6px;flex-wrap:wrap">';
+    h+='<span style="font-size:9px;color:var(--txm);align-self:center">n:</span>';
+    [1,2,3,4].forEach(function(i){h+='<button class="ss-pill" style="font-size:9px;padding:2px 7px" onclick="panelSSSetN('+i+',\''+nd.id+'\')" id="panelSSPill'+i+'">'+i+'</button>'});
+    h+='</div>';
+    h+='<button onclick="panelSSApply(\''+nd.id+'\')" style="width:100%;padding:6px;background:var(--acc);border:none;color:#fff;border-radius:5px;font-size:11px;cursor:pointer;font-weight:700">Aplicar</button>';}
   else if(nd.type==="gain")h+=pI("K","k",p.k||"1");
   else if(nd.type==="sum")h+=pI("Sinais","signs",p.signs||"+ -");
   else if(nd.type==="pid"){h+=pI("Kp","kp",p.kp||"1");h+=pI("Ki","ki",p.ki||"0");h+=pI("Kd","kd",p.kd||"0")}
   else if(nd.type==="input"||nd.type==="output")h+=pI("Label","label",p.label||"");
   pa.innerHTML=h;pa.querySelectorAll("input[data-key]").forEach(function(inp){inp.addEventListener("input",function(){nd.params[inp.dataset.key]=inp.value;
-    if(inp.dataset.key==="signs")render();else{var bl=document.querySelector('.block[data-id="'+nd.id+'"] .block-body');if(bl)bl.innerHTML=bTxt(nd)}})})}
+    if(inp.dataset.key==="signs")render();else{var bl=document.querySelector('.block[data-id="'+nd.id+'"] .block-body');if(bl)bl.innerHTML=bTxt(nd)}})});
+  /* Init SS panel grid if this is an SS block */
+  if(nd.type==="ss"){
+    var p2=nd.params||{};
+    /* Parse existing strings back to grid */
+    var parsed=parseMat(p2.ssA||"0 1; -2 -3");
+    panelSSN=parsed.length||2;if(panelSSN<1)panelSSN=1;if(panelSSN>4)panelSSN=4;
+    ssInitData(panelSSData,panelSSN);
+    var mstrs={A:p2.ssA||"0 1; -2 -3",B:p2.ssB||"0; 1",C:p2.ssC||"1 0",D:p2.ssD||"0"};
+    ['A','B','C','D'].forEach(function(mat){
+      var rows=parseMat(mstrs[mat]);
+      var d=ssDims(panelSSN);
+      for(var r=0;r<Math.min(rows.length,d[mat][0]);r++)
+        for(var c=0;c<Math.min((rows[r]||[]).length,d[mat][1]);c++)
+          panelSSData[mat][r][c]=rows[r][c]});
+    setTimeout(function(){
+      ssRenderGrid('pss',panelSSData,panelSSN,'panelSSBuilder');
+      /* restore values */
+      var d=ssDims(panelSSN);
+      ['A','B','C','D'].forEach(function(mat){
+        for(var r=0;r<d[mat][0];r++)for(var c=0;c<d[mat][1];c++){
+          var v=panelSSData[mat][r][c];
+          if(v!==null&&!isNaN(v)){var el=document.getElementById(ssCellId('pss',mat,r,c));if(el){el.value=ssFmtNum(v);el.classList.add('ss-filled')}}}});
+      /* set active pill */
+      document.querySelectorAll('#pA .ss-pill').forEach(function(p,i){p.classList.toggle('ss-active',i+1===panelSSN)});
+    },30)}}}
 function pI(l,k,v){return'<div class="pg"><label>'+l+'</label><input data-key="'+k+'" value="'+esc(String(v))+'"></div>'}
 
 /* ===== CONEXAO INTERATIVA (Serie, Paralelo, Feedback) ===== */
