@@ -3014,37 +3014,11 @@ def modo_classico():
         nome = st.text_input("Nome", value="G1")
         tipo = st.selectbox("Tipo", ['Planta', 'Controlador', 'Sensor', 'Atuador'])
 
-        representacao = st.radio(
-            "Representacao",
-            ['Funcao de Transferencia', 'Espaco de Estados'],
-            horizontal=True,
-            key="representacao_classico"
-        )
+        representacao = 'Funcao de Transferencia'
 
-        if representacao == 'Funcao de Transferencia':
-            numerador   = st.text_input("Numerador",   placeholder="ex: 4")
-            denominador = st.text_input("Denominador", placeholder="ex: s^2 + 2*s + 3")
-            A_str = B_str = C_str = D_str = ''
-        else:
-            # Grade interativa de entrada de matrizes
-            st.caption("Preencha a grade abaixo célula por célula:")
-            components.html(_ss_matrix_grid_html('cl', default_n=2), height=560, scrolling=False)
-            st.caption("Insira os valores manualmente (copie do preview acima):")
-            if 'ss_n_cl' not in st.session_state:
-                st.session_state.ss_n_cl = 2
-            _n2 = st.session_state.ss_n_cl
-            A_str = st.text_input("Matriz A (linhas por ';')",
-                                  placeholder="ex: 0 1; -2 -3",
-                                  value="; ".join([" ".join(["1" if i==j else "0"
-                                                             for j in range(_n2)])
-                                                   for i in range(_n2)]), key="clA")
-            B_str = st.text_input("Matriz B", value="; ".join(["0"]*_n2),
-                                  placeholder="ex: 0; 1", key="clB")
-            C_str = st.text_input("Matriz C",
-                                  value=" ".join(["1" if j==0 else "0" for j in range(_n2)]),
-                                  placeholder="ex: 1 0", key="clC")
-            D_str = st.text_input("Matriz D", value="0", placeholder="ex: 0", key="clD")
-            numerador = denominador = ''
+        numerador   = st.text_input("Numerador",   placeholder="ex: 4")
+        denominador = st.text_input("Denominador", placeholder="ex: s^2 + 2*s + 3")
+        A_str = B_str = C_str = D_str = ''
 
         if st.button("Adicionar", type="primary", use_container_width=True):
             ok, msg = adicionar_bloco(nome, tipo, representacao,
