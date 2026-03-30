@@ -143,102 +143,79 @@ def converter_para_tf(numerador_str, denominador_str):
 
 def converter_ss_para_tf(A_str, B_str, C_str, D_str):
     """Converte espaço de estados (A,B,C,D) para função de transferência.
-
-    Usa álgebra simbólica pura (sympy): G(s) = C·(sI−A)⁻¹·B + D.
-    Funciona para SISO e MIMO sem depender de ctrl.ss / ctrl.tf,
-    evitando falhas numéricas e de normalização.
-
-    - Se SISO → retorna dict com "tipo":"SISO", "tf", "simbolico", "num", "den"
-    - Se MIMO → retorna dict com "tipo":"MIMO", "tf", "G" (matriz de exprs sympy)
+    
+    - Se SISO → retorna (num_sym, den_sym)
+    - Se MIMO → retorna matriz G(s)
     """
-    # ── Parse ────────────────────────────────────────────────────────────────
+    # 🔹 Parse e garante numpy array 2D
     A = np.atleast_2d(parse_matrix(A_str)).astype(float)
     B = np.atleast_2d(parse_matrix(B_str)).astype(float)
     C = np.atleast_2d(parse_matrix(C_str)).astype(float)
     D = np.atleast_2d(parse_matrix(D_str)).astype(float)
 
+    # 🔹 Validações
     n = A.shape[0]
-
-    # ── Correção automática de orientação de B e C ───────────────────────────
-    # B deve ser (n × n_in); se o usuário digitou como vetor-linha, transpõe
-    if B.ndim == 1 or (B.shape[0] != n and B.shape[1] == n):
-        B = B.T
-    # C deve ser (n_out × n); se chegou como vetor-coluna, transpõe
-    if C.ndim == 1 or (C.shape[1] != n and C.shape[0] == n):
-        C = C.T
-
-    # ── Validações ───────────────────────────────────────────────────────────
     if A.shape != (n, n):
         raise ValueError(f"Matriz A deve ser quadrada ({n}x{n})")
+    # Corrige orientação de B (nx1) e C (1xn) se o usuário inverteu
+    if B.shape[0] != n and B.shape[1] == n:
+        B = B.T
+    if C.shape[1] != n and C.shape[0] == n:
+        C = C.T
     if B.shape[0] != n:
-        raise ValueError(f"Matriz B deve ter {n} linhas (recebeu shape {B.shape})")
+        raise ValueError(f"Matriz B deve ter {n} linhas")
     if C.shape[1] != n:
-        raise ValueError(f"Matriz C deve ter {n} colunas (recebeu shape {C.shape})")
+        raise ValueError(f"Matriz C deve ter {n} colunas")
 
-    n_in  = B.shape[1]
-    n_out = C.shape[0]
+    # 🔹 Sistema
+    ss_sys = ctrl.ss(A, B, C, D)
+    tf_sys = ctrl.tf(ss_sys)
 
-    # ── Cálculo simbólico exato: G(s) = C·(sI−A)⁻¹·B + D ───────────────────
     s = sp.Symbol('s')
-    sI_minus_A = s * sp.eye(n) - sp.Matrix(A.tolist())
-    inv_sI_A   = sI_minus_A.inv()
-    G_sym      = sp.Matrix(C.tolist()) * inv_sI_A * sp.Matrix(B.tolist()) \
-                 + sp.Matrix(D.tolist())
 
-    # ── Extrai coeficientes numéricos de cada entrada (i, j) ─────────────────
-    num_matrix = []   # [n_out][n_in][coeff]  ordem decrescente
-    den_matrix = []
-    G_exprs    = []
+    # =========================
+    # 🔹 CASO SISO
+    # =========================
+    if tf_sys.ninputs == 1 and tf_sys.noutputs == 1:
+        num_coeffs = list(tf_sys.num[0][0])
+        den_coeffs = list(tf_sys.den[0][0])
 
-    for i in range(n_out):
-        num_row, den_row, expr_row = [], [], []
-        for j in range(n_in):
-            expr = sp.nsimplify(G_sym[i, j], rational=False, tolerance=1e-10)
-            expr = sp.simplify(expr)
-            num_sp, den_sp = sp.fraction(sp.together(expr))
+        num_sym = sum(c * s**k for k, c in enumerate(reversed(num_coeffs)))
+        den_sym = sum(c * s**k for k, c in enumerate(reversed(den_coeffs)))
 
-            den_poly = sp.Poly(den_sp, s)
-            lc = float(den_poly.LC())
-            if abs(lc) < 1e-14:
-                lc = 1.0
-
-            nc = [float(c) / lc for c in sp.Poly(num_sp, s).all_coeffs()]
-            dc = [float(c) / lc for c in den_poly.all_coeffs()]
-
-            # Zera coeficientes numericamente desprezíveis
-            nc = [0.0 if abs(v) < 1e-10 else v for v in nc]
-            dc = [0.0 if abs(v) < 1e-10 else v for v in dc]
-
-            num_row.append(nc)
-            den_row.append(dc)
-            expr_row.append(expr)
-
-        num_matrix.append(num_row)
-        den_matrix.append(den_row)
-        G_exprs.append(expr_row)
-
-    # ── Constrói TransferFunction (python-control) ───────────────────────────
-    tf_sys = TransferFunction(num_matrix, den_matrix)
-
-    # ── Retorno ──────────────────────────────────────────────────────────────
-    s = sp.Symbol('s')
-    if n_in == 1 and n_out == 1:
-        num_sym = sum(c * s**k for k, c in enumerate(reversed(num_matrix[0][0])))
-        den_sym = sum(c * s**k for k, c in enumerate(reversed(den_matrix[0][0])))
         return {
-            "tipo":      "SISO",
-            "tf":        tf_sys,
+            "tipo": "SISO",
+            "tf": tf_sys,
             "simbolico": num_sym / den_sym,
-            "num":       num_sym,
-            "den":       den_sym,
-            "ss":        None,
+            "num": num_sym,
+            "den": den_sym,
+            "ss": ss_sys
         }
+
+    # =========================
+    # 🔥 CASO MIMO
+    # =========================
     else:
+        G = []
+
+        for i in range(tf_sys.noutputs):
+            linha = []
+            for j in range(tf_sys.ninputs):
+                num_coeffs = list(tf_sys.num[i][j])
+                den_coeffs = list(tf_sys.den[i][j])
+
+                num_sym = sum(c * s**k for k, c in enumerate(reversed(num_coeffs)))
+                den_sym = sum(c * s**k for k, c in enumerate(reversed(den_coeffs)))
+
+                linha.append(num_sym / den_sym)
+
+            G.append(linha)
+
         return {
             "tipo": "MIMO",
-            "tf":   tf_sys,
-            "G":    G_exprs,
-            "ss":   None,
+            "tf": tf_sys,
+            "G": G,  # matriz simbólica
+            "ss": ss_sys
         }
 
 
