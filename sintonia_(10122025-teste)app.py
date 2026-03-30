@@ -984,6 +984,21 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 </div>
 <div id="manSS" style="display:none">
 <h4>Espaco de Estados: dx/dt = Ax + Bu, y = Cx + Du</h4>
+<div style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:8px 0 14px">
+<div style="font-size:12px;color:var(--txm)">Selecione o tamanho da matriz:</div>
+<div id="manDimBadge" style="font-size:13px;font-weight:700;color:#f87171;border:1.5px solid #f87171;border-radius:20px;padding:5px 18px;cursor:pointer;user-select:none;position:relative" onclick="toggleManDrop(event)">2 x 2 <span style="font-size:10px">&#9660;</span>
+<div id="manDimDrop" style="display:none;position:absolute;top:110%;left:50%;transform:translateX(-50%);background:#1a1d2e;border:1px solid #333654;border-radius:8px;z-index:99;min-width:110px;box-shadow:0 4px 12px rgba(0,0,0,.5)">
+<div onclick="setManDim(event,1)" style="padding:8px 16px;font-size:12px;cursor:pointer;color:#e0e4f0" onmouseenter="this.style.background=\'#252840\'" onmouseleave="this.style.background=\'\'">1 x 1</div>
+<div onclick="setManDim(event,2)" style="padding:8px 16px;font-size:12px;cursor:pointer;color:#e0e4f0" onmouseenter="this.style.background=\'#252840\'" onmouseleave="this.style.background=\'\'">2 x 2</div>
+<div onclick="setManDim(event,3)" style="padding:8px 16px;font-size:12px;cursor:pointer;color:#e0e4f0" onmouseenter="this.style.background=\'#252840\'" onmouseleave="this.style.background=\'\'">3 x 3</div>
+<div onclick="setManDim(event,4)" style="padding:8px 16px;font-size:12px;cursor:pointer;color:#e0e4f0" onmouseenter="this.style.background=\'#252840\'" onmouseleave="this.style.background=\'\'">4 x 4</div>
+<div onclick="setManDim(event,5)" style="padding:8px 16px;font-size:12px;cursor:pointer;color:#e0e4f0" onmouseenter="this.style.background=\'#252840\'" onmouseleave="this.style.background=\'\'">5 x 5</div>
+</div></div>
+<div style="position:relative;display:inline-block;padding:0 12px">
+<div style="position:absolute;left:2px;top:50%;transform:translateY(-50%);width:5px;height:80%;border:2.5px solid #e0e4f0;border-right:none;border-radius:3px 0 0 3px"></div>
+<div id="manMatGrid" style="display:grid;gap:5px"></div>
+<div style="position:absolute;right:2px;top:50%;transform:translateY(-50%);width:5px;height:80%;border:2.5px solid #e0e4f0;border-left:none;border-radius:0 3px 3px 0"></div>
+</div></div>
 <div class="man-row">
 <div class="pg"><label>Matriz A (nxn)</label><input id="manA" value="0 1; -2 -3" placeholder="0 1; -2 -3"></div>
 <div class="pg"><label>Matriz B (nx1)</label><input id="manB" value="0; 1" placeholder="0; 1"></div>
@@ -992,7 +1007,7 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 <div class="pg"><label>Matriz C (1xn)</label><input id="manC" value="1 0" placeholder="1 0"></div>
 <div class="pg"><label>Matriz D (1x1)</label><input id="manD" value="0" placeholder="0"></div>
 </div>
-<div class="man-hint">Use <code>;</code> para separar linhas. Ex: <code>0 1; -2 -3</code> = matriz 2x2. Converte para T(s) = C(sI-A)<sup>-1</sup>B + D</div>
+<div class="man-hint">Use <code>;</code> para separar linhas. Clique na grade para definir a dimensao. Converte para T(s) = C(sI-A)<sup>-1</sup>B + D</div>
 </div>
 </div>
 
@@ -1021,11 +1036,27 @@ function pickBlock(t){
     h+='<div class="cfg-row"><div><label>Numerador</label><input id="cfgNum" value="1" placeholder="ex: s+1"></div>';
     h+='<div><label>Denominador</label><input id="cfgDen" value="s+1" placeholder="ex: s^2+2s+1"></div></div>'}
   else if(t==="ss"){
+    h+='<div style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:8px 0 12px">';
+    h+='<div style="font-size:11px;color:var(--txm)">Tamanho da matriz:</div>';
+    h+='<div id="cfgDimBadge" style="font-size:13px;font-weight:700;color:#f87171;border:1.5px solid #f87171;border-radius:20px;padding:5px 18px;cursor:pointer;user-select:none;position:relative" onclick="toggleCfgDrop(event)">2 x 2 <span style="font-size:10px">&#9660;</span>';
+    h+='<div id="cfgDimDrop" style="display:none;position:absolute;top:110%;left:50%;transform:translateX(-50%);background:#1a1d2e;border:1px solid #333654;border-radius:8px;z-index:99;min-width:110px;box-shadow:0 4px 12px rgba(0,0,0,.5)">';
+    h+='<div onclick="setCfgDim(event,1)" style="padding:8px 16px;font-size:12px;cursor:pointer;color:#e0e4f0" onmouseenter="this.style.background=\'#252840\'" onmouseleave="this.style.background=\'\'">1 x 1</div>';
+    h+='<div onclick="setCfgDim(event,2)" style="padding:8px 16px;font-size:12px;cursor:pointer;color:#e0e4f0" onmouseenter="this.style.background=\'#252840\'" onmouseleave="this.style.background=\'\'">2 x 2</div>';
+    h+='<div onclick="setCfgDim(event,3)" style="padding:8px 16px;font-size:12px;cursor:pointer;color:#e0e4f0" onmouseenter="this.style.background=\'#252840\'" onmouseleave="this.style.background=\'\'">3 x 3</div>';
+    h+='<div onclick="setCfgDim(event,4)" style="padding:8px 16px;font-size:12px;cursor:pointer;color:#e0e4f0" onmouseenter="this.style.background=\'#252840\'" onmouseleave="this.style.background=\'\'">4 x 4</div>';
+    h+='<div onclick="setCfgDim(event,5)" style="padding:8px 16px;font-size:12px;cursor:pointer;color:#e0e4f0" onmouseenter="this.style.background=\'#252840\'" onmouseleave="this.style.background=\'\'">5 x 5</div>';
+    h+='</div></div>';
+    h+='<div style="position:relative;display:inline-block;padding:0 10px">';
+    h+='<div style="position:absolute;left:2px;top:50%;transform:translateY(-50%);width:5px;height:80%;border:2.5px solid #e0e4f0;border-right:none;border-radius:3px 0 0 3px"></div>';
+    h+='<div id="cfgMatGrid" style="display:grid;gap:5px"></div>';
+    h+='<div style="position:absolute;right:2px;top:50%;transform:translateY(-50%);width:5px;height:80%;border:2.5px solid #e0e4f0;border-left:none;border-radius:0 3px 3px 0"></div>';
+    h+='</div></div>';
     h+='<div class="cfg-row"><div><label>Matriz A (nxn)</label><input id="cfgSSA" value="0 1; -2 -3" placeholder="0 1; -2 -3"></div>';
     h+='<div><label>Matriz B (nx1)</label><input id="cfgSSB" value="0; 1" placeholder="0; 1"></div></div>';
     h+='<div class="cfg-row"><div><label>Matriz C (1xn)</label><input id="cfgSSC" value="1 0" placeholder="1 0"></div>';
     h+='<div><label>Matriz D (1x1)</label><input id="cfgSSD" value="0" placeholder="0"></div></div>';
-    h+='<div style="font-size:10px;color:var(--txm);margin-top:4px">Use <code>;</code> para separar linhas. Dimensoes livres (1x1, 2x2, 3x3, etc). Converte para T(s)=C(sI-A)<sup>-1</sup>B+D</div>'}
+    h+='<div style="font-size:10px;color:var(--txm);margin-top:4px">Use <code>;</code> para separar linhas. Dimensoes livres. Converte para T(s)=C(sI-A)<sup>-1</sup>B+D</div>';
+    h+='<script>var cfgN=2;function renderCfgGrid(){var g=document.getElementById("cfgMatGrid");if(!g)return;var MAX=5,s=36,gp=5,total=(s*MAX)+(gp*(MAX-1));g.style.gridTemplateColumns="repeat("+MAX+","+s+"px)";g.style.width=total+"px";g.innerHTML="";for(var r=0;r<MAX;r++)for(var c=0;c<MAX;c++){var cell=document.createElement("div");cell.style.cssText="width:"+s+"px;height:"+s+"px;border-radius:8px;border:1.5px solid "+(r<cfgN&&c<cfgN?"#f87171":"#333654")+";background:"+(r<cfgN&&c<cfgN?"#f87171":"#252840")+";cursor:pointer;transition:background .12s";cell.dataset.r=r;cell.dataset.c=c;cell.onmouseenter=function(){hlCfg(+this.dataset.r+1,+this.dataset.c+1)};cell.onmouseleave=function(){hlCfg(cfgN,cfgN)};cell.onclick=function(){cfgN=Math.max(+this.dataset.r+1,+this.dataset.c+1);var b=document.getElementById("cfgDimBadge");if(b)b.childNodes[0].nodeValue=cfgN+" x "+cfgN+" ";hlCfg(cfgN,cfgN);applyCfgDim(cfgN)};g.appendChild(cell)}}function hlCfg(rows,cols){var cells=document.querySelectorAll("#cfgMatGrid div");cells.forEach(function(c){var active=+c.dataset.r<rows&&+c.dataset.c<cols;c.style.background=active?"#f87171":"#252840";c.style.borderColor=active?"#f87171":"#333654"})}function toggleCfgDrop(e){e.stopPropagation();var d=document.getElementById("cfgDimDrop");d.style.display=d.style.display==="none"?"block":"none"}function setCfgDim(e,n){e.stopPropagation();cfgN=n;var b=document.getElementById("cfgDimBadge");if(b)b.childNodes[0].nodeValue=n+" x "+n+" ";document.getElementById("cfgDimDrop").style.display="none";renderCfgGrid();hlCfg(n,n);applyCfgDim(n)}function applyCfgDim(n){var r=[];for(var i=0;i<n;i++){var row=[];for(var j=0;j<n;j++)row.push(i===j?1:0);r.push(row.join(" "))}var A=document.getElementById("cfgSSA");if(A)A.value=r.join("; ");var B=document.getElementById("cfgSSB");if(B)B.value=Array.from({length:n},function(){return"0"}).join("; ");var C=document.getElementById("cfgSSC");if(C)C.value=Array.from({length:n},function(_,i){return i===0?1:0}).join(" ");var D=document.getElementById("cfgSSD");if(D)D.value="0"}document.addEventListener("click",function(){var d=document.getElementById("cfgDimDrop");if(d)d.style.display="none"});setTimeout(function(){renderCfgGrid();hlCfg(cfgN,cfgN)},50);<\/script>'}
   else if(t==="gain"){h+='<div class="cfg-row"><div><label>Ganho K</label><input id="cfgK" value="1" placeholder="ex: 10"></div><div></div></div>'}
   else if(t==="pid"){
     h+='<div class="cfg-row"><div><label>Kp</label><input id="cfgKp" value="1"></div><div><label>Ki</label><input id="cfgKi" value="0"></div></div>';
@@ -1718,6 +1749,53 @@ function buildFeedback(ids,positive){
   model.edges.push({id:mkEid(),src:br.id,srcPort:'out1',dst:hId,dstPort:'in0'});
   model.edges.push({id:mkEid(),src:hId,srcPort:'out0',dst:sm.id,dstPort:'in1'})}
 
+/* ===== SELETOR VISUAL DE MATRIZ (Entrada Manual SS) ===== */
+var manN=2;
+function renderManGrid(){
+  var g=document.getElementById("manMatGrid");if(!g)return;
+  var MAX=5,s=38,gp=5,total=(s*MAX)+(gp*(MAX-1));
+  g.style.gridTemplateColumns="repeat("+MAX+","+s+"px)";
+  g.style.width=total+"px";g.innerHTML="";
+  for(var r=0;r<MAX;r++)for(var c=0;c<MAX;c++){
+    var cell=document.createElement("div");
+    var active=r<manN&&c<manN;
+    cell.style.cssText="width:"+s+"px;height:"+s+"px;border-radius:8px;border:1.5px solid "+(active?"#f87171":"#333654")+";background:"+(active?"#f87171":"#252840")+";cursor:pointer;transition:background .12s,border-color .12s";
+    cell.dataset.r=r;cell.dataset.c=c;
+    cell.onmouseenter=function(){hlMan(+this.dataset.r+1,+this.dataset.c+1)};
+    cell.onmouseleave=function(){hlMan(manN,manN)};
+    cell.onclick=function(){
+      manN=Math.max(+this.dataset.r+1,+this.dataset.c+1);
+      var b=document.getElementById("manDimBadge");
+      if(b)b.childNodes[0].nodeValue=manN+" x "+manN+" ";
+      hlMan(manN,manN);applyManDim(manN)};
+    g.appendChild(cell)}}
+function hlMan(rows,cols){
+  var cells=document.querySelectorAll("#manMatGrid div");
+  cells.forEach(function(c){var active=+c.dataset.r<rows&&+c.dataset.c<cols;
+    c.style.background=active?"#f87171":"#252840";
+    c.style.borderColor=active?"#f87171":"#333654"})}
+function toggleManDrop(e){
+  e.stopPropagation();
+  var d=document.getElementById("manDimDrop");
+  if(d)d.style.display=d.style.display==="none"?"block":"none"}
+function setManDim(e,n){
+  e.stopPropagation();manN=n;
+  var b=document.getElementById("manDimBadge");
+  if(b)b.childNodes[0].nodeValue=n+" x "+n+" ";
+  var d=document.getElementById("manDimDrop");if(d)d.style.display="none";
+  renderManGrid();hlMan(n,n);applyManDim(n)}
+function applyManDim(n){
+  var r=[];for(var i=0;i<n;i++){var row=[];for(var j=0;j<n;j++)row.push(i===j?1:0);r.push(row.join(" "))}
+  var A=document.getElementById("manA");if(A)A.value=r.join("; ");
+  var B=document.getElementById("manB");if(B)B.value=Array.from({length:n},function(){return"0"}).join("; ");
+  var C=document.getElementById("manC");if(C)C.value=Array.from({length:n},function(_,i){return i===0?1:0}).join(" ");
+  var D=document.getElementById("manD");if(D)D.value="0"}
+document.addEventListener("click",function(e){
+  if(!e.target.closest("#manDimBadge")){var d=document.getElementById("manDimDrop");if(d)d.style.display="none"}
+  if(!e.target.closest("#cfgDimBadge")){var d=document.getElementById("cfgDimDrop");if(d)d.style.display="none"}});
+/* Inicializa grade do manual SS quando a aba e selecionada */
+var _origSetSubMode=setSubMode;
+setSubMode=function(m){_origSetSubMode(m);if(m==="ss"){setTimeout(function(){renderManGrid();hlMan(manN,manN)},30)}};
 document.querySelectorAll(".tb[data-add]").forEach(function(b){b.addEventListener("click",function(){addB(b.dataset.add)})});
 document.getElementById("btnDel").addEventListener("click",delSel);document.getElementById("btnClear").addEventListener("click",clrAll);document.getElementById("btnAuto").addEventListener("click",autoLay);
 document.addEventListener("keydown",function(e){if(e.target.tagName==="INPUT")return;if(e.key==="Delete"||e.key==="Backspace")delSel();if(e.key==="Escape"){conSt=null;closeModal();closeConnModal();document.querySelectorAll(".port.active").forEach(function(p){p.classList.remove("active")})}});
