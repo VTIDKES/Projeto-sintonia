@@ -3182,50 +3182,74 @@ def modo_classico():
             denominador = st.text_input("Denominador", placeholder="ex: s^2 + 2*s + 3")
             A_str = B_str = C_str = D_str = ''
         else:
-            # Grade interativa – ao clicar "Aplicar Matrizes" o bloco e adicionado diretamente
-            st.caption("Preencha a grade celula por celula e clique **\u2713 Aplicar Matrizes**:")
+            # Dimensao n
+            if 'ss_n_cl' not in st.session_state:
+                st.session_state.ss_n_cl = 2
+            n_cols = st.columns(4)
+            for i, n_opt in enumerate([1, 2, 3, 4]):
+                with n_cols[i]:
+                    if st.button(str(n_opt), key=f"ss_dim_{n_opt}_cl",
+                                 type="primary" if st.session_state.ss_n_cl == n_opt else "secondary"):
+                        st.session_state.ss_n_cl = n_opt
+                        st.rerun()
+            _n = st.session_state.ss_n_cl
+            st.caption(f"A:{_n}x{_n}  B:{_n}x1  C:1x{_n}  D:1x1")
 
-            # Recupera valores pendentes gravados pela grade via query_params
-            qp = st.query_params
-            ss_pending = (
-                qp.get("ss_A") and qp.get("ss_B") and
-                qp.get("ss_C") and qp.get("ss_D") and
-                qp.get("ss_nome") == nome and
-                qp.get("ss_tipo") == tipo
-            )
-            if ss_pending:
-                A_str_qp = qp.get("ss_A", "")
-                B_str_qp = qp.get("ss_B", "")
-                C_str_qp = qp.get("ss_C", "")
-                D_str_qp = qp.get("ss_D", "")
-                st.query_params.clear()
-                ok, msg = adicionar_bloco(nome, tipo, 'Espaco de Estados',
-                                          '', '', A_str_qp, B_str_qp, C_str_qp, D_str_qp)
-                if ok:
-                    st.success(msg)
-                else:
-                    st.error(msg)
-                st.rerun()
+            # Matriz A (nxn)
+            st.markdown("**A** (nxn)")
+            A_vals = []
+            for i in range(_n):
+                row_cols = st.columns(_n)
+                row = []
+                for j in range(_n):
+                    default = 1.0 if i == j else 0.0
+                    val = row_cols[j].number_input(
+                        f"a{i}{j}", value=default, label_visibility="collapsed",
+                        key=f"ss_A_{i}_{j}_cl")
+                    row.append(val)
+                A_vals.append(row)
+            A_str = "; ".join(" ".join(str(v) for v in row) for row in A_vals)
 
-            components.html(
-                _ss_matrix_grid_html_direct('cl', default_n=2, nome=nome, tipo=tipo),
-                height=530, scrolling=False
-            )
-            A_str = B_str = C_str = D_str = ''
+            # Matriz B (nx1)
+            st.markdown("**B** (nx1)")
+            b_cols = st.columns(_n)
+            B_vals = []
+            for i in range(_n):
+                val = b_cols[i].number_input(
+                    f"b{i}", value=0.0, label_visibility="collapsed",
+                    key=f"ss_B_{i}_cl")
+                B_vals.append(val)
+            B_str = "; ".join(str(v) for v in B_vals)
+
+            # Matriz C (1xn)
+            st.markdown("**C** (1xn)")
+            c_cols = st.columns(_n)
+            C_vals = []
+            for j in range(_n):
+                default = 1.0 if j == 0 else 0.0
+                val = c_cols[j].number_input(
+                    f"c{j}", value=default, label_visibility="collapsed",
+                    key=f"ss_C_{j}_cl")
+                C_vals.append(val)
+            C_str = " ".join(str(v) for v in C_vals)
+
+            # Matriz D (1x1)
+            st.markdown("**D** (1x1)")
+            D_val = st.number_input("d00", value=0.0, label_visibility="collapsed",
+                                    key="ss_D_cl")
+            D_str = str(D_val)
+
             numerador = denominador = ''
 
-        if representacao == 'Funcao de Transferencia':
-            if st.button("Adicionar", type="primary", use_container_width=True):
-                ok, msg = adicionar_bloco(nome, tipo, representacao,
-                                          numerador, denominador,
-                                          A_str, B_str, C_str, D_str)
-                if ok:
-                    st.success(msg)
-                    st.rerun()
-                else:
-                    st.error(msg)
-        else:
-            st.caption("\u2139\ufe0f O bloco sera adicionado automaticamente ao clicar **\u2713 Aplicar Matrizes** acima.")
+        if st.button("Adicionar", type="primary", use_container_width=True):
+            ok, msg = adicionar_bloco(nome, tipo, representacao,
+                                      numerador, denominador,
+                                      A_str, B_str, C_str, D_str)
+            if ok:
+                st.success(msg)
+                st.rerun()
+            else:
+                st.error(msg)
 
         if not st.session_state.blocos.empty:
             st.markdown("---")
