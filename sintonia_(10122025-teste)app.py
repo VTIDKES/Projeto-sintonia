@@ -3,6 +3,32 @@
 Sistema de Modelagem e Analise de Sistemas de Controle v2.0
 Refatorado com: tela inicial, espaco de estados, modal de blocos,
 logica corrigida de serie/paralelo/feedback, simplificacao automatica.
+
+Motor de Simulacao:
+    A aplicacao converte a disposicao grafica dos blocos (serie, paralelo,
+    realimentacao negativa/positiva) em uma unica Funcao de Transferencia
+    de Malha Fechada (FTMF) no back-end, utilizando algebra de diagramas
+    de blocos via biblioteca python-control.
+
+Interatividade:
+    Widgets interativos permitem alterar ganhos K e constantes de tempo
+    em tempo real, atualizando instantaneamente os diagramas de resposta
+    sem necessidade de recarregar a pagina.
+
+Responsividade e Acessibilidade Web:
+    Construido com Streamlit e Plotly, o diagrama de blocos e os graficos
+    funcionam tanto em desktops quanto em tablets e celulares, sendo
+    acessivel via navegador sem instalacao local.
+
+Funcionalidades de Analise:
+    - Analise de Estabilidade: geracao automatica do Diagrama de Polos e
+      Zeros e do Lugar das Raizes (Root Locus / LGR).
+    - Resposta em Frequencia: Diagramas de Bode com calculo automatico
+      de Margem de Ganho e Margem de Fase.
+    - Simulacao no Dominio do Tempo: resposta ao degrau, rampa, impulso
+      e senoidal, com extracao automatica de Mp, ts e tr.
+    - Suporte a sistemas em Funcao de Transferencia e Espaco de Estados
+      (A, B, C, D), com conversao automatica entre representacoes.
 """
 
 import streamlit as st
@@ -61,6 +87,8 @@ def inicializar_estado():
         'conexoes': [],
         'calculo_erro_habilitado': False,
         'representacao_classico': 'Funcao de Transferencia',
+        'ss_dim_cv': 2,  # Dimensão para modo lista
+        'ss_dim_cl': 2,  # Dimensão para modo classico
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -80,6 +108,9 @@ def formatar_numero(valor):
 
 
 def parse_matrix(text):
+    """Converte texto para matriz numpy. Aceita formatos:
+       '[[1,2],[3,4]]'  ou  '1 2; 3 4'  ou  '1,2;3,4'
+    """
     text = text.strip()
     if text.startswith('['):
         try:
@@ -92,6 +123,23 @@ def parse_matrix(text):
         vals = re.split(r'[,\s]+', row.strip())
         matrix.append([float(v) for v in vals if v])
     return np.array(matrix, dtype=float)
+
+
+def gerar_matrizes_padrao(dim):
+    """Gera matrizes padrão para espaço de estados baseado na dimensão"""
+    A = np.eye(dim)  # Matriz identidade
+    B = np.zeros((dim, 1))  # Vetor coluna de zeros
+    C = np.zeros((1, dim))  # Vetor linha
+    C[0, 0] = 1  # Primeiro elemento = 1
+    D = np.array([[0]])
+    
+    # Formatar para string no formato esperado
+    A_str = "; ".join([" ".join([f"{val:.0f}" for val in row]) for row in A])
+    B_str = "; ".join([f"{val:.0f}" for val in B.flatten()])
+    C_str = " ".join([f"{val:.0f}" for val in C.flatten()])
+    D_str = "0"
+    
+    return A_str, B_str, C_str, D_str
 
 
 # ══════════════════════════════════════════════════
@@ -113,11 +161,18 @@ def converter_para_tf(numerador_str, denominador_str):
 
 
 def converter_ss_para_tf(A_str, B_str, C_str, D_str):
+    """Converte espaço de estados (A,B,C,D) para função de transferência.
+    
+    - Se SISO → retorna (num_sym, den_sym)
+    - Se MIMO → retorna matriz G(s)
+    """
+    # 🔹 Parse e garante numpy array
     A = np.array(parse_matrix(A_str))
     B = np.array(parse_matrix(B_str))
     C = np.array(parse_matrix(C_str))
     D = np.array(parse_matrix(D_str))
 
+    # 🔹 Validações
     n = A.shape[0]
     if A.shape != (n, n):
         raise ValueError(f"Matriz A deve ser quadrada ({n}x{n})")
@@ -126,11 +181,15 @@ def converter_ss_para_tf(A_str, B_str, C_str, D_str):
     if C.shape[1] != n:
         raise ValueError(f"Matriz C deve ter {n} colunas")
 
+    # 🔹 Sistema
     ss_sys = ctrl.ss(A, B, C, D)
     tf_sys = ctrl.tf(ss_sys)
 
     s = sp.Symbol('s')
 
+    # =========================
+    # 🔹 CASO SISO
+    # =========================
     if tf_sys.ninputs == 1 and tf_sys.noutputs == 1:
         num_coeffs = list(tf_sys.num[0][0])
         den_coeffs = list(tf_sys.den[0][0])
@@ -146,8 +205,13 @@ def converter_ss_para_tf(A_str, B_str, C_str, D_str):
             "den": den_sym,
             "ss": ss_sys
         }
+
+    # =========================
+    # 🔥 CASO MIMO
+    # =========================
     else:
         G = []
+
         for i in range(tf_sys.noutputs):
             linha = []
             for j in range(tf_sys.ninputs):
@@ -156,13 +220,15 @@ def converter_ss_para_tf(A_str, B_str, C_str, D_str):
 
                 num_sym = sum(c * s**k for k, c in enumerate(reversed(num_coeffs)))
                 den_sym = sum(c * s**k for k, c in enumerate(reversed(den_coeffs)))
+
                 linha.append(num_sym / den_sym)
+
             G.append(linha)
 
         return {
             "tipo": "MIMO",
             "tf": tf_sys,
-            "G": G, 
+            "G": G,  # matriz simbólica
             "ss": ss_sys
         }
 
@@ -202,6 +268,7 @@ def constantes_de_erro(G):
 # ══════════════════════════════════════════════════
 
 def blocos_em_serie(tf_list):
+    """Serie: G_total = G1 * G2 * ... * Gn"""
     resultado = tf_list[0]
     for tf in tf_list[1:]:
         resultado = resultado * tf
@@ -209,6 +276,7 @@ def blocos_em_serie(tf_list):
 
 
 def blocos_em_paralelo(tf_list):
+    """Paralelo: G_total = G1 + G2 + ... + Gn"""
     resultado = tf_list[0]
     for tf in tf_list[1:]:
         resultado = resultado + tf
@@ -216,6 +284,10 @@ def blocos_em_paralelo(tf_list):
 
 
 def realimentacao(G, H=None, positiva=False):
+    """Feedback: T = G / (1 +/- G*H)
+    Negativa (padrao): T = G / (1 + G*H)
+    Positiva: T = G / (1 - G*H)
+    """
     if H is None:
         H = TransferFunction([1], [1])
     sign = 1 if positiva else -1
@@ -223,6 +295,9 @@ def realimentacao(G, H=None, positiva=False):
 
 
 def simplificar_diagrama(blocos_df, conexoes):
+    """Simplifica um diagrama de blocos baseado nas conexoes definidas.
+    Retorna a funcao de transferencia equivalente.
+    """
     if blocos_df.empty:
         raise ValueError("Nenhum bloco definido.")
 
@@ -659,7 +734,7 @@ def executar_analises(sistema, analises, entrada, tipo_malha):
 
 
 # ══════════════════════════════════════════════════
-# EDITOR VISUAL HTML (MODO CANVAS) COM CSS RESPONSIVO
+# EDITOR VISUAL HTML (MODO CANVAS)
 # ══════════════════════════════════════════════════
 
 def _load_visual_editor_html():
@@ -672,11 +747,6 @@ def _load_visual_editor_html():
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:auto;min-height:100%;font-family:system-ui,sans-serif;background:var(--bg);color:var(--tx);overflow-y:auto}
 .app{display:flex;flex-direction:column;min-height:100%}
-
-/* Ocultar barra de rolagem em áreas com scroll horizontal mantendo funcionalidade */
-.toolbar::-webkit-scrollbar { display: none; }
-.man-tabs::-webkit-scrollbar { display: none; }
-
 /* Modal Overlay */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center}
 .modal-overlay.vis{display:flex}
@@ -704,18 +774,14 @@ html,body{height:auto;min-height:100%;font-family:system-ui,sans-serif;backgroun
 .cfg-row input:focus{border-color:var(--acc)}
 .cfg-btn{background:var(--acc);border:none;color:#fff;font-weight:700;font-size:13px;padding:10px 24px;border-radius:8px;cursor:pointer;width:100%;margin-top:8px}
 .cfg-btn:hover{background:#6e7df0}
-
-/* Toolbar com Flex para Scroll no Mobile */
 .toolbar{background:var(--sf);border-bottom:1px solid var(--bd);padding:6px 10px;display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-height:44px;z-index:50;position:sticky;top:0}
-.toolbar .sep{width:1px;height:26px;background:var(--bd);margin:0 3px;flex-shrink:0}
+.toolbar .sep{width:1px;height:26px;background:var(--bd);margin:0 3px}
 .toolbar .lbl{font-size:10px;color:var(--txm);text-transform:uppercase;letter-spacing:.5px;margin-right:2px;white-space:nowrap}
 .tb{display:inline-flex;align-items:center;gap:4px;background:var(--sf2);color:#c8cad8;border:1px solid var(--bd);
 border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:nowrap;transition:all .15s;min-height:34px;touch-action:manipulation}
 .tb:hover,.tb:active{background:#2f3349;border-color:var(--acc);color:#fff}
 .tb-add{background:#16382a;border-color:#2d8a55;color:var(--grn);font-weight:700;font-size:13px;padding:8px 16px}
 .tb-add:hover{background:#1e4a36}
-
-/* Workspace e Canvas */
 .workspace{display:flex;height:460px;min-height:320px;flex-shrink:0}
 .canvas-wrap{flex:1;position:relative;overflow:hidden;background:radial-gradient(circle,#141722,#0e1117);touch-action:none}
 .canvas-wrap::before{content:"";position:absolute;inset:0;background-image:radial-gradient(circle,#1e2235 1px,transparent 1px);background-size:24px 24px;opacity:.45;pointer-events:none}
@@ -729,8 +795,6 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 .block-body{padding:4px 10px 8px;font-weight:700;font-size:13px;color:#fff}
 .block-tf-disp{font-family:monospace;font-size:10px;margin-top:3px;padding:3px 6px;background:rgba(0,0,0,.3);border-radius:4px;color:#a0b8d8;text-align:center}
 .block-tf-disp .tf-num{border-bottom:1px solid rgba(255,255,255,.2);padding-bottom:2px;margin-bottom:2px}
-
-/* Cores dos blocos */
 .block-tf{background:linear-gradient(135deg,#1e3a5f,#152844);border:1px solid #2a5a8f}
 .block-gain{background:linear-gradient(135deg,#2d1f4e,#1f1635);border:1px solid #5a3d8f}
 .block-int{background:linear-gradient(135deg,#3d3a1a,#2a2812);border:1px solid #8a7a2d}
@@ -745,8 +809,6 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 .block-sum .block-header{display:none}.block-sum .block-body{padding:0;font-size:20px;text-align:center}
 .block-branch{background:#3b82f6;border:2px solid #2563eb;border-radius:50%;min-width:56px;width:56px;height:56px}
 .block-branch .block-header,.block-branch .block-body{display:none}
-
-/* Ports */
 .port{position:absolute;width:14px;height:14px;border-radius:50%;cursor:crosshair;z-index:20;transition:transform .12s}
 .port::after{content:"";position:absolute;inset:3px;border-radius:50%;background:currentColor}
 .port-in{border:2px solid var(--grn);color:var(--grn);background:var(--bg)}
@@ -754,8 +816,6 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 .port:hover,.port:active{transform:scale(1.5)!important;box-shadow:0 0 10px currentColor}
 .port.active{border-color:var(--yel);color:var(--yel);transform:scale(1.4)!important}
 .sign-label{position:absolute;font-size:11px;font-weight:700;color:var(--grn);pointer-events:none}
-
-/* Panel Lateral */
 .panel{width:240px;background:var(--sf);border-left:1px solid var(--bd);display:flex;flex-direction:column;overflow-y:auto;z-index:30;font-size:12px}
 .panel-section{padding:10px 12px;border-bottom:1px solid var(--bd)}
 .panel-section h4{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--txm);margin-bottom:8px}
@@ -765,8 +825,6 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 .pg input:focus{border-color:var(--acc)}
 .hint{font-size:11px;color:var(--txm);line-height:1.5}
 .hint b{color:var(--tx)}
-
-/* Barra Inferior (Modos e Abas Manuais) */
 .mode-bar{display:flex;gap:0;background:var(--sf);border-top:1px solid var(--bd)}
 .mode-btn{flex:1;padding:12px;background:none;border:none;border-bottom:3px solid transparent;color:var(--txm);font-size:14px;font-weight:700;cursor:pointer;transition:all .15s;touch-action:manipulation;letter-spacing:.3px}
 .mode-btn.active{color:var(--grn);border-bottom-color:var(--grn);background:rgba(52,211,153,.06)}
@@ -783,8 +841,6 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 .man-row .pg label{font-size:11px;margin-bottom:4px}
 .man-hint{font-size:11px;color:var(--txm);margin-top:6px;line-height:1.6}
 .man-hint code{background:var(--sf2);padding:1px 5px;border-radius:3px;color:var(--blu);font-size:11px}
-
-/* Botões de Calcular e Resultados */
 .calc-bar{background:var(--sf);border-top:1px solid var(--bd);border-bottom:2px solid #22c55e;padding:12px 20px;text-align:center}
 .calc-bar button{background:#16a34a;border:2px solid #22c55e;color:#fff;font-weight:700;font-size:16px;padding:14px 40px;border-radius:10px;cursor:pointer;letter-spacing:1px;box-shadow:0 0 20px rgba(34,197,94,.3);touch-action:manipulation}
 .calc-bar button:hover{background:#22c55e;transform:scale(1.03)}
@@ -802,43 +858,23 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 .mbox .mv{font-size:16px;font-weight:700;color:var(--grn)}
 .ebox{background:#3a1520;border:1px solid #8a3050;color:#ff8fa3;padding:12px;border-radius:8px;font-size:13px}
 .pzl{font-family:monospace;font-size:12px;line-height:1.8}
-
+@media(max-width:768px){
+.workspace{flex-direction:column;height:350px}
+.panel{width:100%;max-height:150px;border-left:none;border-top:1px solid var(--bd)}
+.toolbar{padding:4px 6px;gap:3px}.tb{padding:5px 7px;font-size:10px;min-height:30px}
+.calc-bar button{font-size:14px;padding:10px 24px;width:100%}
+.mgrid{grid-template-columns:repeat(2,1fr)}
+.man-row{grid-template-columns:1fr}.man-tabs{flex-wrap:wrap}
+.block-grid{grid-template-columns:1fr}
+}
 .conn-item{display:flex;align-items:center;gap:8px;padding:10px 12px;margin-bottom:5px;background:var(--sf2);border:2px solid var(--bd);border-radius:8px;cursor:pointer;font-size:13px;transition:all .15s;user-select:none}
 .conn-item:hover{border-color:var(--acc);background:#2f3349}
 .conn-item.conn-sel{border-color:#5b6be0;background:#2a2f4a;box-shadow:0 0 8px rgba(91,107,224,.3)}
 .conn-item .conn-chk{font-size:16px;color:var(--txm);min-width:18px;text-align:center}
 .conn-item.conn-sel .conn-chk{color:#5b6be0}
-
-/* ========================================================= */
-/* OTIMIZAÇÃO DE RESPONSIVIDADE PARA DISPOSITIVOS MÓVEIS */
-/* ========================================================= */
-@media(max-width:768px){
-  .workspace{flex-direction:column;height:65vh;min-height:400px} /* Canvas ocupa melhor a tela */
-  .panel{width:100%;max-height:220px;border-left:none;border-top:2px solid var(--bd)}
-  
-  /* Toolbar com rolagem horizontal (evita esmagar tudo em cel) */
-  .toolbar{padding:8px;gap:6px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch}
-  .tb{padding:8px 12px;font-size:12px;min-height:36px;flex-shrink:0} /* Evita distorção dos botões */
-  
-  /* Área de toque maior para as Portas no celular */
-  .port{width:22px;height:22px}
-  .port::after{inset:5px}
-
-  .calc-bar button{font-size:16px;padding:14px 24px;width:100%}
-  
-  /* Grades transformam-se em 1 coluna */
-  .mgrid{grid-template-columns:1fr}
-  .man-row{grid-template-columns:1fr}
-  .block-grid{grid-template-columns:1fr}
-  
-  /* Abas do painel manual ajustadas para swipe lateral */
-  .man-tabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:5px;-webkit-overflow-scrolling:touch}
-  .man-tab{flex-shrink:0}
-
-  .modal{width:95%;max-height:90vh;padding-bottom:20px}
-}
 </style></head><body><div class="app">
 
+<!-- MODAL DE ADICIONAR BLOCO -->
 <div class="modal-overlay" id="addModal">
 <div class="modal">
 <div class="modal-hdr"><h3>Adicionar Bloco</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>
@@ -866,6 +902,7 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 <div class="block-option" onclick="pickBlock('branch')"><div class="bo-icon" style="color:var(--blu)">&bull;</div><div class="bo-label">Ramificacao</div><div class="bo-desc">Divide sinal em dois</div></div>
 </div>
 </div>
+<!-- Config panel after picking -->
 <div class="cfg-panel" id="cfgPanel">
 <h4 id="cfgTitle">Configurar bloco</h4>
 <div id="cfgFields"></div>
@@ -874,6 +911,7 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 </div>
 </div></div></div>
 
+<!-- MODAL DE CONEXAO -->
 <div class="modal-overlay" id="connModal">
 <div class="modal">
 <div class="modal-hdr"><h3 id="connModalTitle">Conectar Blocos</h3><button class="modal-close" onclick="closeConnModal()">&times;</button></div>
@@ -1074,16 +1112,21 @@ function parseMat(s){
   var rows=s.split(";");
   return rows.map(function(r){return r.trim().split(/[\s,]+/).map(Number)})}
 function ssToTF(As,Bs,Cs,Ds){
+  /* For SISO: T(s) = C(sI-A)^-1 B + D computed symbolically via det/adj */
   var A=parseMat(As),B=parseMat(Bs),C=parseMat(Cs),D=parseMat(Ds);
   var n=A.length;
   if(n===0)return{n:[D[0]?D[0][0]:0],d:[1]};
-  var M=[];for(var i=0;i<n;i++){M.push([]);for(var j=0;j<n;j++)M[i].push(i===j?[A[i][j]*-1,1]:[-A[i][j]])} 
+  /* Build characteristic polynomial det(sI - A) using Fadeev-LeVerrier */
+  /* For small n (1-4), this is efficient enough */
+  var M=[];for(var i=0;i<n;i++){M.push([]);for(var j=0;j<n;j++)M[i].push(i===j?[A[i][j]*-1,1]:[-A[i][j]])} /* sI - A as poly entries */
+  /* For n<=3, compute directly; for larger, use approximation */
   if(n===1){
     var a00=A[0][0],b0=B[0][0],c0=C[0][0],d0=D[0]?D[0][0]:0;
     return{n:pAdd([d0*(-a00)+c0*b0],[d0]),d:[-a00,1]}}
   if(n===2){
     var tr=A[0][0]+A[1][1],dt=A[0][0]*A[1][1]-A[0][1]*A[1][0];
-    var den=[dt,-tr,1]; 
+    var den=[dt,-tr,1]; /* s^2 - tr*s + det */
+    /* adj(sI-A) * B then C * that */
     var adj00=[-A[1][1],1],adj01=[A[0][1]],adj10=[A[1][0]],adj11=[-A[0][0],1];
     var v0=pAdd(pScl(adj00,B[0][0]),pScl(adj01,B[1][0]));
     var v1=pAdd(pScl(adj10,B[0][0]),pScl(adj11,B[1][0]));
@@ -1091,6 +1134,8 @@ function ssToTF(As,Bs,Cs,Ds){
     var d0v=D[0]?D[0][0]:0;
     if(Math.abs(d0v)>1e-14)num=pAdd(num,pMul([d0v],den));
     return pfReduce({n:num,d:den})}
+  /* General case: numerical via companion form */
+  /* Use Fadeev-LeVerrier for char poly, then numerical adj */
   var cp=[1];var Mk=[];for(var i=0;i<n;i++){Mk.push([]);for(var j=0;j<n;j++)Mk[i].push(0)}
   for(var k=1;k<=n;k++){
     var prev=Mk;var AM=[];
@@ -1099,24 +1144,31 @@ function ssToTF(As,Bs,Cs,Ds){
     var tk=0;for(var i=0;i<n;i++)tk+=AM[i][i];
     var ck=-tk/k;cp.unshift(ck);
     Mk=[];for(var i=0;i<n;i++){Mk.push([]);for(var j=0;j<n;j++)Mk[i].push(AM[i][j]+(i===j?ck:0))}}
+  /* cp is den coeffs [c0,c1,...,1] ascending */
   var den=cp;
+  /* num: evaluate C*adj(sI-A)*B numerically at n+1 points, fit poly */
   var pts=[];for(var k=0;k<=n;k++){
     var sv=k*10+1;
     var sIA=[];for(var i=0;i<n;i++){sIA.push([]);for(var j=0;j<n;j++)sIA[i].push((i===j?sv:0)-A[i][j])}
+    /* invert sIA by Gauss-Jordan */
     var aug=[];for(var i=0;i<n;i++){aug.push([]);for(var j=0;j<2*n;j++)aug[i].push(j<n?sIA[i][j]:(i===j-n?1:0))}
     for(var c2=0;c2<n;c2++){var mx2=c2;for(var r=c2+1;r<n;r++)if(Math.abs(aug[r][c2])>Math.abs(aug[mx2][c2]))mx2=r;
       var tmp=aug[c2];aug[c2]=aug[mx2];aug[mx2]=tmp;var piv=aug[c2][c2];if(Math.abs(piv)<1e-30)continue;
       for(var j=0;j<2*n;j++)aug[c2][j]/=piv;
       for(var r=0;r<n;r++){if(r===c2)continue;var f=aug[r][c2];for(var j=0;j<2*n;j++)aug[r][j]-=f*aug[c2][j]}}
     var inv=[];for(var i=0;i<n;i++){inv.push([]);for(var j=0;j<n;j++)inv[i].push(aug[i][j+n])}
+    /* C * inv * B */
     var CiB=0;for(var i=0;i<(C[0]||[]).length;i++)for(var j=0;j<(B[0]||[]).length;j++){var v3=0;for(var l=0;l<n;l++)v3+=inv[i][l]*B[l][j];CiB+=C[0][i]*v3}
     var d0v=D[0]?D[0][0]:0;
     pts.push({s:sv,v:CiB+d0v*pEv(den,sv)})}
+  /* Lagrange interpolation for numerator poly (degree <= n) */
   var numC=[];for(var i=0;i<=n;i++){
     var li=1,yi=pts[i].v;for(var j=0;j<=n;j++){if(j===i)continue;li*=(pts[i].s-pts[j].s)}
     numC.push(yi/li)}
+  /* Build num poly from pts using Newton form... simpler: Vandermonde */
   var V=[];for(var i=0;i<=n;i++){V.push([]);for(var j=0;j<=n;j++)V[i].push(Math.pow(pts[i].s,j))}
   var rhs=pts.map(function(p){return p.v});
+  /* Solve Vandermonde system */
   for(var c2=0;c2<=n;c2++){var mx2=c2;for(var r=c2+1;r<=n;r++)if(Math.abs(V[r][c2])>Math.abs(V[mx2][c2]))mx2=r;
     var tmp=V[c2];V[c2]=V[mx2];V[mx2]=tmp;var tmp2=rhs[c2];rhs[c2]=rhs[mx2];rhs[mx2]=tmp2;
     var piv=V[c2][c2];if(Math.abs(piv)<1e-30)continue;for(var j=c2;j<=n;j++)V[c2][j]/=piv;rhs[c2]/=piv;
@@ -1147,30 +1199,36 @@ function solve(nodes,edges){
   var inp=null,out=null;nodes.forEach(function(n){if(n.type==="input")inp=n;if(n.type==="output")out=n});
   if(!inp)return{e:"Adicione Entrada R(s)."};if(!out)return{e:"Adicione Saida Y(s)."};if(!edges.length)return{e:"Conecte os blocos."};
   var N=nodes.length,ix={};nodes.forEach(function(n,i){ix[n.id]=i});
+  /* Build system of equations: for each node i, X_i = sum(contributions) */
   var A=[],b=[];for(var i=0;i<N;i++){A.push([]);for(var j=0;j<N;j++)A[i].push(pfC(0));b.push(pfC(0))}
   for(var i=0;i<N;i++){var nd=nodes[i];A[i][i]=pfC(1);
     if(nd.type==="input"){b[i]=pfC(1);continue}
     var inc=edges.filter(function(e){return e.dst===nd.id});
     if(nd.type==="sum"){
+      /* Summing junction: output = sum of signed inputs */
       var sg=((nd.params||{}).signs||"+ -").trim().split(/\s+/);
       inc.forEach(function(e){var si=ix[e.src];if(si===undefined)return;
         var pi=parseInt((e.dstPort||"in0").replace("in",""))||0;
         var sign=sg[pi]==="-"?-1:1;
         A[i][si]=pfSub(A[i][si],pfC(sign))})
     } else {
+      /* Regular block: output = TF * input */
       var tf=bTF(nd);
       inc.forEach(function(e){var si=ix[e.src];if(si===undefined)return;
         A[i][si]=pfSub(A[i][si],tf)})
     }
   }
+  /* Gaussian elimination with partial pivoting */
   for(var c=0;c<N;c++){var pv=-1;for(var r=c;r<N;r++)if(!pfZ(A[r][c])){pv=r;break}
     if(pv<0)return{e:"Sistema singular - verifique as conexoes."};
     if(pv!==c){var t=A[c];A[c]=A[pv];A[pv]=t;var t2=b[c];b[c]=b[pv];b[pv]=t2}
     for(var r=c+1;r<N;r++){if(pfZ(A[r][c]))continue;var f=pfDiv(A[r][c],A[c][c]);
       for(var j=c;j<N;j++)A[r][j]=pfSub(A[r][j],pfMul(f,A[c][j]));b[r]=pfSub(b[r],pfMul(f,b[c]))}}
+  /* Back substitution */
   var x=[];for(var i=0;i<N;i++)x.push(pfC(0));
   for(var i=N-1;i>=0;i--){var s=b[i];for(var j=i+1;j<N;j++)s=pfSub(s,pfMul(A[i][j],x[j]));x[i]=pfDiv(s,A[i][i])}
   var oi=ix[out.id],tf={n:pTrim(x[oi].n),d:pTrim(x[oi].d)};
+  /* Normalize */
   if(tf.d[tf.d.length-1]<0){tf.n=pScl(tf.n,-1);tf.d=pScl(tf.d,-1)}
   var lc=tf.d[tf.d.length-1];if(Math.abs(lc)>1e-14&&Math.abs(lc-1)>1e-10){tf.n=pScl(tf.n,1/lc);tf.d=pScl(tf.d,1/lc)}
   tf=pfReduce(tf);return{tf:tf}}
@@ -1469,12 +1527,15 @@ function onCalc(){
     } else if(curSubMode==="closed"){
       var gn=parseP(document.getElementById("manGN").value),gd=parseP(document.getElementById("manGD").value);
       var hn=parseP(document.getElementById("manHN").value),hd=parseP(document.getElementById("manHD").value);
+      /* T(s) = G/(1+GH) = (Gn*Hd) / (Gd*Hd + Gn*Hn) */
       tf={n:pMul(gn,hd),d:pAdd(pMul(gd,hd),pMul(gn,hn))};
     } else if(curSubMode==="open"){
       var gn=parseP(document.getElementById("manOGN").value),gd=parseP(document.getElementById("manOGD").value);
       var hn=parseP(document.getElementById("manOHN").value),hd=parseP(document.getElementById("manOHD").value);
+      /* L(s) = G*H = (Gn*Hn) / (Gd*Hd) */
       tf={n:pMul(gn,hn),d:pMul(gd,hd)};
     } else if(curSubMode==="ss"){
+      /* State Space */
       try{
         tf=ssToTF(
           document.getElementById("manA").value,
@@ -1507,8 +1568,10 @@ function bTxt(n){var p=n.params||{};if(n.type==="tf"||n.type==="actuator")return
   if(n.type==="gain")return"K="+(p.k||"1");if(n.type==="pid")return'<div class="block-tf-disp">Kp='+(p.kp||"0")+" Ki="+(p.ki||"0")+" Kd="+(p.kd||"0")+'</div>';
   if(n.type==="sensor")return'<div class="block-tf-disp"><div class="tf-num">'+(p.num||"1")+'</div><div>'+(p.den||"1")+'</div></div>';
   if(n.type==="input")return p.label||"R(s)";if(n.type==="output")return p.label||"Y(s)";if(n.type==="sum")return"\u03a3";if(n.type==="int")return"1/s";if(n.type==="der")return"s";return""}
+/* addB: quick add (toolbar) */
 function addB(t){var r=cw.getBoundingClientRect(),n={id:nxtId(),type:t,x:40+Math.random()*(r.width-200),y:40+Math.random()*(r.height-140),params:dPar(t)};
   if(t==="input"){n.x=30;n.y=r.height/2-30}if(t==="output"){n.x=r.width-160;n.y=r.height/2-30}model.nodes.push(n);render();setSel(n.id)}
+/* addBP: add with params (modal) */
 function addBP(t,p){var r=cw.getBoundingClientRect(),n={id:nxtId(),type:t,x:40+Math.random()*(r.width-200),y:40+Math.random()*(r.height-140),params:Object.assign(dPar(t),p)};
   if(t==="input"){n.x=30;n.y=r.height/2-30}if(t==="output"){n.x=r.width-160;n.y=r.height/2-30}model.nodes.push(n);render();setSel(n.id)}
 function delSel(){if(!selId)return;model.edges=model.edges.filter(function(e){return e.src!==selId&&e.dst!==selId});model.nodes=model.nodes.filter(function(n){return n.id!==selId});selId=null;conSt=null;render()}
@@ -1580,7 +1643,7 @@ function updP(){document.getElementById("pB").textContent=model.nodes.length;doc
     if(inp.dataset.key==="signs")render();else{var bl=document.querySelector('.block[data-id="'+nd.id+'"] .block-body');if(bl)bl.innerHTML=bTxt(nd)}})})}
 function pI(l,k,v){return'<div class="pg"><label>'+l+'</label><input data-key="'+k+'" value="'+esc(String(v))+'"></div>'}
 
-/* ===== CONEXAO INTERATIVA ===== */
+/* ===== CONEXAO INTERATIVA (Serie, Paralelo, Feedback) ===== */
 var connType=null,connSel=[];
 function openConnModal(tipo){
   connType=tipo;connSel=[];
@@ -1623,44 +1686,58 @@ function applyConn(){
 function mkEid(){return 'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
 
 function buildSerie(ids){
+  /* Conecta blocos em cadeia: B1 -> B2 -> B3 -> ... */
   for(var i=0;i<ids.length-1;i++){
     var a=ids[i],b=ids[i+1];
     var already=model.edges.some(function(e){return e.src===a&&e.dst===b});
     if(!already)model.edges.push({id:mkEid(),src:a,srcPort:'out0',dst:b,dstPort:'in0'})}
+  /* Reposiciona em linha horizontal */
   var baseX=80,baseY=180;
   ids.forEach(function(id,i){var nd=model.nodes.find(function(n){return n.id===id});if(nd){nd.x=baseX+i*200;nd.y=baseY}})}
 
 function buildParalelo(ids){
+  /* Paralelo: entrada -> branch -> [B1, B2, ...] -> somador -> saida */
   var nb=ids.length;
+  /* Posicao base */
   var minX=9999;ids.forEach(function(id){var nd=model.nodes.find(function(n){return n.id===id});if(nd&&nd.x<minX)minX=nd.x});
   var baseX=Math.max(60,minX-60),baseY=80;
+  /* Cria um unico branch de entrada com nb saidas simuladas via encadeamento */
   var brIds=[];
   for(var i=0;i<nb-1;i++){
     var br={id:nxtId(),type:'branch',x:baseX,y:baseY+50+i*50,params:{}};
     model.nodes.push(br);brIds.push(br.id);
     if(i>0)model.edges.push({id:mkEid(),src:brIds[i-1],srcPort:'out0',dst:br.id,dstPort:'in0'})}
+  /* Cria somador com nb entradas (todas +) */
   var signs='';for(var i=0;i<nb;i++)signs+=(i>0?' ':'')+'+';
   var smX=baseX+420,smY=baseY+(nb-1)*55;
   var sm={id:nxtId(),type:'sum',x:smX,y:smY,params:{signs:signs}};model.nodes.push(sm);
+  /* Posiciona blocos e conecta: branch.outX -> bloco -> somador.inX */
   ids.forEach(function(id,i){
     var nd=model.nodes.find(function(n){return n.id===id});
     if(nd){nd.x=baseX+200;nd.y=baseY+i*120}
+    /* branch -> bloco */
     if(i===0){model.edges.push({id:mkEid(),src:brIds[0],srcPort:'out1',dst:id,dstPort:'in0'})}
     else if(i<nb-1){model.edges.push({id:mkEid(),src:brIds[i],srcPort:'out1',dst:id,dstPort:'in0'})}
     else{model.edges.push({id:mkEid(),src:brIds[nb-2],srcPort:'out0',dst:id,dstPort:'in0'})}
+    /* bloco -> somador */
     model.edges.push({id:mkEid(),src:id,srcPort:'out0',dst:sm.id,dstPort:'in'+i})})}
 
 function buildFeedback(ids,positive){
+  /* Feedback: somador(+/-) -> G -> branch -> saida, branch -> H -> somador */
   if(ids.length<2)return;
   var gId=ids[0],hId=ids[1];
   var gNd=model.nodes.find(function(n){return n.id===gId});
   var hNd=model.nodes.find(function(n){return n.id===hId});
   var baseX=gNd?Math.max(60,gNd.x-120):80,baseY=gNd?gNd.y:160;
+  /* Somador com sinais + e +/- */
   var signStr=positive?'+ +':'+ -';
   var sm={id:nxtId(),type:'sum',x:baseX,y:baseY+15,params:{signs:signStr}};model.nodes.push(sm);
+  /* Branch apos G para bifurcar saida e feedback */
   var br={id:nxtId(),type:'branch',x:baseX+380,y:baseY+15,params:{}};model.nodes.push(br);
+  /* Posiciona G (direto) e H (feedback) */
   if(gNd){gNd.x=baseX+180;gNd.y=baseY}
   if(hNd){hNd.x=baseX+220;hNd.y=baseY+160}
+  /* Arestas: somador -> G -> branch, branch -> H -> somador (loop) */
   model.edges.push({id:mkEid(),src:sm.id,srcPort:'out0',dst:gId,dstPort:'in0'});
   model.edges.push({id:mkEid(),src:gId,srcPort:'out0',dst:br.id,dstPort:'in0'});
   model.edges.push({id:mkEid(),src:br.id,srcPort:'out1',dst:hId,dstPort:'in0'});
@@ -1670,15 +1747,18 @@ document.querySelectorAll(".tb[data-add]").forEach(function(b){b.addEventListene
 document.getElementById("btnDel").addEventListener("click",delSel);document.getElementById("btnClear").addEventListener("click",clrAll);document.getElementById("btnAuto").addEventListener("click",autoLay);
 document.addEventListener("keydown",function(e){if(e.target.tagName==="INPUT")return;if(e.key==="Delete"||e.key==="Backspace")delSel();if(e.key==="Escape"){conSt=null;closeModal();closeConnModal();document.querySelectorAll(".port.active").forEach(function(p){p.classList.remove("active")})}});
 render();new ResizeObserver(function(){rW()}).observe(cw);
+/* Modelo inicial injetado do modo classico (blocos + conexoes) */
 var _initData=__INITIAL_BLOCKS__;
 if(_initData){
   if(_initData.nodes&&_initData.edges){
+    /* Formato completo: {nodes:[...], edges:[...]} */
     _initData.nodes.forEach(function(n){
       n.params=Object.assign(dPar(n.type),n.params||{});
       model.nodes.push(n)});
     _initData.edges.forEach(function(e){model.edges.push(e)});
     render();
   } else if(_initData.length>0){
+    /* Formato antigo: [{type,params},...] */
     _initData.forEach(function(b){addBP(b.type,b.params)});
     setTimeout(autoLay,200);
   }
@@ -1856,15 +1936,44 @@ def modo_lista():
             denominador = st.text_input("Denominador", placeholder="ex: s^2+2*s+3")
             A_str = B_str = C_str = D_str = ''
         else:
-            st.caption("Clique na grade para definir o tamanho (max 4x4).")
-            components.html(_ss_selector_html('cv'), height=210)
-            if 'ss_n_cv' not in st.session_state:
-                st.session_state.ss_n_cv = 2
-            _n = st.session_state.ss_n_cv
-            A_str = st.text_input("Matriz A (nxn)", value="; ".join([" ".join(["1" if i==j else "0" for j in range(_n)]) for i in range(_n)]), key="cvA")
-            B_str = st.text_input("Matriz B (nxm)", value="; ".join(["0"]*_n), key="cvB")
-            C_str = st.text_input("Matriz C (pxn)", value=" ".join(["1" if j==0 else "0" for j in range(_n)]), key="cvC")
-            D_str = st.text_input("Matriz D (pxm)", value="0", key="cvD")
+            # Seletor visual de dimensão com botões
+            st.markdown("**Dimensão do Sistema (máx 4x4)**")
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                if st.button("1x1", key="dim1_cv", use_container_width=True):
+                    st.session_state.ss_dim_cv = 1
+                    st.rerun()
+            with col2:
+                if st.button("2x2", key="dim2_cv", use_container_width=True):
+                    st.session_state.ss_dim_cv = 2
+                    st.rerun()
+            with col3:
+                if st.button("3x3", key="dim3_cv", use_container_width=True):
+                    st.session_state.ss_dim_cv = 3
+                    st.rerun()
+            with col4:
+                if st.button("4x4", key="dim4_cv", use_container_width=True):
+                    st.session_state.ss_dim_cv = 4
+                    st.rerun()
+            
+            _n = st.session_state.ss_dim_cv
+            
+            # Gerar matrizes padrão baseadas na dimensão
+            A_default, B_default, C_default, D_default = gerar_matrizes_padrao(_n)
+            
+            # Mostrar representação visual da matriz
+            st.markdown(f"**Matriz A ({_n}x{_n}):**")
+            A_mat = parse_matrix(A_default)
+            cols_visual = st.columns(_n)
+            for i in range(_n):
+                with cols_visual[i % _n]:
+                    st.code(f"[{' '.join([f'{val:.0f}' for val in A_mat[i]])}]")
+            
+            A_str = st.text_area("Matriz A (nxn)", value=A_default, height=80, key="cvA")
+            B_str = st.text_input("Matriz B (nxm)", value=B_default, key="cvB")
+            C_str = st.text_input("Matriz C (pxn)", value=C_default, key="cvC")
+            D_str = st.text_input("Matriz D (pxm)", value=D_default, key="cvD")
             numerador = denominador = ''
 
         if st.button("Adicionar Bloco", type="primary", use_container_width=True):
@@ -1911,6 +2020,7 @@ def modo_lista():
                         remover_bloco(row['nome'])
                         st.rerun()
 
+            # Diagrama de blocos refletindo conexoes definidas
             if not st.session_state.blocos.empty:
                 st.markdown("---")
                 st.subheader("Diagrama de Blocos")
@@ -1969,6 +2079,7 @@ def modo_lista():
                             st.session_state.conexoes.pop(i)
                             st.rerun()
 
+            # Diagrama de blocos refletindo as conexoes definidas
             if not st.session_state.blocos.empty:
                 st.markdown("---")
                 st.subheader("Diagrama de Blocos")
@@ -1985,6 +2096,7 @@ def modo_lista():
         if st.session_state.blocos.empty:
             st.info("Adicione blocos primeiro.")
         else:
+            # Diagrama de blocos refletindo conexoes definidas
             if st.session_state.conexoes:
                 st.markdown(VISUAL_BLOCKS_CSS, unsafe_allow_html=True)
                 svg_diagram_analise = _svg_diagrama_blocos(
@@ -2063,6 +2175,7 @@ CORES_TIPO_VIS = {
 
 
 def _html_bloco_visual(row, is_new=False):
+    """Gera HTML card para um bloco."""
     cor, bg, icone = CORES_TIPO_VIS.get(row['tipo'], ('#8890b0', '#252840', '?'))
     num_s = _tf_to_str(row['tf'].num[0][0])
     den_s = _tf_to_str(row['tf'].den[0][0])
@@ -2080,6 +2193,7 @@ def _html_bloco_visual(row, is_new=False):
 
 
 def _coeffs_to_poly_str(coeffs):
+    """Converte coeficientes [a_n,...,a_0] para string polinomial (ex: s^2+2s+1)."""
     n = len(coeffs) - 1
     terms = []
     for i, c in enumerate(coeffs):
@@ -2112,23 +2226,28 @@ def _coeffs_to_poly_str(coeffs):
 
 
 def _svg_diagrama_blocos(blocos_df, conexoes):
+    """Gera SVG do diagrama de blocos baseado nas conexoes definidas pelo usuario."""
     if blocos_df.empty:
         return ''
 
     bw, bh, gap, margin, sum_r = 160, 70, 70, 60, 20
     nomes_map = {row['nome']: row for _, row in blocos_df.iterrows()}
 
+    # COM conexoes: renderiza o diagrama conforme a escolha do usuario
     if conexoes:
         return _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r)
 
+    # SEM conexoes: mostra blocos isolados aguardando definicao do usuario
     return _svg_blocos_sem_conexao(list(nomes_map.values()), bw, bh, gap, margin)
 
 
 def _svg_render_bloco(x, y, bw, bh, row):
+    """Renderiza um bloco retangular no SVG."""
     cor = CORES_TIPO_VIS.get(row['tipo'], ('#8890b0', '#252840', '?'))[0]
     icone = CORES_TIPO_VIS.get(row['tipo'], ('#8890b0', '#252840', '?'))[2]
     num_s = _tf_to_str(row['tf'].num[0][0])
     den_s = _tf_to_str(row['tf'].den[0][0])
+    # Trunca texto longo para caber no bloco
     max_chars = int(bw / 7)
     if len(num_s) > max_chars:
         num_s = num_s[:max_chars - 1] + '\u2026'
@@ -2153,6 +2272,7 @@ def _svg_render_bloco(x, y, bw, bh, row):
 
 
 def _svg_blocos_sem_conexao(blocos, bw, bh, gap, margin):
+    """SVG com blocos isolados - aguardando o usuario definir conexoes."""
     n = len(blocos)
     total_w = n * bw + (n - 1) * gap + 2 * margin
     total_h = bh + 2 * margin + 40
@@ -2181,6 +2301,7 @@ def _svg_blocos_sem_conexao(blocos, bw, bh, gap, margin):
 
 
 def _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r):
+    """SVG completo com diagrama baseado nas conexoes escolhidas pelo usuario."""
     _DEFS = ('<defs>'
              '<marker id="arrD" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">'
              '<polygon points="0 0,8 3,0 6" fill="#5b6be0"/></marker>'
@@ -2189,6 +2310,7 @@ def _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r):
              '<marker id="arrP" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">'
              '<polygon points="0 0,8 3,0 6" fill="#a78bfa"/></marker></defs>')
 
+    # Filtra conexoes validas
     sections = []
     for con in conexoes:
         blocos = [nomes_map[n] for n in con['blocos'] if n in nomes_map]
@@ -2198,6 +2320,7 @@ def _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r):
     if not sections:
         return _svg_blocos_sem_conexao(list(nomes_map.values()), bw, bh, gap, margin)
 
+    # Calcula dimensoes por secao (espaco extra para rotulos e legibilidade)
     total_h = margin
     section_ys = []
     for tipo, blocos, _ in sections:
@@ -2220,6 +2343,7 @@ def _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r):
     for sec_idx, (tipo, blocos, nomes) in enumerate(sections):
         sy = section_ys[sec_idx]
 
+        # Rotulo da secao (com fundo para legibilidade)
         tipo_cores = {'Serie': '#60a5fa', 'Paralelo': '#a78bfa',
                       'Realimentacao Negativa': '#f472b6',
                       'Realimentacao Positiva': '#fbbf24'}
@@ -2235,6 +2359,7 @@ def _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r):
         mid_y = block_y + bh / 2
 
         if tipo == 'Serie':
+            # R(s) -> [B1] -> [B2] -> ... -> Y(s)
             r_x = margin
             svg += (f'<text x="{r_x}" y="{mid_y+5}" fill="#8890b0" font-size="14" '
                     f'font-family="monospace" font-weight="bold">R(s)</text>')
@@ -2258,12 +2383,14 @@ def _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r):
                     f'font-family="monospace" font-weight="bold">Y(s)</text>')
 
         elif tipo == 'Paralelo':
+            # R(s) -> fork -> [B1] + [B2] + ... -> Sigma -> Y(s)
             nb = len(blocos)
             r_x = margin
             fork_x = margin + 50
             blk_x = margin + 75
             sum_out_x = blk_x + bw + gap
 
+            # Ponto de bifurcacao e R(s)
             first_mid = block_y + bh / 2
             svg += (f'<text x="{r_x}" y="{first_mid+5}" fill="#8890b0" font-size="14" '
                     f'font-family="monospace" font-weight="bold">R(s)</text>')
@@ -2271,6 +2398,7 @@ def _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r):
                     f'stroke="#a78bfa" stroke-width="2"/>')
             svg += f'<circle cx="{fork_x}" cy="{first_mid}" r="4" fill="#a78bfa"/>'
 
+            # Somador
             all_mid = block_y + (nb - 1) * (bh + 35) / 2 + bh / 2
             svg += (f'<circle cx="{sum_out_x+sum_r}" cy="{all_mid}" r="{sum_r}" '
                     f'fill="#1a3d3a" stroke="#a78bfa" stroke-width="2"/>')
@@ -2281,13 +2409,16 @@ def _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r):
                 y_off = block_y + i * (bh + 35)
                 b_mid = y_off + bh / 2
                 svg += _svg_render_bloco(blk_x, y_off, bw, bh, row)
+                # Fork -> bloco
                 svg += (f'<line x1="{fork_x}" y1="{first_mid}" x2="{fork_x}" y2="{b_mid}" '
                         f'stroke="#a78bfa" stroke-width="1.5"/>')
                 svg += (f'<line x1="{fork_x}" y1="{b_mid}" x2="{blk_x}" y2="{b_mid}" '
                         f'stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrP)"/>')
+                # Bloco -> somador
                 svg += (f'<line x1="{blk_x+bw}" y1="{b_mid}" x2="{sum_out_x}" y2="{all_mid}" '
                         f'stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrP)"/>')
 
+            # Y(s)
             y_x = sum_out_x + sum_r * 2 + 40
             svg += (f'<line x1="{sum_out_x+sum_r*2}" y1="{all_mid}" x2="{y_x-10}" '
                     f'y2="{all_mid}" stroke="#a78bfa" stroke-width="2" '
@@ -2300,14 +2431,19 @@ def _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r):
             G = blocos[0]
             H = blocos[1] if len(blocos) > 1 else None
 
+            # R(s) -> Sigma -> [G] -> Y(s)
+            #          sign ^            |
+            #               +-- [H] <---+
             r_x = margin
             sum_cx = margin + 55
             g_x = sum_cx + sum_r + 25
 
             svg += (f'<text x="{r_x}" y="{mid_y+5}" fill="#8890b0" font-size="14" '
                     f'font-family="monospace" font-weight="bold">R(s)</text>')
+            # R(s) -> Sigma
             svg += (f'<line x1="{r_x+35}" y1="{mid_y}" x2="{sum_cx-sum_r}" y2="{mid_y}" '
                     f'stroke="#5b6be0" stroke-width="2" marker-end="url(#arrD)"/>')
+            # Somador
             svg += (f'<circle cx="{sum_cx}" cy="{mid_y}" r="{sum_r}" '
                     f'fill="#1a3d3a" stroke="#2d8a70" stroke-width="2"/>')
             svg += (f'<text x="{sum_cx}" y="{mid_y+5}" fill="#e0e4f0" font-size="16" '
@@ -2319,10 +2455,13 @@ def _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r):
             svg += (f'<text x="{sum_cx-sum_r-14}" y="{mid_y+sum_r+14}" fill="{sign_cor}" '
                     f'font-size="13" font-weight="700">{sign}</text>')
 
+            # Sigma -> G
             svg += (f'<line x1="{sum_cx+sum_r}" y1="{mid_y}" x2="{g_x}" y2="{mid_y}" '
                     f'stroke="#5b6be0" stroke-width="2" marker-end="url(#arrD)"/>')
+            # Bloco G
             svg += _svg_render_bloco(g_x, block_y, bw, bh, G)
 
+            # G -> Y(s) com branch point
             branch_x = g_x + bw + 25
             y_x = branch_x + 40
             svg += (f'<line x1="{g_x+bw}" y1="{mid_y}" x2="{y_x-10}" y2="{mid_y}" '
@@ -2331,6 +2470,7 @@ def _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r):
             svg += (f'<text x="{y_x}" y="{mid_y+5}" fill="#8890b0" font-size="14" '
                     f'font-family="monospace" font-weight="bold">Y(s)</text>')
 
+            # Caminho de realimentacao
             fb_y_pos = block_y + bh + 65
             svg += (f'<line x1="{branch_x}" y1="{mid_y}" x2="{branch_x}" y2="{fb_y_pos}" '
                     f'stroke="#f472b6" stroke-width="1.5"/>')
@@ -2369,62 +2509,6 @@ def _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r):
 # MODO CLASSICO
 # ══════════════════════════════════════════════════
 
-
-def _ss_selector_html(uid):
-    return f"""
-<style>
-.msel{{display:flex;flex-direction:column;align-items:center;gap:8px;padding:6px 0 10px;font-family:system-ui,sans-serif}}
-.msel-badge{{font-size:12px;font-weight:700;color:#ef4444;border:1.5px solid #ef4444;border-radius:20px;padding:4px 14px;cursor:pointer;user-select:none;position:relative;display:inline-block}}
-.msel-drop{{display:none;position:absolute;top:110%;left:50%;transform:translateX(-50%);background:#fff;border:1px solid #ddd;border-radius:8px;z-index:99;min-width:100px;box-shadow:0 4px 12px rgba(0,0,0,.15)}}
-.msel-drop.open{{display:block}}
-.msel-opt{{padding:7px 14px;font-size:12px;cursor:pointer;color:#222}}
-.msel-opt:hover{{background:#f5f5f5}}
-.msel-cell{{width:36px;height:36px;border-radius:7px;border:1.5px solid #ccc;background:#f8f8f8;cursor:pointer;transition:background .1s,border-color .1s}}
-.msel-cell.on{{background:#ef4444;border-color:#ef4444}}
-.msel-brack{{position:absolute;width:5px;border:2.5px solid #333;background:none}}
-.msel-brack.l{{left:-2px;top:0;height:100%;border-right:none;border-radius:3px 0 0 3px}}
-.msel-brack.r{{right:-2px;top:0;height:100%;border-left:none;border-radius:0 3px 3px 0}}
-</style>
-<div class="msel">
-  <div class="msel-badge" id="badge{uid}" onclick="toggleDrop{uid}()">2 x 2 <span style="font-size:9px">&#9660;</span>
-    <div class="msel-drop" id="drop{uid}">
-      <div class="msel-opt" onclick="pick{uid}(event,1)">1 x 1</div>
-      <div class="msel-opt" onclick="pick{uid}(event,2)">2 x 2</div>
-      <div class="msel-opt" onclick="pick{uid}(event,3)">3 x 3</div>
-      <div class="msel-opt" onclick="pick{uid}(event,4)">4 x 4</div>
-    </div>
-  </div>
-  <div style="position:relative;padding:0 10px">
-    <div class="msel-brack l" id="bl{uid}"></div>
-    <div style="display:grid;gap:4px" id="grid{uid}"></div>
-    <div class="msel-brack r" id="br{uid}"></div>
-  </div>
-</div>
-<script>
-var N{uid}=2,MAX{uid}=4;
-function render{uid}(){{
-  var g=document.getElementById('grid{uid}'),s=36,gp=4,tot=(s*MAX{uid})+(gp*(MAX{uid}-1));
-  g.style.gridTemplateColumns='repeat('+MAX{uid}+','+s+'px)';g.style.width=tot+'px';g.innerHTML='';
-  for(var r=0;r<MAX{uid};r++)for(var c=0;c<MAX{uid};c++){{
-    var el=document.createElement('div');el.className='msel-cell'+(r<N{uid}&&c<N{uid}?' on':'');
-    el.dataset.r=r;el.dataset.c=c;
-    el.onmouseenter=function(){{hl{uid}(+this.dataset.r+1,+this.dataset.c+1)}};
-    el.onmouseleave=function(){{hl{uid}(N{uid},N{uid})}};
-    el.onclick=function(){{N{uid}=Math.max(+this.dataset.r+1,+this.dataset.c+1);
-      document.getElementById('badge{uid}').firstChild.nodeValue=N{uid}+' x '+N{uid}+' ';
-      hl{uid}(N{uid},N{uid});}};
-    g.appendChild(el)}}
-  var h=(s*MAX{uid})+(gp*(MAX{uid}-1));
-  document.getElementById('bl{uid}').style.height=h+'px';
-  document.getElementById('br{uid}').style.height=h+'px';}}
-function hl{uid}(rows,cols){{document.querySelectorAll('#grid{uid} .msel-cell').forEach(function(c){{c.classList.toggle('on',+c.dataset.r<rows&&+c.dataset.c<cols);}})}}
-function toggleDrop{uid}(){{document.getElementById('drop{uid}').classList.toggle('open')}}
-function pick{uid}(e,n){{e.stopPropagation();N{uid}=n;document.getElementById('badge{uid}').firstChild.nodeValue=n+' x '+n+' ';document.getElementById('drop{uid}').classList.remove('open');render{uid}();hl{uid}(n,n);}}
-document.addEventListener('click',function(e){{if(!e.target.closest('#badge{uid}'))document.getElementById('drop{uid}').classList.remove('open')}});
-render{uid}();
-</script>
-"""
-
 def modo_classico():
     st.title("Modo Classico - Funcao de Transferencia")
 
@@ -2452,15 +2536,44 @@ def modo_classico():
             denominador = st.text_input("Denominador", placeholder="ex: s^2 + 2*s + 3")
             A_str = B_str = C_str = D_str = ''
         else:
-            st.caption("Clique na grade para definir o tamanho (max 4x4).")
-            components.html(_ss_selector_html('cl'), height=210)
-            if 'ss_n_cl' not in st.session_state:
-                st.session_state.ss_n_cl = 2
-            _n2 = st.session_state.ss_n_cl
-            A_str = st.text_input("Matriz A", value="; ".join([" ".join(["1" if i==j else "0" for j in range(_n2)]) for i in range(_n2)]), placeholder="ex: 0 1; -2 -3", key="clA")
-            B_str = st.text_input("Matriz B", value="; ".join(["0"]*_n2), placeholder="ex: 0; 1", key="clB")
-            C_str = st.text_input("Matriz C", value=" ".join(["1" if j==0 else "0" for j in range(_n2)]), placeholder="ex: 1 0", key="clC")
-            D_str = st.text_input("Matriz D", value="0", placeholder="ex: 0", key="clD")
+            # Seletor visual de dimensão com botões
+            st.markdown("**Dimensão do Sistema (máx 4x4)**")
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                if st.button("1x1", key="dim1_cl", use_container_width=True):
+                    st.session_state.ss_dim_cl = 1
+                    st.rerun()
+            with col2:
+                if st.button("2x2", key="dim2_cl", use_container_width=True):
+                    st.session_state.ss_dim_cl = 2
+                    st.rerun()
+            with col3:
+                if st.button("3x3", key="dim3_cl", use_container_width=True):
+                    st.session_state.ss_dim_cl = 3
+                    st.rerun()
+            with col4:
+                if st.button("4x4", key="dim4_cl", use_container_width=True):
+                    st.session_state.ss_dim_cl = 4
+                    st.rerun()
+            
+            _n2 = st.session_state.ss_dim_cl
+            
+            # Gerar matrizes padrão baseadas na dimensão
+            A_default, B_default, C_default, D_default = gerar_matrizes_padrao(_n2)
+            
+            # Mostrar representação visual da matriz
+            st.markdown(f"**Matriz A ({_n2}x{_n2}):**")
+            A_mat = parse_matrix(A_default)
+            cols_visual = st.columns(_n2)
+            for i in range(_n2):
+                with cols_visual[i % _n2]:
+                    st.code(f"[{' '.join([f'{val:.0f}' for val in A_mat[i]])}]")
+            
+            A_str = st.text_area("Matriz A", value=A_default, height=80, placeholder="ex: 0 1; -2 -3", key="clA")
+            B_str = st.text_input("Matriz B", value=B_default, placeholder="ex: 0; 1", key="clB")
+            C_str = st.text_input("Matriz C", value=C_default, placeholder="ex: 1 0", key="clC")
+            D_str = st.text_input("Matriz D", value=D_default, placeholder="ex: 0", key="clD")
             numerador = denominador = ''
 
         if st.button("Adicionar", type="primary", use_container_width=True):
@@ -2561,6 +2674,7 @@ def modo_classico():
         st.markdown(VISUAL_BLOCKS_CSS, unsafe_allow_html=True)
 
         st.subheader("Blocos do Sistema")
+        # Detecta o ultimo bloco adicionado para badge "NOVO"
         ultimo_idx = len(st.session_state.blocos) - 1
         html_cards = '<div class="vb-container">'
         for idx, row in st.session_state.blocos.iterrows():
@@ -2595,7 +2709,6 @@ def modo_classico():
     # Painel de analise
     col1, col2 = st.columns([2, 1])
 
-
     with col2:
         st.subheader("Configuracao")
         tipo_malha = st.selectbox("Tipo de Sistema", ["Malha Aberta", "Malha Fechada"])
@@ -2620,6 +2733,7 @@ def modo_classico():
 
                 ganho_tf = TransferFunction([K], [1])
 
+                # Se ha conexoes definidas pelo usuario, usa simplificar_diagrama
                 if st.session_state.conexoes:
                     sistema = simplificar_diagrama(
                         st.session_state.blocos, st.session_state.conexoes)
@@ -2631,6 +2745,7 @@ def modo_classico():
                         sistema = ctrl.feedback(sistema, TransferFunction([1], [1]))
                     label_extra = " (conexoes definidas)"
                 else:
+                    # Modo classico: Plant + Controller + Sensor
                     planta = obter_bloco_por_tipo('Planta')
                     controlador = obter_bloco_por_tipo('Controlador')
                     sensor = obter_bloco_por_tipo('Sensor')
@@ -2668,6 +2783,7 @@ def modo_classico():
 # ══════════════════════════════════════════════════
 
 def _build_canvas_model(blocos_df, conexoes):
+    """Constroi o modelo (nodes + edges) do canvas a partir dos blocos e conexoes do modo classico."""
     tipo_map = {
         'Planta': 'tf', 'Controlador': 'tf', 'Sensor': 'sensor',
         'Atuador': 'actuator', 'Pre-filtro': 'tf', 'Perturbacao': 'tf',
@@ -2681,6 +2797,7 @@ def _build_canvas_model(blocos_df, conexoes):
         nid += 1
         return f"n{nid}"
 
+    # Se nao ha conexoes, retorna so os blocos (sem edges)
     if not conexoes:
         inp_id = mk_id()
         nodes.append({'id': inp_id, 'type': 'input', 'x': 30, 'y': 200, 'params': {'label': 'R(s)'}})
@@ -2700,6 +2817,7 @@ def _build_canvas_model(blocos_df, conexoes):
                       'params': {'label': 'Y(s)'}})
         return {'nodes': nodes, 'edges': edges}
 
+    # Mapear nomes de blocos para dados
     bloco_map = {}
     for _, row in blocos_df.iterrows():
         tf_obj = row['tf']
@@ -2710,6 +2828,7 @@ def _build_canvas_model(blocos_df, conexoes):
                        'den': _coeffs_to_poly_str(tf_obj.den[0][0])}
         }
 
+    # Adicionar input
     inp_id = mk_id()
     nodes.append({'id': inp_id, 'type': 'input', 'x': 30, 'y': 200, 'params': {'label': 'R(s)'}})
 
@@ -2737,6 +2856,7 @@ def _build_canvas_model(blocos_df, conexoes):
             x_offset += len(nomes) * 180
 
         elif tipo_con == 'Paralelo':
+            # Cria branches encadeados para fan-out, blocos em paralelo, e sum
             nb = len(nomes)
             signs = ' '.join(['+'] * nb)
             sum_id = mk_id()
@@ -2744,6 +2864,7 @@ def _build_canvas_model(blocos_df, conexoes):
                           'x': x_offset + 360, 'y': 210,
                           'params': {'signs': signs}})
 
+            # Cria cadeia de branches para distribuir sinal
             branch_ids = []
             cur_src_id = prev_out_id
             cur_src_port = prev_out_port
@@ -2765,9 +2886,11 @@ def _build_canvas_model(blocos_df, conexoes):
                               'x': x_offset + 160, 'y': 100 + i * 120,
                               'params': dict(b['params'])})
                 if i < nb - 1:
+                    # Conecta via out1 do branch correspondente
                     edges.append({'id': f'e{len(edges)}', 'src': branch_ids[i],
                                   'srcPort': 'out1', 'dst': b_id, 'dstPort': 'in0'})
                 else:
+                    # Ultimo bloco: conecta via out0 do ultimo branch
                     edges.append({'id': f'e{len(edges)}', 'src': branch_ids[-1],
                                   'srcPort': 'out0', 'dst': b_id, 'dstPort': 'in0'})
                 edges.append({'id': f'e{len(edges)}', 'src': b_id,
@@ -2788,6 +2911,7 @@ def _build_canvas_model(blocos_df, conexoes):
             edges.append({'id': f'e{len(edges)}', 'src': prev_out_id,
                           'srcPort': prev_out_port, 'dst': sum_id, 'dstPort': 'in0'})
 
+            # G (caminho direto)
             g_data = bloco_map[nomes[0]]
             g_id = mk_id()
             nodes.append({'id': g_id, 'type': g_data['type'],
@@ -2796,6 +2920,7 @@ def _build_canvas_model(blocos_df, conexoes):
             edges.append({'id': f'e{len(edges)}', 'src': sum_id,
                           'srcPort': 'out0', 'dst': g_id, 'dstPort': 'in0'})
 
+            # Branch point
             branch_id = mk_id()
             nodes.append({'id': branch_id, 'type': 'branch',
                           'x': x_offset + 340, 'y': 210,
@@ -2803,6 +2928,7 @@ def _build_canvas_model(blocos_df, conexoes):
             edges.append({'id': f'e{len(edges)}', 'src': g_id,
                           'srcPort': 'out0', 'dst': branch_id, 'dstPort': 'in0'})
 
+            # H (realimentacao)
             if len(nomes) > 1:
                 h_data = bloco_map[nomes[1]]
                 h_id = mk_id()
@@ -2818,6 +2944,7 @@ def _build_canvas_model(blocos_df, conexoes):
             prev_out_port = 'out0'
             x_offset += 420
 
+    # Adicionar output
     out_id = mk_id()
     nodes.append({'id': out_id, 'type': 'output',
                   'x': x_offset, 'y': 200, 'params': {'label': 'Y(s)'}})
@@ -2855,6 +2982,7 @@ def modo_canvas():
 
     html_content = _load_visual_editor_html()
 
+    # Injeta modelo completo (blocos + conexoes do modo classico) no canvas
     if not st.session_state.blocos.empty:
         canvas_model = _build_canvas_model(
             st.session_state.blocos, st.session_state.conexoes)
@@ -2871,6 +2999,7 @@ def modo_canvas():
 # ══════════════════════════════════════════════════
 
 def _tf_to_str(coeffs):
+    """Converte coeficientes para string LaTeX de polinomio."""
     n = len(coeffs) - 1
     terms = []
     for i, c in enumerate(coeffs):
@@ -2906,6 +3035,7 @@ def _tf_to_str(coeffs):
 
 
 def _format_complex_list(arr):
+    """Formata lista de numeros complexos para exibicao."""
     if len(arr) == 0:
         return "Nenhum"
     parts = []
