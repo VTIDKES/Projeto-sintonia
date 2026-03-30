@@ -984,21 +984,6 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 </div>
 <div id="manSS" style="display:none">
 <h4>Espaco de Estados: dx/dt = Ax + Bu, y = Cx + Du</h4>
-<div style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:8px 0 14px">
-<div style="font-size:12px;color:var(--txm)">Selecione o tamanho da matriz:</div>
-<div id="manDimBadge" style="font-size:13px;font-weight:700;color:#f87171;border:1.5px solid #f87171;border-radius:20px;padding:5px 18px;cursor:pointer;user-select:none;position:relative" onclick="toggleManDrop(event)">2 x 2 <span style="font-size:10px">&#9660;</span>
-<div id="manDimDrop" style="display:none;position:absolute;top:110%;left:50%;transform:translateX(-50%);background:#1a1d2e;border:1px solid #333654;border-radius:8px;z-index:99;min-width:110px;box-shadow:0 4px 12px rgba(0,0,0,.5)">
-<div onclick="setManDim(event,1)" style="padding:8px 16px;font-size:12px;cursor:pointer;color:#e0e4f0" onmouseenter="this.style.background=\'#252840\'" onmouseleave="this.style.background=\'\'">1 x 1</div>
-<div onclick="setManDim(event,2)" style="padding:8px 16px;font-size:12px;cursor:pointer;color:#e0e4f0" onmouseenter="this.style.background=\'#252840\'" onmouseleave="this.style.background=\'\'">2 x 2</div>
-<div onclick="setManDim(event,3)" style="padding:8px 16px;font-size:12px;cursor:pointer;color:#e0e4f0" onmouseenter="this.style.background=\'#252840\'" onmouseleave="this.style.background=\'\'">3 x 3</div>
-<div onclick="setManDim(event,4)" style="padding:8px 16px;font-size:12px;cursor:pointer;color:#e0e4f0" onmouseenter="this.style.background=\'#252840\'" onmouseleave="this.style.background=\'\'">4 x 4</div>
-<div onclick="setManDim(event,5)" style="padding:8px 16px;font-size:12px;cursor:pointer;color:#e0e4f0" onmouseenter="this.style.background=\'#252840\'" onmouseleave="this.style.background=\'\'">5 x 5</div>
-</div></div>
-<div style="position:relative;display:inline-block;padding:0 12px">
-<div style="position:absolute;left:2px;top:50%;transform:translateY(-50%);width:5px;height:80%;border:2.5px solid #e0e4f0;border-right:none;border-radius:3px 0 0 3px"></div>
-<div id="manMatGrid" style="display:grid;gap:5px"></div>
-<div style="position:absolute;right:2px;top:50%;transform:translateY(-50%);width:5px;height:80%;border:2.5px solid #e0e4f0;border-left:none;border-radius:0 3px 3px 0"></div>
-</div></div>
 <div class="man-row">
 <div class="pg"><label>Matriz A (nxn)</label><input id="manA" value="0 1; -2 -3" placeholder="0 1; -2 -3"></div>
 <div class="pg"><label>Matriz B (nx1)</label><input id="manB" value="0; 1" placeholder="0; 1"></div>
@@ -1007,7 +992,7 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 <div class="pg"><label>Matriz C (1xn)</label><input id="manC" value="1 0" placeholder="1 0"></div>
 <div class="pg"><label>Matriz D (1x1)</label><input id="manD" value="0" placeholder="0"></div>
 </div>
-<div class="man-hint">Use <code>;</code> para separar linhas. Clique na grade para definir a dimensao. Converte para T(s) = C(sI-A)<sup>-1</sup>B + D</div>
+<div class="man-hint">Use <code>;</code> para separar linhas. Ex: <code>0 1; -2 -3</code> = matriz 2x2. Converte para T(s) = C(sI-A)<sup>-1</sup>B + D</div>
 </div>
 </div>
 
@@ -1036,27 +1021,11 @@ function pickBlock(t){
     h+='<div class="cfg-row"><div><label>Numerador</label><input id="cfgNum" value="1" placeholder="ex: s+1"></div>';
     h+='<div><label>Denominador</label><input id="cfgDen" value="s+1" placeholder="ex: s^2+2s+1"></div></div>'}
   else if(t==="ss"){
-    h+='<div style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:8px 0 12px">';
-    h+='<div style="font-size:11px;color:var(--txm)">Tamanho da matriz:</div>';
-    h+='<div id="cfgDimBadge" style="font-size:13px;font-weight:700;color:#f87171;border:1.5px solid #f87171;border-radius:20px;padding:5px 18px;cursor:pointer;user-select:none;position:relative" onclick="toggleCfgDrop(event)">2 x 2 <span style="font-size:10px">&#9660;</span>';
-    h+='<div id="cfgDimDrop" style="display:none;position:absolute;top:110%;left:50%;transform:translateX(-50%);background:#1a1d2e;border:1px solid #333654;border-radius:8px;z-index:99;min-width:110px;box-shadow:0 4px 12px rgba(0,0,0,.5)">';
-    h+='<div onclick="setCfgDim(event,1)" style="padding:8px 16px;font-size:12px;cursor:pointer;color:#e0e4f0" onmouseenter="this.style.background=\'#252840\'" onmouseleave="this.style.background=\'\'">1 x 1</div>';
-    h+='<div onclick="setCfgDim(event,2)" style="padding:8px 16px;font-size:12px;cursor:pointer;color:#e0e4f0" onmouseenter="this.style.background=\'#252840\'" onmouseleave="this.style.background=\'\'">2 x 2</div>';
-    h+='<div onclick="setCfgDim(event,3)" style="padding:8px 16px;font-size:12px;cursor:pointer;color:#e0e4f0" onmouseenter="this.style.background=\'#252840\'" onmouseleave="this.style.background=\'\'">3 x 3</div>';
-    h+='<div onclick="setCfgDim(event,4)" style="padding:8px 16px;font-size:12px;cursor:pointer;color:#e0e4f0" onmouseenter="this.style.background=\'#252840\'" onmouseleave="this.style.background=\'\'">4 x 4</div>';
-    h+='<div onclick="setCfgDim(event,5)" style="padding:8px 16px;font-size:12px;cursor:pointer;color:#e0e4f0" onmouseenter="this.style.background=\'#252840\'" onmouseleave="this.style.background=\'\'">5 x 5</div>';
-    h+='</div></div>';
-    h+='<div style="position:relative;display:inline-block;padding:0 10px">';
-    h+='<div style="position:absolute;left:2px;top:50%;transform:translateY(-50%);width:5px;height:80%;border:2.5px solid #e0e4f0;border-right:none;border-radius:3px 0 0 3px"></div>';
-    h+='<div id="cfgMatGrid" style="display:grid;gap:5px"></div>';
-    h+='<div style="position:absolute;right:2px;top:50%;transform:translateY(-50%);width:5px;height:80%;border:2.5px solid #e0e4f0;border-left:none;border-radius:0 3px 3px 0"></div>';
-    h+='</div></div>';
     h+='<div class="cfg-row"><div><label>Matriz A (nxn)</label><input id="cfgSSA" value="0 1; -2 -3" placeholder="0 1; -2 -3"></div>';
     h+='<div><label>Matriz B (nx1)</label><input id="cfgSSB" value="0; 1" placeholder="0; 1"></div></div>';
     h+='<div class="cfg-row"><div><label>Matriz C (1xn)</label><input id="cfgSSC" value="1 0" placeholder="1 0"></div>';
     h+='<div><label>Matriz D (1x1)</label><input id="cfgSSD" value="0" placeholder="0"></div></div>';
-    h+='<div style="font-size:10px;color:var(--txm);margin-top:4px">Use <code>;</code> para separar linhas. Dimensoes livres. Converte para T(s)=C(sI-A)<sup>-1</sup>B+D</div>';
-    h+='<script>var cfgN=2;function renderCfgGrid(){var g=document.getElementById("cfgMatGrid");if(!g)return;var MAX=5,s=36,gp=5,total=(s*MAX)+(gp*(MAX-1));g.style.gridTemplateColumns="repeat("+MAX+","+s+"px)";g.style.width=total+"px";g.innerHTML="";for(var r=0;r<MAX;r++)for(var c=0;c<MAX;c++){var cell=document.createElement("div");cell.style.cssText="width:"+s+"px;height:"+s+"px;border-radius:8px;border:1.5px solid "+(r<cfgN&&c<cfgN?"#f87171":"#333654")+";background:"+(r<cfgN&&c<cfgN?"#f87171":"#252840")+";cursor:pointer;transition:background .12s";cell.dataset.r=r;cell.dataset.c=c;cell.onmouseenter=function(){hlCfg(+this.dataset.r+1,+this.dataset.c+1)};cell.onmouseleave=function(){hlCfg(cfgN,cfgN)};cell.onclick=function(){cfgN=Math.max(+this.dataset.r+1,+this.dataset.c+1);var b=document.getElementById("cfgDimBadge");if(b)b.childNodes[0].nodeValue=cfgN+" x "+cfgN+" ";hlCfg(cfgN,cfgN);applyCfgDim(cfgN)};g.appendChild(cell)}}function hlCfg(rows,cols){var cells=document.querySelectorAll("#cfgMatGrid div");cells.forEach(function(c){var active=+c.dataset.r<rows&&+c.dataset.c<cols;c.style.background=active?"#f87171":"#252840";c.style.borderColor=active?"#f87171":"#333654"})}function toggleCfgDrop(e){e.stopPropagation();var d=document.getElementById("cfgDimDrop");d.style.display=d.style.display==="none"?"block":"none"}function setCfgDim(e,n){e.stopPropagation();cfgN=n;var b=document.getElementById("cfgDimBadge");if(b)b.childNodes[0].nodeValue=n+" x "+n+" ";document.getElementById("cfgDimDrop").style.display="none";renderCfgGrid();hlCfg(n,n);applyCfgDim(n)}function applyCfgDim(n){var r=[];for(var i=0;i<n;i++){var row=[];for(var j=0;j<n;j++)row.push(i===j?1:0);r.push(row.join(" "))}var A=document.getElementById("cfgSSA");if(A)A.value=r.join("; ");var B=document.getElementById("cfgSSB");if(B)B.value=Array.from({length:n},function(){return"0"}).join("; ");var C=document.getElementById("cfgSSC");if(C)C.value=Array.from({length:n},function(_,i){return i===0?1:0}).join(" ");var D=document.getElementById("cfgSSD");if(D)D.value="0"}document.addEventListener("click",function(){var d=document.getElementById("cfgDimDrop");if(d)d.style.display="none"});setTimeout(function(){renderCfgGrid();hlCfg(cfgN,cfgN)},50);<\/script>'}
+    h+='<div style="font-size:10px;color:var(--txm);margin-top:4px">Use <code>;</code> para separar linhas. Dimensoes livres (1x1, 2x2, 3x3, etc). Converte para T(s)=C(sI-A)<sup>-1</sup>B+D</div>'}
   else if(t==="gain"){h+='<div class="cfg-row"><div><label>Ganho K</label><input id="cfgK" value="1" placeholder="ex: 10"></div><div></div></div>'}
   else if(t==="pid"){
     h+='<div class="cfg-row"><div><label>Kp</label><input id="cfgKp" value="1"></div><div><label>Ki</label><input id="cfgKi" value="0"></div></div>';
@@ -1749,53 +1718,6 @@ function buildFeedback(ids,positive){
   model.edges.push({id:mkEid(),src:br.id,srcPort:'out1',dst:hId,dstPort:'in0'});
   model.edges.push({id:mkEid(),src:hId,srcPort:'out0',dst:sm.id,dstPort:'in1'})}
 
-/* ===== SELETOR VISUAL DE MATRIZ (Entrada Manual SS) ===== */
-var manN=2;
-function renderManGrid(){
-  var g=document.getElementById("manMatGrid");if(!g)return;
-  var MAX=5,s=38,gp=5,total=(s*MAX)+(gp*(MAX-1));
-  g.style.gridTemplateColumns="repeat("+MAX+","+s+"px)";
-  g.style.width=total+"px";g.innerHTML="";
-  for(var r=0;r<MAX;r++)for(var c=0;c<MAX;c++){
-    var cell=document.createElement("div");
-    var active=r<manN&&c<manN;
-    cell.style.cssText="width:"+s+"px;height:"+s+"px;border-radius:8px;border:1.5px solid "+(active?"#f87171":"#333654")+";background:"+(active?"#f87171":"#252840")+";cursor:pointer;transition:background .12s,border-color .12s";
-    cell.dataset.r=r;cell.dataset.c=c;
-    cell.onmouseenter=function(){hlMan(+this.dataset.r+1,+this.dataset.c+1)};
-    cell.onmouseleave=function(){hlMan(manN,manN)};
-    cell.onclick=function(){
-      manN=Math.max(+this.dataset.r+1,+this.dataset.c+1);
-      var b=document.getElementById("manDimBadge");
-      if(b)b.childNodes[0].nodeValue=manN+" x "+manN+" ";
-      hlMan(manN,manN);applyManDim(manN)};
-    g.appendChild(cell)}}
-function hlMan(rows,cols){
-  var cells=document.querySelectorAll("#manMatGrid div");
-  cells.forEach(function(c){var active=+c.dataset.r<rows&&+c.dataset.c<cols;
-    c.style.background=active?"#f87171":"#252840";
-    c.style.borderColor=active?"#f87171":"#333654"})}
-function toggleManDrop(e){
-  e.stopPropagation();
-  var d=document.getElementById("manDimDrop");
-  if(d)d.style.display=d.style.display==="none"?"block":"none"}
-function setManDim(e,n){
-  e.stopPropagation();manN=n;
-  var b=document.getElementById("manDimBadge");
-  if(b)b.childNodes[0].nodeValue=n+" x "+n+" ";
-  var d=document.getElementById("manDimDrop");if(d)d.style.display="none";
-  renderManGrid();hlMan(n,n);applyManDim(n)}
-function applyManDim(n){
-  var r=[];for(var i=0;i<n;i++){var row=[];for(var j=0;j<n;j++)row.push(i===j?1:0);r.push(row.join(" "))}
-  var A=document.getElementById("manA");if(A)A.value=r.join("; ");
-  var B=document.getElementById("manB");if(B)B.value=Array.from({length:n},function(){return"0"}).join("; ");
-  var C=document.getElementById("manC");if(C)C.value=Array.from({length:n},function(_,i){return i===0?1:0}).join(" ");
-  var D=document.getElementById("manD");if(D)D.value="0"}
-document.addEventListener("click",function(e){
-  if(!e.target.closest("#manDimBadge")){var d=document.getElementById("manDimDrop");if(d)d.style.display="none"}
-  if(!e.target.closest("#cfgDimBadge")){var d=document.getElementById("cfgDimDrop");if(d)d.style.display="none"}});
-/* Inicializa grade do manual SS quando a aba e selecionada */
-var _origSetSubMode=setSubMode;
-setSubMode=function(m){_origSetSubMode(m);if(m==="ss"){setTimeout(function(){renderManGrid();hlMan(manN,manN)},30)}};
 document.querySelectorAll(".tb[data-add]").forEach(function(b){b.addEventListener("click",function(){addB(b.dataset.add)})});
 document.getElementById("btnDel").addEventListener("click",delSel);document.getElementById("btnClear").addEventListener("click",clrAll);document.getElementById("btnAuto").addEventListener("click",autoLay);
 document.addEventListener("keydown",function(e){if(e.target.tagName==="INPUT")return;if(e.key==="Delete"||e.key==="Backspace")delSel();if(e.key==="Escape"){conSt=null;closeModal();closeConnModal();document.querySelectorAll(".port.active").forEach(function(p){p.classList.remove("active")})}});
@@ -1989,12 +1911,75 @@ def modo_lista():
             denominador = st.text_input("Denominador", placeholder="ex: s^2+2*s+3")
             A_str = B_str = C_str = D_str = ''
         else:
-            st.markdown("**Matrizes do Espaco de Estados**")
-            st.caption("Use `;` para separar linhas. Ex: `0 1; -2 -3`")
-            A_str = st.text_input("Matriz A (nxn)", value="0 1; -2 -3")
-            B_str = st.text_input("Matriz B (nxm)", value="0; 1")
-            C_str = st.text_input("Matriz C (pxn)", value="1 0")
-            D_str = st.text_input("Matriz D (pxm)", value="0")
+            st.caption("Clique na grade para definir o tamanho da matriz.")
+            _mat_sel_html2 = """
+<style>
+.msel{display:flex;flex-direction:column;align-items:center;gap:8px;padding:6px 0 10px;font-family:system-ui,sans-serif}
+.msel-badge{font-size:12px;font-weight:700;color:#ef4444;border:1.5px solid #ef4444;border-radius:20px;padding:4px 14px;cursor:pointer;user-select:none;position:relative;display:inline-block}
+.msel-drop{display:none;position:absolute;top:110%;left:50%;transform:translateX(-50%);background:#fff;border:1px solid #ddd;border-radius:8px;z-index:99;min-width:100px;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.msel-drop.open{display:block}
+.msel-opt{padding:7px 14px;font-size:12px;cursor:pointer;color:#222}
+.msel-opt:hover{background:#f5f5f5}
+.msel-cell{width:34px;height:34px;border-radius:7px;border:1.5px solid #ccc;background:#f8f8f8;cursor:pointer;transition:background .1s,border-color .1s}
+.msel-cell.on{background:#ef4444;border-color:#ef4444}
+.msel-brack{position:absolute;width:5px;border:2.5px solid #333;background:none}
+.msel-brack.l{left:-2px;top:0;height:100%;border-right:none;border-radius:3px 0 0 3px}
+.msel-brack.r{right:-2px;top:0;height:100%;border-left:none;border-radius:0 3px 3px 0}
+</style>
+<div class="msel">
+  <div class="msel-badge" id="badge2" onclick="toggleDrop2()">2 x 2 <span style="font-size:9px">&#9660;</span>
+    <div class="msel-drop" id="drop2">
+      <div class="msel-opt" onclick="pick2(event,1)">1 x 1</div>
+      <div class="msel-opt" onclick="pick2(event,2)">2 x 2</div>
+      <div class="msel-opt" onclick="pick2(event,3)">3 x 3</div>
+      <div class="msel-opt" onclick="pick2(event,4)">4 x 4</div>
+      <div class="msel-opt" onclick="pick2(event,5)">5 x 5</div>
+    </div>
+  </div>
+  <div style="position:relative;padding:0 10px">
+    <div class="msel-brack l" id="bl2"></div>
+    <div style="display:grid;gap:4px" id="grid2"></div>
+    <div class="msel-brack r" id="br2"></div>
+  </div>
+</div>
+<script>
+var N2=2,MAX2=5;
+function render2(){
+  var g=document.getElementById('grid2'),s=34,gp=4,tot=(s*MAX2)+(gp*(MAX2-1));
+  g.style.gridTemplateColumns='repeat('+MAX2+','+s+'px)';g.style.width=tot+'px';g.innerHTML='';
+  for(var r=0;r<MAX2;r++)for(var c=0;c<MAX2;c++){
+    var el=document.createElement('div');el.className='msel-cell'+(r<N2&&c<N2?' on':'');
+    el.dataset.r=r;el.dataset.c=c;
+    el.onmouseenter=function(){hl2(+this.dataset.r+1,+this.dataset.c+1)};
+    el.onmouseleave=function(){hl2(N2,N2)};
+    el.onclick=function(){N2=Math.max(+this.dataset.r+1,+this.dataset.c+1);
+      document.getElementById('badge2').firstChild.nodeValue=N2+' x '+N2+' ';
+      hl2(N2,N2);send2()};
+    g.appendChild(el)}
+  var h=(s*MAX2)+(gp*(MAX2-1));
+  document.getElementById('bl2').style.height=h+'px';
+  document.getElementById('br2').style.height=h+'px';}
+function hl2(rows,cols){document.querySelectorAll('.msel-cell').forEach(function(c){c.classList.toggle('on',+c.dataset.r<rows&&+c.dataset.c<cols)})}
+function toggleDrop2(){document.getElementById('drop2').classList.toggle('open')}
+function pick2(e,n){e.stopPropagation();N2=n;document.getElementById('badge2').firstChild.nodeValue=n+' x '+n+' ';document.getElementById('drop2').classList.remove('open');render2();hl2(n,n);send2()}
+function send2(){
+  var A=[],B=[],C=[];
+  for(var i=0;i<N2;i++){var row=[];for(var j=0;j<N2;j++)row.push(i===j?1:0);A.push(row.join(' '));}
+  for(var i=0;i<N2;i++)B.push('0');
+  for(var j=0;j<N2;j++)C.push(j===0?1:0);
+  window.parent.postMessage({type:'ss_dim2',n:N2,A:A.join('; '),B:B.join('; '),C:C.join(' '),D:'0'},'*');}
+document.addEventListener('click',function(e){if(!e.target.closest('#badge2'))document.getElementById('drop2').classList.remove('open')});
+render2();
+</script>
+"""
+            components.html(_mat_sel_html2, height=220)
+            if 'ss_dim_n2' not in st.session_state:
+                st.session_state.ss_dim_n2 = 2
+            n_ss2 = st.session_state.ss_dim_n2
+            A_str = st.text_input("Matriz A (nxn)", value="; ".join([" ".join(["1" if i==j else "0" for j in range(n_ss2)]) for i in range(n_ss2)]), key="cvA")
+            B_str = st.text_input("Matriz B (nxm)", value="; ".join(["0"]*n_ss2), key="cvB")
+            C_str = st.text_input("Matriz C (pxn)", value=" ".join(["1" if j==0 else "0" for j in range(n_ss2)]), key="cvC")
+            D_str = st.text_input("Matriz D (pxm)", value="0", key="cvD")
             numerador = denominador = ''
 
         if st.button("Adicionar Bloco", type="primary", use_container_width=True):
@@ -2557,11 +2542,78 @@ def modo_classico():
             denominador = st.text_input("Denominador", placeholder="ex: s^2 + 2*s + 3")
             A_str = B_str = C_str = D_str = ''
         else:
-            st.caption("Matrizes separadas por ';' entre linhas e espacos/virgulas entre colunas.")
-            A_str = st.text_input("Matriz A", placeholder="ex: 0 1; -2 -3")
-            B_str = st.text_input("Matriz B", placeholder="ex: 0; 1")
-            C_str = st.text_input("Matriz C", placeholder="ex: 1 0")
-            D_str = st.text_input("Matriz D", placeholder="ex: 0")
+            st.caption("Clique na grade para definir o tamanho da matriz.")
+            # Seletor visual de dimensao da matriz
+            _mat_sel_html = """
+<style>
+.msel{display:flex;flex-direction:column;align-items:center;gap:8px;padding:6px 0 10px;font-family:system-ui,sans-serif}
+.msel-badge{font-size:12px;font-weight:700;color:#ef4444;border:1.5px solid #ef4444;border-radius:20px;padding:4px 14px;cursor:pointer;user-select:none;position:relative;display:inline-block}
+.msel-drop{display:none;position:absolute;top:110%;left:50%;transform:translateX(-50%);background:#fff;border:1px solid #ddd;border-radius:8px;z-index:99;min-width:100px;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.msel-drop.open{display:block}
+.msel-opt{padding:7px 14px;font-size:12px;cursor:pointer;color:#222}
+.msel-opt:hover{background:#f5f5f5}
+.msel-grid{display:grid;gap:4px;position:relative}
+.msel-cell{width:34px;height:34px;border-radius:7px;border:1.5px solid #ccc;background:#f8f8f8;cursor:pointer;transition:background .1s,border-color .1s}
+.msel-cell.on{background:#ef4444;border-color:#ef4444}
+.msel-brack{position:absolute;width:5px;border:2.5px solid #333;background:none}
+.msel-brack.l{left:-2px;top:0;height:100%;border-right:none;border-radius:3px 0 0 3px}
+.msel-brack.r{right:-2px;top:0;height:100%;border-left:none;border-radius:0 3px 3px 0}
+</style>
+<div class="msel">
+  <div class="msel-badge" id="badge" onclick="toggleDrop()">2 x 2 <span style="font-size:9px">&#9660;</span>
+    <div class="msel-drop" id="drop">
+      <div class="msel-opt" onclick="pick(event,1)">1 x 1</div>
+      <div class="msel-opt" onclick="pick(event,2)">2 x 2</div>
+      <div class="msel-opt" onclick="pick(event,3)">3 x 3</div>
+      <div class="msel-opt" onclick="pick(event,4)">4 x 4</div>
+      <div class="msel-opt" onclick="pick(event,5)">5 x 5</div>
+    </div>
+  </div>
+  <div style="position:relative;padding:0 10px">
+    <div class="msel-brack l" id="bl"></div>
+    <div class="msel-grid" id="grid"></div>
+    <div class="msel-brack r" id="br"></div>
+  </div>
+</div>
+<script>
+var N=2,MAX=5;
+function render(){
+  var g=document.getElementById('grid'),s=34,gp=4,tot=(s*MAX)+(gp*(MAX-1));
+  g.style.gridTemplateColumns='repeat('+MAX+','+s+'px)';g.style.width=tot+'px';g.innerHTML='';
+  for(var r=0;r<MAX;r++)for(var c=0;c<MAX;c++){
+    var el=document.createElement('div');el.className='msel-cell'+(r<N&&c<N?' on':'');
+    el.dataset.r=r;el.dataset.c=c;
+    el.onmouseenter=function(){hl(+this.dataset.r+1,+this.dataset.c+1)};
+    el.onmouseleave=function(){hl(N,N)};
+    el.onclick=function(){N=Math.max(+this.dataset.r+1,+this.dataset.c+1);
+      document.getElementById('badge').firstChild.nodeValue=N+' x '+N+' ';
+      hl(N,N);send()};
+    g.appendChild(el)}
+  var h=(s*MAX)+(gp*(MAX-1));
+  document.getElementById('bl').style.height=h+'px';
+  document.getElementById('br').style.height=h+'px';}
+function hl(rows,cols){document.querySelectorAll('.msel-cell').forEach(function(c){var on=+c.dataset.r<rows&&+c.dataset.c<cols;c.classList.toggle('on',on)})}
+function toggleDrop(){document.getElementById('drop').classList.toggle('open')}
+function pick(e,n){e.stopPropagation();N=n;document.getElementById('badge').firstChild.nodeValue=n+' x '+n+' ';document.getElementById('drop').classList.remove('open');render();hl(n,n);send()}
+function send(){
+  var A=[],B=[],C=[];
+  for(var i=0;i<N;i++){var row=[];for(var j=0;j<N;j++)row.push(i===j?1:0);A.push(row.join(' '));}
+  for(var i=0;i<N;i++)B.push('0');
+  for(var j=0;j<N;j++)C.push(j===0?1:0);
+  var msg={type:'ss_dim',n:N,A:A.join('; '),B:B.join('; '),C:C.join(' '),D:'0'};
+  window.parent.postMessage(msg,'*');}
+document.addEventListener('click',function(e){if(!e.target.closest('#badge'))document.getElementById('drop').classList.remove('open')});
+render();
+</script>
+"""
+            components.html(_mat_sel_html, height=220)
+            if 'ss_dim_n' not in st.session_state:
+                st.session_state.ss_dim_n = 2
+            n_ss = st.session_state.ss_dim_n
+            A_str = st.text_input("Matriz A", value="; ".join([" ".join(["1" if i==j else "0" for j in range(n_ss)]) for i in range(n_ss)]), placeholder="ex: 0 1; -2 -3", key="clA")
+            B_str = st.text_input("Matriz B", value="; ".join(["0"]*n_ss), placeholder="ex: 0; 1", key="clB")
+            C_str = st.text_input("Matriz C", value=" ".join(["1" if j==0 else "0" for j in range(n_ss)]), placeholder="ex: 1 0", key="clC")
+            D_str = st.text_input("Matriz D", value="0", placeholder="ex: 0", key="clD")
             numerador = denominador = ''
 
         if st.button("Adicionar", type="primary", use_container_width=True):
