@@ -142,13 +142,18 @@ def converter_para_tf(numerador_str, denominador_str):
 
 
 def converter_ss_para_tf(A_str, B_str, C_str, D_str):
-    """Converte espaco de estados (A,B,C,D) para funcao de transferencia.
-    T(s) = C(sI - A)^(-1)B + D
+    """Converte espaço de estados (A,B,C,D) para função de transferência.
+    
+    - Se SISO → retorna (num_sym, den_sym)
+    - Se MIMO → retorna matriz G(s)
     """
-    A = parse_matrix(A_str)
-    B = parse_matrix(B_str)
-    C = parse_matrix(C_str)
-    D = parse_matrix(D_str)
+    # 🔹 Parse e garante numpy array
+    A = np.array(parse_matrix(A_str))
+    B = np.array(parse_matrix(B_str))
+    C = np.array(parse_matrix(C_str))
+    D = np.array(parse_matrix(D_str))
+
+    # 🔹 Validações
     n = A.shape[0]
     if A.shape != (n, n):
         raise ValueError(f"Matriz A deve ser quadrada ({n}x{n})")
@@ -156,14 +161,57 @@ def converter_ss_para_tf(A_str, B_str, C_str, D_str):
         raise ValueError(f"Matriz B deve ter {n} linhas")
     if C.shape[1] != n:
         raise ValueError(f"Matriz C deve ter {n} colunas")
+
+    # 🔹 Sistema
     ss_sys = ctrl.ss(A, B, C, D)
     tf_sys = ctrl.tf(ss_sys)
+
     s = sp.Symbol('s')
-    num_coeffs = list(tf_sys.num[0][0])
-    den_coeffs = list(tf_sys.den[0][0])
-    num_sym = sum(c * s**i for i, c in enumerate(reversed(num_coeffs)))
-    den_sym = sum(c * s**i for i, c in enumerate(reversed(den_coeffs)))
-    return tf_sys, (num_sym, den_sym), ss_sys
+
+    # =========================
+    # 🔹 CASO SISO
+    # =========================
+    if tf_sys.ninputs == 1 and tf_sys.noutputs == 1:
+        num_coeffs = list(tf_sys.num[0][0])
+        den_coeffs = list(tf_sys.den[0][0])
+
+        num_sym = sum(c * s**k for k, c in enumerate(reversed(num_coeffs)))
+        den_sym = sum(c * s**k for k, c in enumerate(reversed(den_coeffs)))
+
+        return {
+            "tipo": "SISO",
+            "tf": tf_sys,
+            "simbolico": num_sym / den_sym,
+            "num": num_sym,
+            "den": den_sym,
+            "ss": ss_sys
+        }
+
+    # =========================
+    # 🔥 CASO MIMO
+    # =========================
+    else:
+        G = []
+
+        for i in range(tf_sys.noutputs):
+            linha = []
+            for j in range(tf_sys.ninputs):
+                num_coeffs = list(tf_sys.num[i][j])
+                den_coeffs = list(tf_sys.den[i][j])
+
+                num_sym = sum(c * s**k for k, c in enumerate(reversed(num_coeffs)))
+                den_sym = sum(c * s**k for k, c in enumerate(reversed(den_coeffs)))
+
+                linha.append(num_sym / den_sym)
+
+            G.append(linha)
+
+        return {
+            "tipo": "MIMO",
+            "tf": tf_sys,
+            "G": G,  # matriz simbólica
+            "ss": ss_sys
+        }
 
 
 def tipo_do_sistema(G):
