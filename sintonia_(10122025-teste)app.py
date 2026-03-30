@@ -526,11 +526,15 @@ def plot_diagrama_blocos_plotly(blocos_df, conexoes):
         return None
 
     fig = go.Figure()
+    # Monta layout sem conflito de chaves: separa xaxis/yaxis do PLOTLY_DARK
+    _base = {k: v for k, v in PLOTLY_DARK.items() if k not in ('xaxis', 'yaxis')}
     fig.update_layout(
-        **PLOTLY_DARK,
+        **_base,
         title=dict(text='Diagrama de Blocos do Sistema', font=dict(size=15, color='#34d399')),
-        xaxis=dict(visible=False, range=[-0.3, 10]),
-        yaxis=dict(visible=False, scaleanchor='x', scaleratio=1, range=[-1.5, 3]),
+        xaxis=dict(visible=False, range=[-0.3, 10],
+                   gridcolor='#333654', zerolinecolor='#444870', linecolor='#333654'),
+        yaxis=dict(visible=False, scaleanchor='x', scaleratio=1, range=[-1.5, 3],
+                   gridcolor='#333654', zerolinecolor='#444870', linecolor='#333654'),
         height=320,
         showlegend=False,
     )
@@ -2195,7 +2199,7 @@ def modo_lista():
             A_str = B_str = C_str = D_str = ''
         else:
             st.caption("Preencha a grade abaixo célula por célula:")
-            components.html(_ss_matrix_grid_html('cv', default_n=2), height=420, scrolling=False)
+            components.html(_ss_matrix_grid_html('cv', default_n=2), height=560, scrolling=False)
             st.caption("Insira os valores manualmente (copie do preview acima):")
             if 'ss_n_cv' not in st.session_state:
                 st.session_state.ss_n_cv = 2
@@ -2828,9 +2832,10 @@ body{{font-family:'Segoe UI',system-ui,sans-serif;background:transparent;color:#
 .mat-grid{{display:grid;gap:3px}}
 .mat-cell{{width:100%;height:32px;border:1.5px solid #cbd5e1;border-radius:5px;
   background:#fff;color:#1e293b;font-size:12px;font-weight:600;text-align:center;
-  outline:none;transition:border-color .1s,box-shadow .1s;min-width:0}}
+  outline:none;transition:border-color .1s,box-shadow .1s;min-width:0;min-height:28px}}
 .mat-cell:focus{{border-color:#ef4444;box-shadow:0 0 0 2px rgba(239,68,68,.15)}}
 .mat-cell:hover:not(:focus){{border-color:#94a3b8;background:#fef2f2}}
+@media(max-width:400px){{.mat-cell{{height:28px;font-size:11px}}}}
 .apply-btn{{background:linear-gradient(135deg,#ef4444,#dc2626);border:none;color:#fff;
   font-weight:700;font-size:13px;padding:10px 20px;border-radius:8px;cursor:pointer;
   width:100%;letter-spacing:.3px;box-shadow:0 2px 8px rgba(239,68,68,.25);transition:all .15s}}
@@ -3023,7 +3028,7 @@ def modo_classico():
         else:
             # Grade interativa de entrada de matrizes
             st.caption("Preencha a grade abaixo célula por célula:")
-            components.html(_ss_matrix_grid_html('cl', default_n=2), height=420, scrolling=False)
+            components.html(_ss_matrix_grid_html('cl', default_n=2), height=560, scrolling=False)
             st.caption("Insira os valores manualmente (copie do preview acima):")
             if 'ss_n_cl' not in st.session_state:
                 st.session_state.ss_n_cl = 2
