@@ -87,8 +87,6 @@ def inicializar_estado():
         'conexoes': [],
         'calculo_erro_habilitado': False,
         'representacao_classico': 'Funcao de Transferencia',
-        'ss_dim_cv': 2,  # Dimensão para modo lista
-        'ss_dim_cl': 2,  # Dimensão para modo classico
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -123,23 +121,6 @@ def parse_matrix(text):
         vals = re.split(r'[,\s]+', row.strip())
         matrix.append([float(v) for v in vals if v])
     return np.array(matrix, dtype=float)
-
-
-def gerar_matrizes_padrao(dim):
-    """Gera matrizes padrão para espaço de estados baseado na dimensão"""
-    A = np.eye(dim)  # Matriz identidade
-    B = np.zeros((dim, 1))  # Vetor coluna de zeros
-    C = np.zeros((1, dim))  # Vetor linha
-    C[0, 0] = 1  # Primeiro elemento = 1
-    D = np.array([[0]])
-    
-    # Formatar para string no formato esperado
-    A_str = "; ".join([" ".join([f"{val:.0f}" for val in row]) for row in A])
-    B_str = "; ".join([f"{val:.0f}" for val in B.flatten()])
-    C_str = " ".join([f"{val:.0f}" for val in C.flatten()])
-    D_str = "0"
-    
-    return A_str, B_str, C_str, D_str
 
 
 # ══════════════════════════════════════════════════
@@ -1936,44 +1917,15 @@ def modo_lista():
             denominador = st.text_input("Denominador", placeholder="ex: s^2+2*s+3")
             A_str = B_str = C_str = D_str = ''
         else:
-            # Seletor visual de dimensão com botões
-            st.markdown("**Dimensão do Sistema (máx 4x4)**")
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                if st.button("1x1", key="dim1_cv", use_container_width=True):
-                    st.session_state.ss_dim_cv = 1
-                    st.rerun()
-            with col2:
-                if st.button("2x2", key="dim2_cv", use_container_width=True):
-                    st.session_state.ss_dim_cv = 2
-                    st.rerun()
-            with col3:
-                if st.button("3x3", key="dim3_cv", use_container_width=True):
-                    st.session_state.ss_dim_cv = 3
-                    st.rerun()
-            with col4:
-                if st.button("4x4", key="dim4_cv", use_container_width=True):
-                    st.session_state.ss_dim_cv = 4
-                    st.rerun()
-            
-            _n = st.session_state.ss_dim_cv
-            
-            # Gerar matrizes padrão baseadas na dimensão
-            A_default, B_default, C_default, D_default = gerar_matrizes_padrao(_n)
-            
-            # Mostrar representação visual da matriz
-            st.markdown(f"**Matriz A ({_n}x{_n}):**")
-            A_mat = parse_matrix(A_default)
-            cols_visual = st.columns(_n)
-            for i in range(_n):
-                with cols_visual[i % _n]:
-                    st.code(f"[{' '.join([f'{val:.0f}' for val in A_mat[i]])}]")
-            
-            A_str = st.text_area("Matriz A (nxn)", value=A_default, height=80, key="cvA")
-            B_str = st.text_input("Matriz B (nxm)", value=B_default, key="cvB")
-            C_str = st.text_input("Matriz C (pxn)", value=C_default, key="cvC")
-            D_str = st.text_input("Matriz D (pxm)", value=D_default, key="cvD")
+            st.caption("Clique na grade para definir o tamanho (max 4x4).")
+            components.html(_ss_selector_html('cv'), height=210)
+            if 'ss_n_cv' not in st.session_state:
+                st.session_state.ss_n_cv = 2
+            _n = st.session_state.ss_n_cv
+            A_str = st.text_input("Matriz A (nxn)", value="; ".join([" ".join(["1" if i==j else "0" for j in range(_n)]) for i in range(_n)]), key="cvA")
+            B_str = st.text_input("Matriz B (nxm)", value="; ".join(["0"]*_n), key="cvB")
+            C_str = st.text_input("Matriz C (pxn)", value=" ".join(["1" if j==0 else "0" for j in range(_n)]), key="cvC")
+            D_str = st.text_input("Matriz D (pxm)", value="0", key="cvD")
             numerador = denominador = ''
 
         if st.button("Adicionar Bloco", type="primary", use_container_width=True):
@@ -2509,6 +2461,63 @@ def _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r):
 # MODO CLASSICO
 # ══════════════════════════════════════════════════
 
+
+def _ss_selector_html(uid):
+    """Retorna HTML do seletor visual de matriz (max 4x4)."""
+    return f"""
+<style>
+.msel{{display:flex;flex-direction:column;align-items:center;gap:8px;padding:6px 0 10px;font-family:system-ui,sans-serif}}
+.msel-badge{{font-size:12px;font-weight:700;color:#ef4444;border:1.5px solid #ef4444;border-radius:20px;padding:4px 14px;cursor:pointer;user-select:none;position:relative;display:inline-block}}
+.msel-drop{{display:none;position:absolute;top:110%;left:50%;transform:translateX(-50%);background:#fff;border:1px solid #ddd;border-radius:8px;z-index:99;min-width:100px;box-shadow:0 4px 12px rgba(0,0,0,.15)}}
+.msel-drop.open{{display:block}}
+.msel-opt{{padding:7px 14px;font-size:12px;cursor:pointer;color:#222}}
+.msel-opt:hover{{background:#f5f5f5}}
+.msel-cell{{width:36px;height:36px;border-radius:7px;border:1.5px solid #ccc;background:#f8f8f8;cursor:pointer;transition:background .1s,border-color .1s}}
+.msel-cell.on{{background:#ef4444;border-color:#ef4444}}
+.msel-brack{{position:absolute;width:5px;border:2.5px solid #333;background:none}}
+.msel-brack.l{{left:-2px;top:0;height:100%;border-right:none;border-radius:3px 0 0 3px}}
+.msel-brack.r{{right:-2px;top:0;height:100%;border-left:none;border-radius:0 3px 3px 0}}
+</style>
+<div class="msel">
+  <div class="msel-badge" id="badge{uid}" onclick="toggleDrop{uid}()">2 x 2 <span style="font-size:9px">&#9660;</span>
+    <div class="msel-drop" id="drop{uid}">
+      <div class="msel-opt" onclick="pick{uid}(event,1)">1 x 1</div>
+      <div class="msel-opt" onclick="pick{uid}(event,2)">2 x 2</div>
+      <div class="msel-opt" onclick="pick{uid}(event,3)">3 x 3</div>
+      <div class="msel-opt" onclick="pick{uid}(event,4)">4 x 4</div>
+    </div>
+  </div>
+  <div style="position:relative;padding:0 10px">
+    <div class="msel-brack l" id="bl{uid}"></div>
+    <div style="display:grid;gap:4px" id="grid{uid}"></div>
+    <div class="msel-brack r" id="br{uid}"></div>
+  </div>
+</div>
+<script>
+var N{uid}=2,MAX{uid}=4;
+function render{uid}(){{
+  var g=document.getElementById('grid{uid}'),s=36,gp=4,tot=(s*MAX{uid})+(gp*(MAX{uid}-1));
+  g.style.gridTemplateColumns='repeat('+MAX{uid}+','+s+'px)';g.style.width=tot+'px';g.innerHTML='';
+  for(var r=0;r<MAX{uid};r++)for(var c=0;c<MAX{uid};c++){{
+    var el=document.createElement('div');el.className='msel-cell'+(r<N{uid}&&c<N{uid}?' on':'');
+    el.dataset.r=r;el.dataset.c=c;
+    el.onmouseenter=function(){{hl{uid}(+this.dataset.r+1,+this.dataset.c+1)}};
+    el.onmouseleave=function(){{hl{uid}(N{uid},N{uid})}};
+    el.onclick=function(){{N{uid}=Math.max(+this.dataset.r+1,+this.dataset.c+1);
+      document.getElementById('badge{uid}').firstChild.nodeValue=N{uid}+' x '+N{uid}+' ';
+      hl{uid}(N{uid},N{uid});}};
+    g.appendChild(el)}}
+  var h=(s*MAX{uid})+(gp*(MAX{uid}-1));
+  document.getElementById('bl{uid}').style.height=h+'px';
+  document.getElementById('br{uid}').style.height=h+'px';}}
+function hl{uid}(rows,cols){{document.querySelectorAll('#grid{uid} .msel-cell').forEach(function(c){{c.classList.toggle('on',+c.dataset.r<rows&&+c.dataset.c<cols);}})}}
+function toggleDrop{uid}(){{document.getElementById('drop{uid}').classList.toggle('open')}}
+function pick{uid}(e,n){{e.stopPropagation();N{uid}=n;document.getElementById('badge{uid}').firstChild.nodeValue=n+' x '+n+' ';document.getElementById('drop{uid}').classList.remove('open');render{uid}();hl{uid}(n,n);}}
+document.addEventListener('click',function(e){{if(!e.target.closest('#badge{uid}'))document.getElementById('drop{uid}').classList.remove('open')}});
+render{uid}();
+</script>
+"""
+
 def modo_classico():
     st.title("Modo Classico - Funcao de Transferencia")
 
@@ -2536,44 +2545,15 @@ def modo_classico():
             denominador = st.text_input("Denominador", placeholder="ex: s^2 + 2*s + 3")
             A_str = B_str = C_str = D_str = ''
         else:
-            # Seletor visual de dimensão com botões
-            st.markdown("**Dimensão do Sistema (máx 4x4)**")
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                if st.button("1x1", key="dim1_cl", use_container_width=True):
-                    st.session_state.ss_dim_cl = 1
-                    st.rerun()
-            with col2:
-                if st.button("2x2", key="dim2_cl", use_container_width=True):
-                    st.session_state.ss_dim_cl = 2
-                    st.rerun()
-            with col3:
-                if st.button("3x3", key="dim3_cl", use_container_width=True):
-                    st.session_state.ss_dim_cl = 3
-                    st.rerun()
-            with col4:
-                if st.button("4x4", key="dim4_cl", use_container_width=True):
-                    st.session_state.ss_dim_cl = 4
-                    st.rerun()
-            
-            _n2 = st.session_state.ss_dim_cl
-            
-            # Gerar matrizes padrão baseadas na dimensão
-            A_default, B_default, C_default, D_default = gerar_matrizes_padrao(_n2)
-            
-            # Mostrar representação visual da matriz
-            st.markdown(f"**Matriz A ({_n2}x{_n2}):**")
-            A_mat = parse_matrix(A_default)
-            cols_visual = st.columns(_n2)
-            for i in range(_n2):
-                with cols_visual[i % _n2]:
-                    st.code(f"[{' '.join([f'{val:.0f}' for val in A_mat[i]])}]")
-            
-            A_str = st.text_area("Matriz A", value=A_default, height=80, placeholder="ex: 0 1; -2 -3", key="clA")
-            B_str = st.text_input("Matriz B", value=B_default, placeholder="ex: 0; 1", key="clB")
-            C_str = st.text_input("Matriz C", value=C_default, placeholder="ex: 1 0", key="clC")
-            D_str = st.text_input("Matriz D", value=D_default, placeholder="ex: 0", key="clD")
+            st.caption("Clique na grade para definir o tamanho (max 4x4).")
+            components.html(_ss_selector_html('cl'), height=210)
+            if 'ss_n_cl' not in st.session_state:
+                st.session_state.ss_n_cl = 2
+            _n2 = st.session_state.ss_n_cl
+            A_str = st.text_input("Matriz A", value="; ".join([" ".join(["1" if i==j else "0" for j in range(_n2)]) for i in range(_n2)]), placeholder="ex: 0 1; -2 -3", key="clA")
+            B_str = st.text_input("Matriz B", value="; ".join(["0"]*_n2), placeholder="ex: 0; 1", key="clB")
+            C_str = st.text_input("Matriz C", value=" ".join(["1" if j==0 else "0" for j in range(_n2)]), placeholder="ex: 1 0", key="clC")
+            D_str = st.text_input("Matriz D", value="0", placeholder="ex: 0", key="clD")
             numerador = denominador = ''
 
         if st.button("Adicionar", type="primary", use_container_width=True):
@@ -2708,6 +2688,7 @@ def modo_classico():
 
     # Painel de analise
     col1, col2 = st.columns([2, 1])
+
 
     with col2:
         st.subheader("Configuracao")
