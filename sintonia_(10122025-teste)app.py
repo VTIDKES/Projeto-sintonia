@@ -2999,6 +2999,162 @@ renderAll{uid}();
 </body>
 </html>"""
 
+def _ss_matrix_grid_html_direct(uid, default_n=2, nome="G1", tipo="Planta"):
+    """
+    Grade interativa para Espaco de Estados no modo classico.
+    Ao clicar 'Aplicar Matrizes', redireciona com query params para
+    o Streamlit processar e adicionar o bloco automaticamente.
+    """
+    import urllib.parse as _up
+    nome_enc = _up.quote(str(nome))
+    tipo_enc = _up.quote(str(tipo))
+    return f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{font-family:'Segoe UI',system-ui,sans-serif;background:transparent;color:#1e293b;font-size:13px}}
+.ss-editor{{display:flex;flex-direction:column;gap:10px;padding:8px 4px}}
+.dim-row{{display:flex;align-items:center;gap:8px;flex-wrap:wrap}}
+.dim-label{{font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.5px}}
+.dim-btns{{display:flex;gap:4px}}
+.dim-btn{{width:36px;height:28px;border:1.5px solid #cbd5e1;border-radius:6px;background:#f8fafc;
+  color:#334155;font-weight:700;font-size:12px;cursor:pointer;transition:all .12s}}
+.dim-btn.active{{background:#ef4444;border-color:#ef4444;color:#fff;box-shadow:0 2px 6px rgba(239,68,68,.3)}}
+.dim-btn:hover:not(.active){{background:#fee2e2;border-color:#f87171}}
+.matrices-wrap{{display:grid;grid-template-columns:1fr 1fr;gap:10px}}
+@media(max-width:480px){{.matrices-wrap{{grid-template-columns:1fr}}}}
+.mat-block{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px}}
+.mat-title{{font-size:11px;font-weight:700;color:#ef4444;text-transform:uppercase;
+  letter-spacing:.5px;margin-bottom:6px;display:flex;align-items:center;gap:4px}}
+.mat-title span{{font-size:9px;color:#94a3b8;font-weight:400;text-transform:none;letter-spacing:0}}
+.mat-grid{{display:grid;gap:3px}}
+.mat-cell{{width:100%;height:32px;border:1.5px solid #cbd5e1;border-radius:5px;
+  background:#fff;color:#1e293b;font-size:12px;font-weight:600;text-align:center;
+  outline:none;transition:border-color .1s,box-shadow .1s;min-width:0;min-height:28px}}
+.mat-cell:focus{{border-color:#ef4444;box-shadow:0 0 0 2px rgba(239,68,68,.15)}}
+.mat-cell:hover:not(:focus){{border-color:#94a3b8;background:#fef2f2}}
+.apply-btn{{background:linear-gradient(135deg,#ef4444,#dc2626);border:none;color:#fff;
+  font-weight:700;font-size:13px;padding:10px 20px;border-radius:8px;cursor:pointer;
+  width:100%;letter-spacing:.3px;box-shadow:0 2px 8px rgba(239,68,68,.25);transition:all .15s}}
+.apply-btn:hover{{background:linear-gradient(135deg,#f87171,#ef4444);transform:translateY(-1px);
+  box-shadow:0 4px 12px rgba(239,68,68,.35)}}
+</style>
+</head>
+<body>
+<div class="ss-editor">
+  <div class="dim-row">
+    <span class="dim-label">Dimensao n:</span>
+    <div class="dim-btns" id="dimBtns{uid}">
+      <button class="dim-btn" onclick="setDim{uid}(1)">1</button>
+      <button class="dim-btn active" onclick="setDim{uid}(2)">2</button>
+      <button class="dim-btn" onclick="setDim{uid}(3)">3</button>
+      <button class="dim-btn" onclick="setDim{uid}(4)">4</button>
+    </div>
+    <span id="dimInfo{uid}" style="font-size:10px;color:#94a3b8">A:{default_n}x{default_n} B:{default_n}x1 C:1x{default_n} D:1x1</span>
+  </div>
+  <div class="matrices-wrap" id="matsWrap{uid}">
+    <div class="mat-block">
+      <div class="mat-title">A <span>(nxn)</span></div>
+      <div class="mat-grid" id="gridA{uid}"></div>
+    </div>
+    <div class="mat-block">
+      <div class="mat-title">B <span>(nx1)</span></div>
+      <div class="mat-grid" id="gridB{uid}"></div>
+    </div>
+    <div class="mat-block">
+      <div class="mat-title">C <span>(1xn)</span></div>
+      <div class="mat-grid" id="gridC{uid}"></div>
+    </div>
+    <div class="mat-block">
+      <div class="mat-title">D <span>(1x1)</span></div>
+      <div class="mat-grid" id="gridD{uid}"></div>
+    </div>
+  </div>
+  <button class="apply-btn" onclick="apply{uid}()">&#10003; Aplicar Matrizes</button>
+</div>
+<script>
+var dim{uid}={default_n};
+var data{uid}={{A:[],B:[],C:[],D:[]}};
+function initData{uid}(n){{
+  var oldA=data{uid}.A,oldB=data{uid}.B,oldC=data{uid}.C,oldD=data{uid}.D;
+  data{uid}.A=[];
+  for(var i=0;i<n;i++){{data{uid}.A.push([]);for(var j=0;j<n;j++)data{uid}.A[i].push((oldA[i]&&oldA[i][j]!=null)?oldA[i][j]:(i===j?1:0));}}
+  data{uid}.B=[];
+  for(var i=0;i<n;i++)data{uid}.B.push([oldB[i]&&oldB[i][0]!=null?oldB[i][0]:0]);
+  data{uid}.C=[[]];
+  for(var j=0;j<n;j++)data{uid}.C[0].push(oldC[0]&&oldC[0][j]!=null?oldC[0][j]:(j===0?1:0));
+  data{uid}.D=[[oldD[0]&&oldD[0][0]!=null?oldD[0][0]:0]];
+}}
+function buildGrid{uid}(matId,rows,cols,key){{
+  var g=document.getElementById('grid'+matId+'{uid}');
+  g.style.gridTemplateColumns='repeat('+cols+',1fr)';
+  g.innerHTML='';
+  for(var r=0;r<rows;r++)for(var c=0;c<cols;c++){{
+    var inp=document.createElement('input');
+    inp.type='text';inp.className='mat-cell';inp.inputMode='decimal';
+    var val=data{uid}[key][r]&&data{uid}[key][r][c]!=null?data{uid}[key][r][c]:0;
+    inp.value=val;inp.dataset.r=r;inp.dataset.c=c;inp.dataset.key=key;
+    inp.addEventListener('input',(function(r2,c2,k){{return function(){{
+      if(!data{uid}[k][r2])data{uid}[k][r2]=[];
+      var v=parseFloat(this.value);data{uid}[k][r2][c2]=isNaN(v)?0:v;
+    }}}})(r,c,key));
+    inp.addEventListener('keydown',function(e){{
+      var cells=g.querySelectorAll('input');var idx=[].indexOf.call(cells,this);
+      if(e.key==='Tab'||e.key==='Enter'){{e.preventDefault();var next=cells[idx+1]||cells[0];next.focus();next.select();}}
+      else if(e.key==='ArrowRight'){{var nx=cells[idx+1];if(nx){{e.preventDefault();nx.focus();nx.select();}}}}
+      else if(e.key==='ArrowLeft'){{var nx=cells[idx-1];if(nx){{e.preventDefault();nx.focus();nx.select();}}}}
+      else if(e.key==='ArrowDown'){{var nx=cells[idx+cols];if(nx){{e.preventDefault();nx.focus();nx.select();}}}}
+      else if(e.key==='ArrowUp'){{var nx=cells[idx-cols];if(nx){{e.preventDefault();nx.focus();nx.select();}}}}
+    }});
+    g.appendChild(inp);
+  }}
+}}
+function renderAll{uid}(){{
+  var n=dim{uid};
+  buildGrid{uid}('A',n,n,'A');buildGrid{uid}('B',n,1,'B');
+  buildGrid{uid}('C',1,n,'C');buildGrid{uid}('D',1,1,'D');
+  document.getElementById('dimInfo{uid}').textContent='A:'+n+'x'+n+' B:'+n+'x1 C:1x'+n+' D:1x1';
+}}
+function setDim{uid}(n){{
+  dim{uid}=n;initData{uid}(n);
+  document.querySelectorAll('#dimBtns{uid} .dim-btn').forEach(function(b,i){{b.classList.toggle('active',i+1===n);}});
+  renderAll{uid}();
+}}
+function syncData{uid}(){{
+  ['A','B','C','D'].forEach(function(k){{
+    var g=document.getElementById('grid'+k+'{uid}');if(!g)return;
+    g.querySelectorAll('input').forEach(function(inp){{
+      var r=+inp.dataset.r,c=+inp.dataset.c;
+      if(!data{uid}[k][r])data{uid}[k][r]=[];
+      var v=parseFloat(inp.value);data{uid}[k][r][c]=isNaN(v)?0:v;
+    }});
+  }});
+}}
+function matToStr{uid}(mat){{return mat.map(function(row){{return row.join(' ')}}).join('; ')}}
+function apply{uid}(){{
+  syncData{uid}();
+  var As=matToStr{uid}(data{uid}.A);
+  var Bs=matToStr{uid}(data{uid}.B);
+  var Cs=matToStr{uid}(data{uid}.C);
+  var Ds=matToStr{uid}(data{uid}.D);
+  var base=window.parent.location.href.split('?')[0];
+  var params='ss_A='+encodeURIComponent(As)
+    +'&ss_B='+encodeURIComponent(Bs)
+    +'&ss_C='+encodeURIComponent(Cs)
+    +'&ss_D='+encodeURIComponent(Ds)
+    +'&ss_nome={nome_enc}'
+    +'&ss_tipo={tipo_enc}';
+  window.parent.location.href=base+'?'+params;
+}}
+initData{uid}({default_n});renderAll{uid}();
+</script>
+</body>
+</html>"""
+
+
 def modo_classico():
     st.title("Modo Classico - Funcao de Transferencia")
 
@@ -3014,21 +3170,62 @@ def modo_classico():
         nome = st.text_input("Nome", value="G1")
         tipo = st.selectbox("Tipo", ['Planta', 'Controlador', 'Sensor', 'Atuador'])
 
-        representacao = 'Funcao de Transferencia'
+        representacao = st.radio(
+            "Representacao",
+            ['Funcao de Transferencia', 'Espaco de Estados'],
+            horizontal=True,
+            key="representacao_classico"
+        )
 
-        numerador   = st.text_input("Numerador",   placeholder="ex: 4")
-        denominador = st.text_input("Denominador", placeholder="ex: s^2 + 2*s + 3")
-        A_str = B_str = C_str = D_str = ''
+        if representacao == 'Funcao de Transferencia':
+            numerador   = st.text_input("Numerador",   placeholder="ex: 4")
+            denominador = st.text_input("Denominador", placeholder="ex: s^2 + 2*s + 3")
+            A_str = B_str = C_str = D_str = ''
+        else:
+            # Grade interativa – ao clicar "Aplicar Matrizes" o bloco e adicionado diretamente
+            st.caption("Preencha a grade celula por celula e clique **\u2713 Aplicar Matrizes**:")
 
-        if st.button("Adicionar", type="primary", use_container_width=True):
-            ok, msg = adicionar_bloco(nome, tipo, representacao,
-                                      numerador, denominador,
-                                      A_str, B_str, C_str, D_str)
-            if ok:
-                st.success(msg)
+            # Recupera valores pendentes gravados pela grade via query_params
+            qp = st.query_params
+            ss_pending = (
+                qp.get("ss_A") and qp.get("ss_B") and
+                qp.get("ss_C") and qp.get("ss_D") and
+                qp.get("ss_nome") == nome and
+                qp.get("ss_tipo") == tipo
+            )
+            if ss_pending:
+                A_str_qp = qp.get("ss_A", "")
+                B_str_qp = qp.get("ss_B", "")
+                C_str_qp = qp.get("ss_C", "")
+                D_str_qp = qp.get("ss_D", "")
+                st.query_params.clear()
+                ok, msg = adicionar_bloco(nome, tipo, 'Espaco de Estados',
+                                          '', '', A_str_qp, B_str_qp, C_str_qp, D_str_qp)
+                if ok:
+                    st.success(msg)
+                else:
+                    st.error(msg)
                 st.rerun()
-            else:
-                st.error(msg)
+
+            components.html(
+                _ss_matrix_grid_html_direct('cl', default_n=2, nome=nome, tipo=tipo),
+                height=530, scrolling=False
+            )
+            A_str = B_str = C_str = D_str = ''
+            numerador = denominador = ''
+
+        if representacao == 'Funcao de Transferencia':
+            if st.button("Adicionar", type="primary", use_container_width=True):
+                ok, msg = adicionar_bloco(nome, tipo, representacao,
+                                          numerador, denominador,
+                                          A_str, B_str, C_str, D_str)
+                if ok:
+                    st.success(msg)
+                    st.rerun()
+                else:
+                    st.error(msg)
+        else:
+            st.caption("\u2139\ufe0f O bloco sera adicionado automaticamente ao clicar **\u2713 Aplicar Matrizes** acima.")
 
         if not st.session_state.blocos.empty:
             st.markdown("---")
