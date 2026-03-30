@@ -2141,15 +2141,7 @@ def modo_lista():
             denominador = st.text_input("Denominador", placeholder="ex: s^2+2*s+3")
             A_str = B_str = C_str = D_str = ''
         else:
-            st.caption("Clique na grade para definir o tamanho (max 4x4).")
-            components.html(_ss_selector_html('cv'), height=210)
-            if 'ss_n_cv' not in st.session_state:
-                st.session_state.ss_n_cv = 2
-            _n = st.session_state.ss_n_cv
-            A_str = st.text_input("Matriz A (nxn)", value="; ".join([" ".join(["1" if i==j else "0" for j in range(_n)]) for i in range(_n)]), key="cvA")
-            B_str = st.text_input("Matriz B (nxm)", value="; ".join(["0"]*_n), key="cvB")
-            C_str = st.text_input("Matriz C (pxn)", value=" ".join(["1" if j==0 else "0" for j in range(_n)]), key="cvC")
-            D_str = st.text_input("Matriz D (pxm)", value="0", key="cvD")
+            A_str, B_str, C_str, D_str = _ss_editor_streamlit('cv')
             numerador = denominador = ''
 
         if st.button("Adicionar Bloco", type="primary", use_container_width=True):
@@ -2686,61 +2678,110 @@ def _svg_com_conexoes(nomes_map, conexoes, bw, bh, gap, margin, sum_r):
 # ══════════════════════════════════════════════════
 
 
-def _ss_selector_html(uid):
-    """Retorna HTML do seletor visual de matriz (max 4x4)."""
-    return f"""
-<style>
-.msel{{display:flex;flex-direction:column;align-items:center;gap:8px;padding:6px 0 10px;font-family:system-ui,sans-serif}}
-.msel-badge{{font-size:12px;font-weight:700;color:#ef4444;border:1.5px solid #ef4444;border-radius:20px;padding:4px 14px;cursor:pointer;user-select:none;position:relative;display:inline-block}}
-.msel-drop{{display:none;position:absolute;top:110%;left:50%;transform:translateX(-50%);background:#fff;border:1px solid #ddd;border-radius:8px;z-index:99;min-width:100px;box-shadow:0 4px 12px rgba(0,0,0,.15)}}
-.msel-drop.open{{display:block}}
-.msel-opt{{padding:7px 14px;font-size:12px;cursor:pointer;color:#222}}
-.msel-opt:hover{{background:#f5f5f5}}
-.msel-cell{{width:36px;height:36px;border-radius:7px;border:1.5px solid #ccc;background:#f8f8f8;cursor:pointer;transition:background .1s,border-color .1s}}
-.msel-cell.on{{background:#ef4444;border-color:#ef4444}}
-.msel-brack{{position:absolute;width:5px;border:2.5px solid #333;background:none}}
-.msel-brack.l{{left:-2px;top:0;height:100%;border-right:none;border-radius:3px 0 0 3px}}
-.msel-brack.r{{right:-2px;top:0;height:100%;border-left:none;border-radius:0 3px 3px 0}}
-</style>
-<div class="msel">
-  <div class="msel-badge" id="badge{uid}" onclick="toggleDrop{uid}()">2 x 2 <span style="font-size:9px">&#9660;</span>
-    <div class="msel-drop" id="drop{uid}">
-      <div class="msel-opt" onclick="pick{uid}(event,1)">1 x 1</div>
-      <div class="msel-opt" onclick="pick{uid}(event,2)">2 x 2</div>
-      <div class="msel-opt" onclick="pick{uid}(event,3)">3 x 3</div>
-      <div class="msel-opt" onclick="pick{uid}(event,4)">4 x 4</div>
-    </div>
-  </div>
-  <div style="position:relative;padding:0 10px">
-    <div class="msel-brack l" id="bl{uid}"></div>
-    <div style="display:grid;gap:4px" id="grid{uid}"></div>
-    <div class="msel-brack r" id="br{uid}"></div>
-  </div>
-</div>
-<script>
-var N{uid}=2,MAX{uid}=4;
-function render{uid}(){{
-  var g=document.getElementById('grid{uid}'),s=36,gp=4,tot=(s*MAX{uid})+(gp*(MAX{uid}-1));
-  g.style.gridTemplateColumns='repeat('+MAX{uid}+','+s+'px)';g.style.width=tot+'px';g.innerHTML='';
-  for(var r=0;r<MAX{uid};r++)for(var c=0;c<MAX{uid};c++){{
-    var el=document.createElement('div');el.className='msel-cell'+(r<N{uid}&&c<N{uid}?' on':'');
-    el.dataset.r=r;el.dataset.c=c;
-    el.onmouseenter=function(){{hl{uid}(+this.dataset.r+1,+this.dataset.c+1)}};
-    el.onmouseleave=function(){{hl{uid}(N{uid},N{uid})}};
-    el.onclick=function(){{N{uid}=Math.max(+this.dataset.r+1,+this.dataset.c+1);
-      document.getElementById('badge{uid}').firstChild.nodeValue=N{uid}+' x '+N{uid}+' ';
-      hl{uid}(N{uid},N{uid});}};
-    g.appendChild(el)}}
-  var h=(s*MAX{uid})+(gp*(MAX{uid}-1));
-  document.getElementById('bl{uid}').style.height=h+'px';
-  document.getElementById('br{uid}').style.height=h+'px';}}
-function hl{uid}(rows,cols){{document.querySelectorAll('#grid{uid} .msel-cell').forEach(function(c){{c.classList.toggle('on',+c.dataset.r<rows&&+c.dataset.c<cols);}})}}
-function toggleDrop{uid}(){{document.getElementById('drop{uid}').classList.toggle('open')}}
-function pick{uid}(e,n){{e.stopPropagation();N{uid}=n;document.getElementById('badge{uid}').firstChild.nodeValue=n+' x '+n+' ';document.getElementById('drop{uid}').classList.remove('open');render{uid}();hl{uid}(n,n);}}
-document.addEventListener('click',function(e){{if(!e.target.closest('#badge{uid}'))document.getElementById('drop{uid}').classList.remove('open')}});
-render{uid}();
-</script>
-"""
+def _ss_editor_streamlit(key_prefix: str):
+    """
+    Editor visual de matrizes A, B, C, D usando st.data_editor nativo.
+    Retorna (A_str, B_str, C_str, D_str) prontas para parse_matrix().
+    key_prefix: string unica por instancia (ex: 'cl', 'cv').
+    """
+    n_key = f"ss_n_{key_prefix}"
+    if n_key not in st.session_state:
+        st.session_state[n_key] = 2
+
+    # --- Seletor de ordem n ---
+    cols_n = st.columns(4)
+    for i, size in enumerate([1, 2, 3, 4]):
+        with cols_n[i]:
+            label = f"{size}×{size}"
+            is_active = st.session_state[n_key] == size
+            if st.button(
+                label,
+                key=f"{key_prefix}_sz_{size}",
+                type="primary" if is_active else "secondary",
+                use_container_width=True,
+            ):
+                st.session_state[n_key] = size
+                # Reset data when size changes
+                for m in ['A','B','C','D']:
+                    st.session_state.pop(f"{key_prefix}_mat_{m}", None)
+                st.rerun()
+
+    n = st.session_state[n_key]
+
+    def _get_mat(mat, rows, cols):
+        key = f"{key_prefix}_mat_{mat}"
+        if key not in st.session_state or \
+           len(st.session_state[key]) != rows or \
+           len(st.session_state[key][0]) != cols:
+            if mat == 'A':
+                default = [[1.0 if i==j else 0.0 for j in range(cols)] for i in range(rows)]
+            elif mat == 'B':
+                default = [[0.0] for _ in range(rows)]
+            elif mat == 'C':
+                default = [[1.0 if j==0 else 0.0 for j in range(cols)]]
+            else:  # D
+                default = [[0.0]]
+            st.session_state[key] = default
+        return st.session_state[key]
+
+    def _mat_to_str(mat_data):
+        rows = []
+        for row in mat_data:
+            vals = []
+            for v in row:
+                try:
+                    f = float(v) if v not in (None, '') else 0.0
+                except (ValueError, TypeError):
+                    f = 0.0
+                vals.append(str(int(f)) if f == int(f) else str(round(f, 6)))
+            rows.append(' '.join(vals))
+        return '; '.join(rows)
+
+    def _render_matrix(mat, rows, cols, label, color):
+        st.markdown(
+            f'<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'
+            f'<span style="background:{color}22;color:{color};font-weight:700;'
+            f'font-family:monospace;padding:2px 8px;border-radius:5px;font-size:13px">{mat}</span>'
+            f'<span style="font-size:12px;color:#888">{label} &nbsp; <code style="font-size:11px">{rows}×{cols}</code></span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        data = _get_mat(mat, rows, cols)
+        col_names = [f"x{j+1}" for j in range(cols)]
+        df_in = pd.DataFrame(data, columns=col_names)
+        edited = st.data_editor(
+            df_in,
+            key=f"{key_prefix}_de_{mat}",
+            hide_index=True,
+            use_container_width=True,
+            column_config={c: st.column_config.NumberColumn(c, format="%.4g", step=0.001) for c in col_names},
+            height=rows * 38 + 40,
+        )
+        st.session_state[f"{key_prefix}_mat_{mat}"] = edited.values.tolist()
+        return _mat_to_str(edited.values.tolist())
+
+    # Renderiza em grid 2×2
+    col1, col2 = st.columns(2)
+    with col1:
+        A_str = _render_matrix('A', n, n, 'Matriz de estados', '#2563eb')
+    with col2:
+        B_str = _render_matrix('B', n, 1, 'Entrada', '#dc2626')
+    col3, col4 = st.columns(2)
+    with col3:
+        C_str = _render_matrix('C', 1, n, 'Saida', '#16a34a')
+    with col4:
+        D_str = _render_matrix('D', 1, 1, 'Transmissao direta', '#7c3aed')
+
+    # Preview das equacoes
+    st.markdown(
+        f'<div style="font-size:11px;color:#888;margin-top:4px;padding:6px 10px;'
+        f'background:#f8f8f8;border-radius:6px;border:1px solid #eee;font-family:monospace">'
+        f'ẋ = <b>A</b>x + <b>B</b>u &nbsp;|&nbsp; y = <b>C</b>x + <b>D</b>u'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    return A_str, B_str, C_str, D_str
 
 def modo_classico():
     st.title("Modo Classico - Funcao de Transferencia")
@@ -2769,15 +2810,7 @@ def modo_classico():
             denominador = st.text_input("Denominador", placeholder="ex: s^2 + 2*s + 3")
             A_str = B_str = C_str = D_str = ''
         else:
-            st.caption("Clique na grade para definir o tamanho (max 4x4).")
-            components.html(_ss_selector_html('cl'), height=210)
-            if 'ss_n_cl' not in st.session_state:
-                st.session_state.ss_n_cl = 2
-            _n2 = st.session_state.ss_n_cl
-            A_str = st.text_input("Matriz A", value="; ".join([" ".join(["1" if i==j else "0" for j in range(_n2)]) for i in range(_n2)]), placeholder="ex: 0 1; -2 -3", key="clA")
-            B_str = st.text_input("Matriz B", value="; ".join(["0"]*_n2), placeholder="ex: 0; 1", key="clB")
-            C_str = st.text_input("Matriz C", value=" ".join(["1" if j==0 else "0" for j in range(_n2)]), placeholder="ex: 1 0", key="clC")
-            D_str = st.text_input("Matriz D", value="0", placeholder="ex: 0", key="clD")
+            A_str, B_str, C_str, D_str = _ss_editor_streamlit('cl')
             numerador = denominador = ''
 
         if st.button("Adicionar", type="primary", use_container_width=True):
