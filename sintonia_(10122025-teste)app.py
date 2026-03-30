@@ -1718,35 +1718,43 @@ function showRes(tf){
   chks.forEach(function(c){h+='<label style="font-size:12px;cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" '+(selAn[c[0]]?'checked':'')+' onchange="selAn.'+c[0]+'=this.checked;reRender()"> '+c[1]+'</label>'});
   h+='</div></div>';
   h+='<div class="rcard"><h4>T(s)</h4><div class="tf-disp"><div style="display:inline-block;text-align:center"><div style="padding:0 8px">'+esc(ns)+'</div><div style="border-top:2px solid var(--acc);padding:4px 8px 0">'+esc(ds)+'</div></div></div></div>';
+  /* NOTA: Plotly requer <div>, nao <canvas>. Todos os containers sao <div> com altura explicita. */
   if(selAn.tempo){
-    h+='<div class="rcard"><h4>Resposta no Tempo - '+sigNomes[curSig]+'</h4><div><canvas id="cStep"></canvas></div></div>';}
+    h+='<div class="rcard"><h4>Resposta no Tempo - '+sigNomes[curSig]+'</h4><div id="cStep" style="width:100%;height:320px"></div></div>';}
   if(selAn.desemp){
     h+='<div class="rcard"><h4>Desempenho</h4><div class="mgrid">';
     Object.keys(pf).forEach(function(k){h+='<div class="mbox"><div class="ml">'+k+'</div><div class="mv">'+pf[k]+'</div></div>'});
     h+='</div></div>';}
   if(selAn.pz){
-    h+='<div class="rcard"><h4>Diagrama de Polos e Zeros</h4><div style="display:flex;gap:20px;flex-wrap:wrap"><div><b style="color:var(--red)">Polos:</b><div class="pzl">';
+    h+='<div class="rcard"><h4>Diagrama de Polos e Zeros</h4>';
+    h+='<div id="cPZ" style="width:100%;height:360px"></div>';
+    h+='<div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:8px"><div><b style="color:var(--red)">Polos:</b><div class="pzl">';
     ps.forEach(function(p){h+='<div style="color:var(--red)">'+fC(p)+'</div>'});if(!ps.length)h+="<div>-</div>";
     h+='</div></div><div><b style="color:var(--blu)">Zeros:</b><div class="pzl">';
     zs.forEach(function(z){h+='<div style="color:var(--blu)">'+fC(z)+'</div>'});if(!zs.length)h+="<div>-</div>";
-    h+='</div></div></div><div style="margin-top:8px;padding:6px 10px;border-radius:6px;font-weight:700;font-size:13px;'+(stb?'background:#16382a;color:#34d399">ESTAVEL':'background:#3a1520;color:#f87171">INSTAVEL')+'</div></div>';}
+    h+='</div></div></div>';
+    h+='<div style="margin-top:8px;padding:6px 10px;border-radius:6px;font-weight:700;font-size:13px;'+(stb?'background:#16382a;color:#34d399">ESTAVEL':'background:#3a1520;color:#f87171">INSTAVEL')+'</div></div>';}
   if(selAn.bm){
-    h+='<div class="rcard"><h4>Diagrama De Bode - Magnitude</h4><div><canvas id="cBM"></canvas></div></div>';}
+    h+='<div class="rcard"><h4>Diagrama De Bode - Magnitude</h4><div id="cBM" style="width:100%;height:320px"></div></div>';}
   if(selAn.bp){
-    h+='<div class="rcard"><h4>Diagrama De Bode - Fase</h4><div><canvas id="cBP"></canvas></div></div>';}
+    h+='<div class="rcard"><h4>Diagrama De Bode - Fase</h4><div id="cBP" style="width:100%;height:320px"></div></div>';}
   if(curMalha==='aberta'&&selAn.nyqst){
-    h+='<div class="rcard"><h4>Nyquist</h4><div><canvas id="cNyq"></canvas></div>';
+    h+='<div class="rcard"><h4>Nyquist</h4><div id="cNyq" style="width:100%;height:380px"></div>';
     var nps=roots(tf.d),npsd=0;nps.forEach(function(p){if(p.r>1e-6)npsd++});
     h+='<div style="margin-top:8px;font-size:12px"><b>Polos SPD (P):</b> '+npsd+' | <b>Z = P + N:</b> '+(npsd===0?'Estavel':'Instavel')+'</div></div>';}
   if(curMalha==='fechada'&&selAn.lgr){
-    h+='<div class="rcard"><h4>Lugar Geometrico das Raizes (LGR)</h4><div><canvas id="cLGR"></canvas></div>';
+    h+='<div class="rcard"><h4>Lugar Geometrico das Raizes (LGR)</h4><div id="cLGR" style="width:100%;height:380px"></div>';
     h+='<div style="margin-top:8px;font-size:11px;color:var(--txm)">Polos (X vermelho) | Zeros (O verde) | K: 0 a 200</div></div>';}
   rb.innerHTML=h;
-  if(selAn.tempo)chart2("cStep",sr.t,sr.u,sr.y,"Tempo (s)","Amplitude");
-  if(selAn.bm)chart("cBM",bd.w,bd.m,"w (rad/s)","dB","#60a5fa",true);
-  if(selAn.bp)chart("cBP",bd.w,bd.p,"w (rad/s)","graus","#f472b6",true);
-  if(curMalha==='aberta'&&selAn.nyqst)chartXY("cNyq",nqd.re,nqd.im,"Parte Real","Parte Imaginaria");
-  if(curMalha==='fechada'&&selAn.lgr)chartLGR("cLGR",lgrData,tf);
+  /* Aguarda o DOM ser atualizado antes de chamar Plotly */
+  setTimeout(function(){
+    if(selAn.tempo)chart2("cStep",sr.t,sr.u,sr.y,"Tempo (s)","Amplitude");
+    if(selAn.pz)chartPZ("cPZ",ps,zs);
+    if(selAn.bm)chart("cBM",bd.w,bd.m,"w (rad/s)","dB","#60a5fa",true);
+    if(selAn.bp)chart("cBP",bd.w,bd.p,"w (rad/s)","graus","#f472b6",true);
+    if(curMalha==='aberta'&&selAn.nyqst)chartXY("cNyq",nqd.re,nqd.im,"Parte Real","Parte Imaginaria");
+    if(curMalha==='fechada'&&selAn.lgr)chartLGR("cLGR",lgrData,tf);
+  },50);
   rd.scrollIntoView({behavior:"smooth"})}
 
 /* ===== MODE SWITCHING ===== */
@@ -3511,7 +3519,7 @@ def modo_canvas():
     else:
         html_content = html_content.replace('__INITIAL_BLOCKS__', '[]')
 
-    components.html(html_content, height=1200, scrolling=True)
+    components.html(html_content, height=2800, scrolling=True)
 
 
 # ══════════════════════════════════════════════════
