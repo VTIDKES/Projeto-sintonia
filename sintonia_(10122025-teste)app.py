@@ -3177,7 +3177,7 @@ def modo_classico():
 
         representacao = st.radio(
             "Representacao",
-            ['Funcao de Transferencia', 'Espaco de Estados'],
+            ['Funcao de Transferência', 'Espaco de Estados'],
             horizontal=True,
             key="representacao_classico"
         )
