@@ -3182,7 +3182,7 @@ def modo_classico():
             key="representacao_classico"
         )
 
-        if representacao == 'Função de Transferência':
+        if representacao == 'Funcao de Transferencia':
             numerador   = st.text_input("Numerador",   placeholder="ex: 4")
             denominador = st.text_input("Denominador", placeholder="ex: s^2 + 2*s + 3")
             A_str = B_str = C_str = D_str = ''
@@ -3451,7 +3451,7 @@ def modo_classico():
         st.subheader("Analises")
         chave = "malha_fechada" if tipo_malha == "Malha Fechada" else "malha_aberta"
         analise_opcoes = ANALYSIS_OPTIONS[chave]
-        análises = st.multiselect("Escolha:", analise_opcoes, default=[analise_opcoes[0]])
+        analises = st.multiselect("Escolha:", analise_opcoes, default=[analise_opcoes[0]])
         entrada = st.selectbox("Sinal de Entrada", INPUT_SIGNALS)
 
     with col1:
@@ -3691,7 +3691,7 @@ def modo_canvas():
     st.title("Modo Diagrama de Blocos")
 
     with st.sidebar:
-        st.header("Navegação")
+        st.header("Navegacao")
         if st.button("Voltar a Tela Inicial"):
             st.session_state.modo_selecionado = None
             st.rerun()
