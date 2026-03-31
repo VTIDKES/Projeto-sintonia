@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 """
 Sistema de Modelagem e Analise de Sistemas de Controle v2.0
@@ -64,7 +63,7 @@ ANALYSIS_OPTIONS = {
 INPUT_SIGNALS = ['Degrau', 'Rampa', 'Senoidal', 'Impulso', 'Parabolica']
 
 BLOCK_TYPES = {
-    'Planta': {'icon': 'G(s)', 'desc': 'Funcao de transferencia da planta'},
+    'Planta': {'icon': 'G(s)', 'desc': 'Função de transferência da planta'},
     'Controlador': {'icon': 'C(s)', 'desc': 'Controlador (PID, Lead-Lag, etc.)'},
     'Sensor': {'icon': 'H(s)', 'desc': 'Sensor na malha de realimentacao'},
     'Atuador': {'icon': 'A(s)', 'desc': 'Atuador do sistema'},
@@ -87,7 +86,7 @@ def inicializar_estado():
         ]),
         'conexoes': [],
         'calculo_erro_habilitado': False,
-        'representacao_classico': 'Funcao de Transferencia',
+        'representacao_classico': 'Função de Transferência',
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -570,9 +569,9 @@ def plot_diagrama_blocos_plotly(blocos_df, conexoes):
 
         for i, (_, row) in enumerate(blocos_list):
             cor_bd, bg = CORES_PLOTLY.get(row['tipo'], ('#5b6be0', '#1a1d2e'))
-            num_s = _tf_to_str(row['tf'].num[0][0])
-            den_s = _tf_to_str(row['tf'].den[0][0])
-            lbl = f"{num_s} / {den_s}"[:20]
+            num_s = _tf_to_diag_str(row['tf'].num[0][0])
+            den_s = _tf_to_diag_str(row['tf'].den[0][0])
+            lbl = f"{num_s} / {den_s}"[:24]
             _plot_bloco(fig, cx, 0.7, bw, bh, row['nome'], lbl, cor_bd, bg)
             _plot_seta(fig, cx - (0.3 if i > 0 else 0.0), 1.0, cx, 1.0)
             cx += bw + gap
@@ -603,8 +602,8 @@ def plot_diagrama_blocos_plotly(blocos_df, conexoes):
             for nome in nomes:
                 row = blocos_map[nome]
                 cor_bd, bg = CORES_PLOTLY.get(row['tipo'], ('#5b6be0', '#1a1d2e'))
-                num_s = _tf_to_str(row['tf'].num[0][0])
-                den_s = _tf_to_str(row['tf'].den[0][0])
+                num_s = _tf_to_diag_str(row['tf'].num[0][0])
+                den_s = _tf_to_diag_str(row['tf'].den[0][0])
                 fig.add_shape(type='line', x0=x_cur-0.01, y0=y_mid, x1=x_cur+0.3, y1=y_mid,
                               line=dict(color='#5b6be0', width=2))
                 _plot_bloco(fig, x_cur + 0.3, y_mid - bh/2, bw, bh, nome,
@@ -670,8 +669,8 @@ def plot_diagrama_blocos_plotly(blocos_df, conexoes):
             g_row = blocos_map[nomes[0]]
             cor_bd, bg = CORES_PLOTLY.get(g_row['tipo'], ('#60a5fa', '#1e3a5f'))
             g_x = sum_cx + sum_r + 0.3
-            num_s = _tf_to_str(g_row['tf'].num[0][0])
-            den_s = _tf_to_str(g_row['tf'].den[0][0])
+            num_s = _tf_to_diag_str(g_row['tf'].num[0][0])
+            den_s = _tf_to_diag_str(g_row['tf'].den[0][0])
             _plot_bloco(fig, g_x, y_mid - bh/2, bw, bh, g_row['nome'],
                         f"{num_s[:12]}/{den_s[:12]}", cor_bd, bg)
 
@@ -769,7 +768,7 @@ def calcular_operacao_entre_sistemas(nome_resultado, nome_g1, operacao, nome_g2,
         num_str = str(list(resultado.num[0][0]))
         den_str = str(list(resultado.den[0][0]))
         ok, msg = adicionar_bloco(
-            nome_resultado, 'Planta', 'Funcao de Transferencia',
+            nome_resultado, 'Planta', 'Função de Transferência',
             num_str, den_str
         )
         if not ok:
@@ -943,7 +942,7 @@ def plot_nyquist(sistema):
 def adicionar_bloco(nome, tipo, representacao, numerador='', denominador='',
                     A_str='', B_str='', C_str='', D_str=''):
     try:
-        if representacao == 'Funcao de Transferencia':
+        if representacao == 'Função de Transferência':
             tf_obj, tf_symb = converter_para_tf(numerador, denominador)
             ss_sys = None
         else:
@@ -1342,7 +1341,7 @@ function pickBlock(t){
   document.getElementById("modalGrid").style.display="none";
   var cp=document.getElementById("cfgPanel");cp.classList.add("vis");
   var cf=document.getElementById("cfgFields");var h="";
-  var titles={tf:"Planta G(s)",ss:"Espaco de Estados",gain:"Ganho K",pid:"Controlador PID",sensor:"Sensor H(s)",sum:"Somador",actuator:"Atuador A(s)"};
+  var titles={tf:"Planta G(s)",ss:"Espaço de Estados",gain:"Ganho K",pid:"Controlador PID",sensor:"Sensor H(s)",sum:"Somador",actuator:"Atuador A(s)"};
   document.getElementById("cfgTitle").textContent="Configurar: "+(titles[t]||t);
   if(t==="tf"||t==="sensor"||t==="actuator"){
     h+='<div class="cfg-row"><div><label>Numerador</label><input id="cfgNum" value="1" placeholder="ex: s+1"></div>';
@@ -1492,7 +1491,11 @@ function bTF(nd){var p=nd.params||{},t=nd.type;
   if(t==="gain")return pfC(parseFloat(p.k)||1);
   if(t==="int")return{n:[1],d:[0,1]};if(t==="der")return{n:[0,1],d:[1]};
   if(t==="pid"){var kp=parseFloat(p.kp)||0,ki=parseFloat(p.ki)||0,kd=parseFloat(p.kd)||0;
-    if(ki===0&&kd===0)return pfC(kp||1);if(ki===0)return{n:[kp,kd],d:[1]};return{n:[ki,kp,kd],d:[0,1]}}
+    /* C(s)=(Kd*s^2+Kp*s+Ki)/s => num ascending [Ki,Kp,Kd], den [0,1] */
+    if(Math.abs(ki)<1e-14&&Math.abs(kd)<1e-14)return pfC(kp||1);
+    if(Math.abs(ki)<1e-14)return{n:[kp,kd],d:[1]};
+    if(Math.abs(kd)<1e-14)return{n:[ki,kp],d:[0,1]};
+    return{n:[ki,kp,kd],d:[0,1]}}
   return pfC(1)}
 
 /* ===== SOLVER (Gaussian elimination on signal-flow graph) ===== */
@@ -1827,13 +1830,13 @@ var model={nodes:[],edges:[]},selId=null,dragSt=null,conSt=null;
 var cw=document.getElementById("cw"),cv=document.getElementById("cv"),wSvg=document.getElementById("wires");
 function nxtId(){var m=0;model.nodes.forEach(function(n){var v=parseInt(n.id.replace("n",""))||0;if(v>m)m=v});return"n"+(m+1)}
 function ptr(e){if(e.touches&&e.touches.length)return{x:e.touches[0].clientX,y:e.touches[0].clientY};if(e.changedTouches&&e.changedTouches.length)return{x:e.changedTouches[0].clientX,y:e.changedTouches[0].clientY};return{x:e.clientX,y:e.clientY}}
-var BL={tf:"Planta",ss:"Espaco de Estados",gain:"Ganho",sum:"Somador",int:"Integrador",der:"Derivador",pid:"PID",sensor:"Sensor",actuator:"Atuador",input:"Entrada",output:"Saida",branch:"Ramificacao"};
+var BL={tf:"Planta",ss:"Espaço de Estados",gain:"Ganho",sum:"Somador",int:"Integrador",der:"Derivador",pid:"PID",sensor:"Sensor",actuator:"Atuador",input:"Entrada",output:"Saida",branch:"Ramificacao"};
 function dPar(t){if(t==="tf")return{num:"1",den:"s+1"};if(t==="ss")return{ssA:"0 1; -2 -3",ssB:"0; 1",ssC:"1 0",ssD:"0"};if(t==="gain")return{k:"1"};if(t==="sum")return{signs:"+ -"};if(t==="pid")return{kp:"1",ki:"0",kd:"0"};if(t==="sensor"||t==="actuator")return{num:"1",den:"1"};if(t==="input")return{label:"R(s)"};if(t==="output")return{label:"Y(s)"};return{}}
 function gPC(t,p){if(t==="input")return{i:[],o:[{id:"out0"}]};if(t==="output")return{i:[{id:"in0"}],o:[]};if(t==="branch")return{i:[{id:"in0"}],o:[{id:"out0"},{id:"out1"}]};
   if(t==="sum"){var sg=(p&&p.signs?p.signs:"+ -").trim().split(/\s+/);return{i:sg.map(function(s,i){return{id:"in"+i,sign:s}}),o:[{id:"out0"}]}}return{i:[{id:"in0"}],o:[{id:"out0"}]}}
 function bTxt(n){var p=n.params||{};if(n.type==="tf"||n.type==="actuator")return'<div class="block-tf-disp"><div class="tf-num">'+(p.num||"1")+'</div><div>'+(p.den||"1")+'</div></div>';
   if(n.type==="ss"){var tf=ssToTF(p.ssA||"0",p.ssB||"0",p.ssC||"1",p.ssD||"0");return'<div class="block-tf-disp"><div class="tf-num">'+fP(tf.n)+'</div><div>'+fP(tf.d)+'</div></div>'}
-  if(n.type==="gain")return"K="+(p.k||"1");if(n.type==="pid")return'<div class="block-tf-disp">Kp='+(p.kp||"0")+" Ki="+(p.ki||"0")+" Kd="+(p.kd||"0")+'</div>';
+  if(n.type==="gain")return"K="+(p.k||"1");if(n.type==="pid"){var _tf=bTF(n);return'<div class="block-tf-disp"><div class="tf-num">'+fP(_tf.n)+'</div><div>'+fP(_tf.d)+'</div></div>';}
   if(n.type==="sensor")return'<div class="block-tf-disp"><div class="tf-num">'+(p.num||"1")+'</div><div>'+(p.den||"1")+'</div></div>';
   if(n.type==="input")return p.label||"R(s)";if(n.type==="output")return p.label||"Y(s)";if(n.type==="sum")return"\u03a3";if(n.type==="int")return"1/s";if(n.type==="der")return"s";return""}
 /* addB: quick add (toolbar) */
@@ -2101,9 +2104,9 @@ def tela_inicial():
 
     st.markdown("")
     st.markdown("")
-    st.markdown('<div class="welcome-title">Sistema de Modelagem e Analise de Controle</div>',
+    st.markdown('<div class="welcome-title">Sistema de Modelagem e Análise de Controle</div>',
                 unsafe_allow_html=True)
-    st.markdown('<div class="welcome-sub">Escolha o modo de trabalho para comecar</div>',
+    st.markdown('<div class="welcome-sub">Escolha o modo de trabalho para começar</div>',
                 unsafe_allow_html=True)
 
     col1, col2 = st.columns(2, gap="large")
@@ -2136,7 +2139,7 @@ def tela_inicial():
             </div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("Entrar no Modo Classico", key="btn_classico", type="primary", use_container_width=True):
+        if st.button("Entrar no Modo Clássico", key="btn_classico", type="primary", use_container_width=True):
             st.session_state.modo_selecionado = 'classico'
             st.rerun()
 
@@ -2180,11 +2183,11 @@ def tela_inicial():
 # ══════════════════════════════════════════════════
 
 def modo_lista():
-    st.title("Modo Lista - Blocos e Conexoes")
+    st.title("Modo Lista - Blocos e Conexões")
 
     with st.sidebar:
-        st.header("Navegacao")
-        if st.button("Voltar a Tela Inicial"):
+        st.header("Navegação")
+        if st.button("Voltar à Tela Inicial"):
             st.session_state.modo_selecionado = None
             st.rerun()
 
@@ -2195,11 +2198,11 @@ def modo_lista():
         tipo = st.selectbox("Tipo", list(BLOCK_TYPES.keys()))
 
         representacao = st.radio(
-            "Representacao",
-            ['Funcao de Transferencia', 'Espaco de Estados'],
+            "Representação",
+            ['Função de Transferência', 'Espaço de Estados'],
             horizontal=True)
 
-        if representacao == 'Funcao de Transferencia':
+        if representacao == 'Função de Transferência':
             numerador = st.text_input("Numerador", placeholder="ex: s+1")
             denominador = st.text_input("Denominador", placeholder="ex: s^2+2*s+3")
             A_str = B_str = C_str = D_str = ''
@@ -2238,7 +2241,7 @@ def modo_lista():
 
     # --- Area principal ---
     tab_blocos, tab_conexoes, tab_analise = st.tabs(
-        ["Blocos", "Conexoes", "Analise"])
+        ["Blocos", "Conexões", "Análise"])
 
     with tab_blocos:
         st.subheader("Blocos Definidos")
@@ -2252,7 +2255,7 @@ def modo_lista():
                     den_str = _tf_to_str(tf_obj.den[0][0])
                     st.latex(f"\\frac{{{num_str}}}{{{den_str}}}")
 
-                    if row['representacao'] == 'Espaco de Estados' and row['A']:
+                    if row['representacao'] == 'Espaço de Estados' and row['A']:
                         st.markdown(f"**A:** `{row['A']}`  |  **B:** `{row['B']}`")
                         st.markdown(f"**C:** `{row['C']}`  |  **D:** `{row['D']}`")
 
@@ -2275,13 +2278,13 @@ def modo_lista():
                     st.plotly_chart(fig_diag_bl, use_container_width=True)
 
     with tab_conexoes:
-        st.subheader("Definir Conexoes entre Blocos")
+        st.subheader("Definir Conexões entre Blocos")
         if len(st.session_state.blocos) < 2:
-            st.info("Adicione pelo menos 2 blocos para definir conexoes.")
+            st.info("Adicione pelo menos 2 blocos para definir conexões.")
         else:
             nomes_disponiveis = list(st.session_state.blocos['nome'])
 
-            st.markdown("**Nova Conexao**")
+            st.markdown("**Nova Conexão**")
             c1, c2 = st.columns(2)
             with c1:
                 tipo_conexao = st.selectbox("Tipo de conexao", CONNECTION_TYPES)
@@ -2293,7 +2296,7 @@ def modo_lista():
                 "Blocos (na ordem desejada)", nomes_disponiveis,
                 max_selections=10 if tipo_conexao in ['Serie', 'Paralelo'] else 2)
 
-            if st.button("Adicionar Conexao", type="primary"):
+            if st.button("Adicionar Conexão", type="primary"):
                 if len(blocos_sel) < 2:
                     st.error("Selecione pelo menos 2 blocos.")
                 else:
@@ -2301,7 +2304,7 @@ def modo_lista():
                         'tipo': tipo_conexao,
                         'blocos': blocos_sel,
                     })
-                    st.success(f"Conexao '{tipo_conexao}' adicionada: {' -> '.join(blocos_sel)}")
+                    st.success(f"Conexão '{tipo_conexao}' adicionada: {' -> '.join(blocos_sel)}")
                     st.rerun()
 
             if st.session_state.conexoes:
@@ -2331,7 +2334,7 @@ def modo_lista():
                     st.plotly_chart(fig_diag_conn, use_container_width=True)
 
     with tab_analise:
-        st.subheader("Analise do Sistema")
+        st.subheader("Análise do Sistema")
         if st.session_state.blocos.empty:
             st.info("Adicione blocos primeiro.")
         else:
@@ -2344,13 +2347,13 @@ def modo_lista():
 
             col1, col2 = st.columns(2)
             with col1:
-                tipo_malha = st.selectbox("Tipo de analise", ["Malha Aberta", "Malha Fechada"])
-                usar_ganho = st.checkbox("Ganho K ajustavel")
+                tipo_malha = st.selectbox("Tipo de análise", ["Malha Aberta", "Malha Fechada"])
+                usar_ganho = st.checkbox("Ganho K ajustável")
                 K = st.slider("K", 0.1, 100.0, 1.0, 0.1) if usar_ganho else 1.0
             with col2:
                 analise_opcoes = ANALYSIS_OPTIONS[
                     "malha_fechada" if tipo_malha == "Malha Fechada" else "malha_aberta"]
-                analises = st.multiselect("Analises", analise_opcoes, default=[analise_opcoes[0]])
+                analises = st.multiselect("Análises", analise_opcoes, default=[analise_opcoes[0]])
                 entrada = st.selectbox("Sinal de entrada", INPUT_SIGNALS)
 
             if st.button("Calcular e Analisar", type="primary", use_container_width=True):
@@ -2417,7 +2420,7 @@ def _html_bloco_visual(row, is_new=False):
     den_s = _tf_to_str(row['tf'].den[0][0])
     badge = '<span class="vb-badge">NOVO</span>' if is_new else ''
     ss = ''
-    if row.get('representacao') == 'Espaco de Estados' and row.get('A'):
+    if row.get('representacao') == 'Espaço de Estados' and row.get('A'):
         ss = (f'<div class="vb-ss">A=[{row["A"]}] B=[{row["B"]}]'
               f'<br>C=[{row["C"]}] D=[{row["D"]}]</div>')
     return (f'<div class="vb-card" style="border-top:3px solid {cor}">{badge}'
@@ -3162,11 +3165,11 @@ initData{uid}({default_n});renderAll{uid}();
 
 
 def modo_classico():
-    st.title("Modo Classico - Funcao de Transferencia")
+    st.title("Modo Clássico - Função de Transferência")
 
     with st.sidebar:
-        st.header("Navegacao")
-        if st.button("Voltar a Tela Inicial"):
+        st.header("Navegação")
+        if st.button("Voltar à Tela Inicial"):
             st.session_state.modo_selecionado = None
             st.rerun()
 
@@ -3177,13 +3180,13 @@ def modo_classico():
         tipo = st.selectbox("Tipo", ['Planta', 'Controlador', 'Sensor', 'Atuador'])
 
         representacao = st.radio(
-            "Representacao",
-            ['Funcao de Transferencia', 'Espaco de Estados'],
+            "Representação",
+            ['Função de Transferência', 'Espaço de Estados'],
             horizontal=True,
             key="representacao_classico"
         )
 
-        if representacao == 'Funcao de Transferencia':
+        if representacao == 'Função de Transferência':
             numerador   = st.text_input("Numerador",   placeholder="ex: 4")
             denominador = st.text_input("Denominador", placeholder="ex: s^2 + 2*s + 3")
             A_str = B_str = C_str = D_str = ''
@@ -3266,7 +3269,7 @@ def modo_classico():
                 st.rerun()
 
         st.markdown("---")
-        st.header("Conexoes entre Blocos")
+        st.header("Conexões entre Blocos")
         if len(st.session_state.blocos) >= 2:
             tipo_conexao = st.selectbox(
                 "Tipo de conexao", CONNECTION_TYPES, key="conn_tipo_classico")
@@ -3282,7 +3285,7 @@ def modo_classico():
                 "Blocos (na ordem)", nomes_disp,
                 max_selections=max_sel, key="conn_blocos_classico")
 
-            if st.button("Adicionar Conexao", key="btn_add_conn"):
+            if st.button("Adicionar Conexão", key="btn_add_conn"):
                 if len(blocos_conexao) < 2:
                     st.error("Selecione pelo menos 2 blocos.")
                 else:
@@ -3309,11 +3312,11 @@ def modo_classico():
             st.caption("Adicione pelo menos 2 blocos para definir conexoes.")
 
         st.markdown("---")
-        st.header("Configuracoes")
+        st.header("Configurações")
         if st.button(
-            "Habilitar Calculo de Erro"
+            "Habilitar Cálculo de Erro"
             if not st.session_state.calculo_erro_habilitado
-            else "Desabilitar Calculo de Erro"
+            else "Desabilitar Cálculo de Erro"
         ):
             st.session_state.calculo_erro_habilitado = (
                 not st.session_state.calculo_erro_habilitado)
@@ -3321,14 +3324,14 @@ def modo_classico():
 
     # Calculo de erro
     if st.session_state.calculo_erro_habilitado:
-        st.subheader("Calculo de Erro Estacionario")
+        st.subheader("Cálculo de Erro Estacionário")
         col1, col2 = st.columns(2)
         with col1:
             num_erro = st.text_input("Numerador", value="", key="num_erro")
         with col2:
             den_erro = st.text_input("Denominador", value="", key="den_erro")
 
-        if st.button("Calcular Erro Estacionario"):
+        if st.button("Calcular Erro Estacionário"):
             try:
                 G, _ = converter_para_tf(num_erro, den_erro)
                 tipo, Kp, Kv, Ka = constantes_de_erro(G)
@@ -3446,10 +3449,10 @@ def modo_classico():
     with col2:
         st.subheader("Configuração")
         tipo_malha = st.selectbox("Tipo de Sistema", ["Malha Aberta", "Malha Fechada"])
-        usar_ganho = st.checkbox("Adicionar ganho K ajustavel", value=False)
+        usar_ganho = st.checkbox("Adicionar ganho K ajustável", value=False)
         K = st.slider("Ganho K", 0.1, 100.0, 1.0, 0.1) if usar_ganho else 1.0
 
-        st.subheader("Analises")
+        st.subheader("Análises")
         chave = "malha_fechada" if tipo_malha == "Malha Fechada" else "malha_aberta"
         analise_opcoes = ANALYSIS_OPTIONS[chave]
         analises = st.multiselect("Escolha:", analise_opcoes, default=[analise_opcoes[0]])
@@ -3458,7 +3461,7 @@ def modo_classico():
     with col1:
         st.subheader("Resultados")
 
-        if st.button("Executar Simulacao", use_container_width=True, type="primary"):
+        if st.button("Executar Simulação", use_container_width=True, type="primary"):
             try:
                 df = st.session_state.blocos
                 if df.empty:
@@ -3477,7 +3480,7 @@ def modo_classico():
                             c['tipo'].startswith('Realimentacao')
                             for c in st.session_state.conexoes):
                         sistema = ctrl.feedback(sistema, TransferFunction([1], [1]))
-                    label_extra = " (conexoes definidas)"
+                    label_extra = " (conexões definidas)"
                 else:
                     # Modo classico: Plant + Controller + Sensor
                     planta = obter_bloco_por_tipo('Planta')
@@ -3509,7 +3512,7 @@ def modo_classico():
                 executar_analises(sistema, analises, entrada, tipo_malha)
 
             except Exception as e:
-                st.error(f"Erro durante a simulacao: {e}")
+                st.error(f"Erro durante a simulação: {e}")
 
 
 # ══════════════════════════════════════════════════
@@ -3692,8 +3695,8 @@ def modo_canvas():
     st.title("Modo Diagrama de Blocos")
 
     with st.sidebar:
-        st.header("Navegacao")
-        if st.button("Voltar a Tela Inicial"):
+        st.header("Navegação")
+        if st.button("Voltar à Tela Inicial"):
             st.session_state.modo_selecionado = None
             st.rerun()
 
@@ -3757,6 +3760,42 @@ def _tf_to_str(coeffs):
                 terms.append(f"-s^{{{power}}}")
             else:
                 terms.append(f"{c_val:.4g}s^{{{power}}}")
+    if not terms:
+        return "0"
+    result = terms[0]
+    for t in terms[1:]:
+        if t.startswith('-'):
+            result += f" - {t[1:]}"
+        else:
+            result += f" + {t}"
+    return result
+
+
+def _tf_to_diag_str(coeffs):
+    """Converte coeficientes para string legivel no diagrama (sem LaTeX)."""
+    n = len(coeffs) - 1
+    terms = []
+    for i, c in enumerate(coeffs):
+        power = n - i
+        c_val = float(c)
+        if abs(c_val) < 1e-10:
+            continue
+        if power == 0:
+            terms.append(f"{c_val:.4g}")
+        elif power == 1:
+            if abs(c_val - 1) < 1e-10:
+                terms.append("s")
+            elif abs(c_val + 1) < 1e-10:
+                terms.append("-s")
+            else:
+                terms.append(f"{c_val:.4g}s")
+        else:
+            if abs(c_val - 1) < 1e-10:
+                terms.append(f"s^{power}")
+            elif abs(c_val + 1) < 1e-10:
+                terms.append(f"-s^{power}")
+            else:
+                terms.append(f"{c_val:.4g}s^{power}")
     if not terms:
         return "0"
     result = terms[0]
