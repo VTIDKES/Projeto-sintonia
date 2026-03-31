@@ -3443,7 +3443,7 @@ def modo_classico():
     col1, col2 = st.columns([2, 1])
 
     with col2:
-        st.subheader("Configuracao")
+        st.subheader("Configuração")
         tipo_malha = st.selectbox("Tipo de Sistema", ["Malha Aberta", "Malha Fechada"])
         usar_ganho = st.checkbox("Adicionar ganho K ajustavel", value=False)
         K = st.slider("Ganho K", 0.1, 100.0, 1.0, 0.1) if usar_ganho else 1.0
