@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 """
 Sistema de Modelagem e Analise de Sistemas de Controle v2.0
@@ -3177,7 +3178,7 @@ def modo_classico():
 
         representacao = st.radio(
             "Representacao",
-            ['Funcao de Transferência', 'Espaco de Estados'],
+            ['Funcao de Transferencia', 'Espaco de Estados'],
             horizontal=True,
             key="representacao_classico"
         )
