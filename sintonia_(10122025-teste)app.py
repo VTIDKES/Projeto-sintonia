@@ -1046,8 +1046,9 @@ def _load_visual_editor_html():
 :root{--bg:#0e1117;--sf:#1a1d2e;--sf2:#252840;--bd:#333654;--tx:#e0e4f0;--txm:#8890b0;
 --acc:#5b6be0;--grn:#34d399;--red:#f87171;--yel:#fbbf24;--blu:#60a5fa;--pur:#a78bfa;--pnk:#f472b6}
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{height:auto;min-height:100%;font-family:system-ui,sans-serif;background:var(--bg);color:var(--tx);overflow-y:auto}
-.app{display:flex;flex-direction:column;min-height:100%}
+html,body{height:100%;min-height:100vh;font-family:system-ui,sans-serif;background:var(--bg);color:var(--tx);overflow-y:auto}
+html{background:var(--bg)}
+.app{display:flex;flex-direction:column;min-height:100vh;background:var(--bg)}
 /* Modal Overlay */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center}
 .modal-overlay.vis{display:flex}
@@ -2470,6 +2471,33 @@ VISUAL_BLOCKS_CSS = """<style>
 .vb-badge{position:absolute;top:-8px;right:-8px;background:#16a34a;color:white;font-size:10px;
   font-weight:700;padding:2px 8px;border-radius:10px}
 .vb-ss{font-size:10px;color:#8890b0;margin-top:6px;text-align:left;line-height:1.5}
+.ss-display-container{background:linear-gradient(135deg,#0f1219,#161b2e);border:1.5px solid #2a3055;
+  border-radius:14px;padding:24px 28px;margin:20px 0;max-width:900px}
+.ss-model-header{text-align:center;margin-bottom:18px}
+.ss-model-title{font-size:16px;font-weight:700;color:#e0e4f0;letter-spacing:.5px;margin-bottom:6px}
+.ss-model-subtitle{font-size:12px;color:#64748b;letter-spacing:.3px}
+.ss-equations{display:flex;flex-direction:column;gap:6px;align-items:center;
+  margin-bottom:20px;padding:14px 18px;background:rgba(91,107,224,.06);
+  border:1px solid rgba(91,107,224,.15);border-radius:10px}
+.ss-eq{font-family:'Times New Roman','STIX Two Math',serif;font-size:17px;color:#c8d0e8;letter-spacing:.3px}
+.ss-eq .eq-dot{position:relative;display:inline-block}
+.ss-eq .eq-dot::after{content:'\u0307';position:absolute;top:-1px;left:0;right:0;text-align:center;font-size:20px}
+.ss-matrices-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:600px){.ss-matrices-grid{grid-template-columns:1fr}}
+.ss-mat-card{background:rgba(255,255,255,.03);border:1px solid #2a3055;border-radius:10px;padding:14px 16px}
+.ss-mat-label{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.ss-mat-letter{font-family:'Times New Roman',serif;font-size:22px;font-weight:700;font-style:italic;min-width:22px;text-align:center}
+.ss-mat-desc{font-size:10px;color:#64748b;letter-spacing:.3px;text-transform:uppercase}
+.ss-mat-dim{font-size:10px;color:#4a5175;margin-left:auto;font-family:monospace}
+.ss-mat-wrap{display:flex;align-items:center;justify-content:center;gap:0;padding:4px 0}
+.ss-bracket{font-size:1em;color:#4a5175;line-height:1;display:flex;align-items:stretch}
+.ss-bracket-left{border-left:2px solid #5b6be0;border-top:2px solid #5b6be0;border-bottom:2px solid #5b6be0;
+  border-radius:4px 0 0 4px;width:6px;min-height:100%}
+.ss-bracket-right{border-right:2px solid #5b6be0;border-top:2px solid #5b6be0;border-bottom:2px solid #5b6be0;
+  border-radius:0 4px 4px 0;width:6px;min-height:100%}
+.ss-mat-table{border-collapse:collapse;margin:0 4px}
+.ss-mat-table td{text-align:right;padding:4px 8px;font-family:'JetBrains Mono','Fira Code',monospace;
+  font-size:13px;color:#c8d0e8;white-space:nowrap;min-width:48px}
 .conn-diagram-wrap{background:#0e1117;border:1px solid #333654;border-radius:12px;padding:20px;
   margin:16px 0;text-align:center;overflow-x:auto}
 </style>"""
@@ -2492,14 +2520,118 @@ def _html_bloco_visual(row, is_new=False):
     badge = '<span class="vb-badge">NOVO</span>' if is_new else ''
     ss = ''
     if row.get('representacao') == 'Espaço de Estados' and row.get('A'):
-        ss = (f'<div class="vb-ss">A=[{row["A"]}] B=[{row["B"]}]'
-              f'<br>C=[{row["C"]}] D=[{row["D"]}]</div>')
+        ss = ('<div class="vb-ss" style="text-align:center;color:#5b6be0;'
+              'font-weight:600;font-size:11px;margin-top:8px;'
+              'padding:4px 8px;background:rgba(91,107,224,.08);'
+              'border-radius:6px;border:1px solid rgba(91,107,224,.15)">'
+              'Espaço de Estados</div>')
     return (f'<div class="vb-card" style="border-top:3px solid {cor}">{badge}'
             f'<div class="vb-tipo">{row["tipo"]}</div>'
             f'<div class="vb-icone" style="color:{cor}">{icone}</div>'
             f'<div class="vb-nome">{row["nome"]}</div>'
             f'<div class="vb-tf"><div class="vb-tf-num">{num_s}</div>'
             f'<div>{den_s}</div></div>{ss}</div>')
+
+
+def _fmt_ss_val(v):
+    """Formata valor numerico para exibicao em matriz de espaco de estados."""
+    if abs(v) < 1e-10:
+        return "0"
+    if abs(v - round(v)) < 1e-9:
+        return f"{int(round(v))}"
+    return f"{v:.4g}"
+
+
+def _build_matrix_html(mat_2d):
+    """Gera HTML de uma tabela para matriz com colchetes estilizados."""
+    rows_html = ""
+    for row in mat_2d:
+        cells = "".join(f"<td>{_fmt_ss_val(v)}</td>" for v in row)
+        rows_html += f"<tr>{cells}</tr>"
+    return (
+        '<div class="ss-mat-wrap">'
+        '<div class="ss-bracket-left"></div>'
+        f'<table class="ss-mat-table">{rows_html}</table>'
+        '<div class="ss-bracket-right"></div>'
+        '</div>'
+    )
+
+
+def _html_ss_display(row):
+    """Gera HTML completo da representacao em espaco de estados para um bloco."""
+    try:
+        A = np.atleast_2d(parse_matrix(row['A'])).astype(float)
+        B = np.atleast_2d(parse_matrix(row['B'])).astype(float)
+        C = np.atleast_2d(parse_matrix(row['C'])).astype(float)
+        D = np.atleast_2d(parse_matrix(row['D'])).astype(float)
+
+        n = A.shape[0]
+        if B.shape[0] != n and B.shape[1] == n:
+            B = B.T
+        if C.shape[1] != n and C.shape[0] == n:
+            C = C.T
+    except Exception:
+        return ""
+
+    cor = CORES_TIPO_VIS.get(row['tipo'], ('#8890b0', '#252840', '?'))[0]
+    nome = row['nome']
+
+    mat_colors = {'A': '#60a5fa', 'B': '#34d399', 'C': '#fbbf24', 'D': '#f472b6'}
+    mat_descs = {
+        'A': 'Dinâmica do sistema',
+        'B': 'Entrada',
+        'C': 'Saída',
+        'D': 'Transmissão direta',
+    }
+    mat_data = {'A': A, 'B': B, 'C': C, 'D': D}
+
+    cards_html = ""
+    for letter in ['A', 'B', 'C', 'D']:
+        m = mat_data[letter]
+        dim_str = f"{m.shape[0]}×{m.shape[1]}"
+        c = mat_colors[letter]
+        desc = mat_descs[letter]
+        matrix_table = _build_matrix_html(m)
+        cards_html += (
+            f'<div class="ss-mat-card">'
+            f'<div class="ss-mat-label">'
+            f'<span class="ss-mat-letter" style="color:{c}">{letter}</span>'
+            f'<span class="ss-mat-desc">{desc}</span>'
+            f'<span class="ss-mat-dim">{dim_str}</span>'
+            f'</div>'
+            f'{matrix_table}'
+            f'</div>'
+        )
+
+    return (
+        f'<div class="ss-display-container">'
+        f'<div class="ss-model-header">'
+        f'<div class="ss-model-title">Modelo em Espaço de Estados — {nome}</div>'
+        f'<div class="ss-model-subtitle">'
+        f'Representação canônica do sistema na forma de variáveis de estado'
+        f'</div>'
+        f'</div>'
+        f'<div class="ss-equations">'
+        f'<div class="ss-eq">'
+        f'<span class="eq-dot">x</span>(t) = '
+        f'<span style="color:#60a5fa;font-weight:700;font-style:italic">A</span> '
+        f'x(t) + '
+        f'<span style="color:#34d399;font-weight:700;font-style:italic">B</span> '
+        f'u(t)'
+        f'</div>'
+        f'<div class="ss-eq">'
+        f'y(t) = '
+        f'<span style="color:#fbbf24;font-weight:700;font-style:italic">C</span> '
+        f'x(t) + '
+        f'<span style="color:#f472b6;font-weight:700;font-style:italic">D</span> '
+        f'u(t)'
+        f'</div>'
+        f'</div>'
+        f'<div class="ss-matrices-grid">'
+        f'{cards_html}'
+        f'</div>'
+        f'</div>'
+    )
 
 
 def _coeffs_to_poly_str(coeffs):
@@ -3427,6 +3559,13 @@ def modo_classico():
         html_cards += '</div>'
         st.markdown(html_cards, unsafe_allow_html=True)
 
+        # Exibicao detalhada do espaco de estados para blocos SS
+        for _, row in st.session_state.blocos.iterrows():
+            if row.get('representacao') == 'Espaço de Estados' and row.get('A'):
+                ss_html = _html_ss_display(row)
+                if ss_html:
+                    st.markdown(ss_html, unsafe_allow_html=True)
+
         # Conexoes definidas
         if st.session_state.conexoes:
             simbolos = {'Serie': '\u2192', 'Paralelo': '||',
@@ -3436,17 +3575,6 @@ def modo_classico():
                 f"**{c['tipo']}**: {simbolos.get(c['tipo'], '\u2192').join(c['blocos'])}"
                 for c in st.session_state.conexoes)
             st.markdown(f"**Conexoes:** {conn_txt}")
-
-        # Diagrama de blocos via Plotly (substitui SVG)
-        st.subheader("Diagrama de Blocos")
-        fig_diag = plot_diagrama_blocos_plotly(st.session_state.blocos, st.session_state.conexoes)
-        if fig_diag:
-            st.plotly_chart(fig_diag, use_container_width=True)
-
-        # Botao para abrir no editor visual
-        if st.button("Abrir no Editor Visual (Diagrama de Blocos)", key="btn_to_canvas"):
-            st.session_state.modo_selecionado = 'canvas'
-            st.rerun()
 
         st.markdown("---")
 
@@ -3498,19 +3626,6 @@ def modo_classico():
             # Historico de operacoes / blocos criados por combinacao
             if 'op_historico' not in st.session_state:
                 st.session_state.op_historico = []
-
-            # Diagrama da operacao escolhida
-            if op_g1 and (op_g2 or usar_unit):
-                st.markdown("**Visualização da operação:**")
-                # Mini diagrama via Plotly
-                preview_blocos = st.session_state.blocos[
-                    st.session_state.blocos['nome'].isin([op_g1] + ([op_g2] if op_g2 else []))
-                ]
-                preview_conn = [{'tipo': op_tipo, 'blocos': [op_g1] + ([op_g2] if op_g2 else [])}]
-                fig_prev = plot_diagrama_blocos_plotly(preview_blocos, preview_conn)
-                if fig_prev:
-                    fig_prev.update_layout(height=220, margin=dict(l=10, r=10, t=30, b=10))
-                    st.plotly_chart(fig_prev, use_container_width=True)
 
     st.markdown("---")
 
@@ -3895,12 +4010,34 @@ def _format_complex_list(arr):
 # APLICACAO PRINCIPAL
 # ══════════════════════════════════════════════════
 
+_STREAMLIT_GLOBAL_CSS = """<style>
+    /* Fundo escuro global para Streamlit Cloud */
+    .stApp, [data-testid="stAppViewContainer"],
+    [data-testid="stApp"], [data-testid="stMain"],
+    .main, .block-container, section[data-testid="stSidebar"] {
+        background-color: #0e1117 !important;
+    }
+    [data-testid="stSidebar"] > div {
+        background-color: #1a1d2e !important;
+    }
+    /* Remove fundo branco do iframe do canvas */
+    iframe {
+        background-color: #0e1117 !important;
+        border: none !important;
+    }
+    [data-testid="stHeader"] {
+        background-color: #0e1117 !important;
+    }
+</style>"""
+
+
 def main():
     st.set_page_config(
         page_title="Modelagem de Sistemas de Controle",
         page_icon="&#9881;",
         layout="wide",
     )
+    st.markdown(_STREAMLIT_GLOBAL_CSS, unsafe_allow_html=True)
     inicializar_estado()
 
     if st.session_state.modo_selecionado is None:
