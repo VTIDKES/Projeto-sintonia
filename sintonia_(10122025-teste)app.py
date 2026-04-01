@@ -1652,8 +1652,18 @@ function autoT(tf){
   var m=Infinity;
   ps.forEach(function(p){if(Math.abs(p.r)>1e-6)m=Math.min(m,Math.abs(p.r))});
   return m===Infinity?20:Math.min(200,Math.max(5,8/m))}
-function autoW(tf){var ps=roots(tf.d).concat(roots(tf.n)),fs=ps.map(function(p){return Math.sqrt(p.r*p.r+p.i*p.i)}).filter(function(f){return f>1e-6});
-  if(!fs.length)return{a:.01,b:1000};return{a:Math.max(.001,Math.min.apply(null,fs)/20),b:Math.min(1e5,Math.max.apply(null,fs)*20)}}
+function autoW(tf,tfRef){
+  /* Combina polos/zeros de tf E tfRef (ex: MA original) para range adequado */
+  var allNodes=(tf.d||[]).concat(tf.n||[]);
+  if(tfRef)allNodes=allNodes.concat((tfRef.d||[]),(tfRef.n||[]));
+  var ps=roots(tf.d).concat(roots(tf.n));
+  if(tfRef)ps=ps.concat(roots(tfRef.d),roots(tfRef.n));
+  var fs=ps.map(function(p){return Math.sqrt(p.r*p.r+p.i*p.i)}).filter(function(f){return f>1e-6});
+  if(!fs.length)return{a:.01,b:1000};
+  var wMin=Math.max(1e-3,Math.min.apply(null,fs)/100);
+  var wMax=Math.min(1e5,Math.max.apply(null,fs)*100);
+  if(Math.log10(wMax/wMin)<4)wMax=wMin*1e4;
+  return{a:wMin,b:wMax}}
 
 /* ===== PERF ===== */
 function perf(t,y){if(!y.length)return{};var l=y.slice(Math.floor(y.length*.9)),yf=l.reduce(function(a,b){return a+b},0)/l.length;
@@ -1690,6 +1700,28 @@ function chartXY(id,xD,yD,xL,yL){var el=document.getElementById(id);if(!el)retur
   var lay=Object.assign({},_PT,{xaxis:_pAx(xL),yaxis:_pAx(yL,{scaleanchor:'x'}),height:380,showlegend:true,
     legend:{x:0.01,y:0.99,bgcolor:'rgba(0,0,0,0.3)',font:{color:'#e0e4f0'}},hovermode:'closest'});
   Plotly.newPlot(el,[tr1,tr2,tr3],lay,{responsive:true})}
+
+/* ===== MARGENS DE BODE (sobre malha aberta) ===== */
+function calcGM(bd){
+  /* Ganho na frequencia de cruzamento de fase (-180 graus) */
+  for(var i=1;i<bd.p.length;i++){
+    if(bd.p[i-1]>-180&&bd.p[i]<=-180){
+      var w=(bd.p[i-1]+180)/(bd.p[i-1]-bd.p[i]);
+      var mag=bd.m[i-1]+w*(bd.m[i]-bd.m[i-1]);
+      return -mag; /* GM = -|G(jw_pc)| em dB */
+    }
+  }
+  return Infinity}
+function calcPM(bd){
+  /* Fase na frequencia de cruzamento de ganho (0 dB) */
+  for(var i=1;i<bd.m.length;i++){
+    if(bd.m[i-1]>=0&&bd.m[i]<0){
+      var w=bd.m[i-1]/(bd.m[i-1]-bd.m[i]);
+      var ph=bd.p[i-1]+w*(bd.p[i]-bd.p[i-1]);
+      return ph+180; /* PM = fase + 180 */
+    }
+  }
+  return Infinity}
 
 /* ===== RESULTS ===== */
 function fC(c){if(Math.abs(c.i)<1e-8)return fN(c.r);return fN(c.r)+(c.i>=0?" + ":" - ")+fN(Math.abs(c.i))+"j"}
@@ -1730,7 +1762,7 @@ function showRes(tf){
   var tM=autoT(tfAnalise);
   var sr=forceResp(tfAnalise,curSig,tM,400);
   var pf=perf(sr.t,sr.y);
-  var wr=autoW(tfAnalise),bd=bode(tfAnalise,wr.a,wr.b,400);
+  var wr=autoW(tfAnalise,tf),bd=bode(tfAnalise,wr.a,wr.b,600);
   var nqd=nyq(tfAnalise,wr.a,wr.b,400);
   var lgrData=lgr(tf,300); /* LGR usa sempre a malha aberta */
   var sigNomes={degrau:'Degrau',rampa:'Rampa',senoidal:'Senoidal',impulso:'Impulso',parabolica:'Parabolica'};
@@ -1778,9 +1810,18 @@ function showRes(tf){
     h+='</div></div></div>';
     h+='<div style="margin-top:8px;padding:6px 10px;border-radius:6px;font-weight:700;font-size:13px;'+(stb?'background:#16382a;color:#34d399">ESTAVEL':'background:#3a1520;color:#f87171">INSTAVEL')+'</div></div>';}
   if(selAn.bm){
-    h+='<div class="rcard"><h4>Diagrama De Bode - Magnitude</h4><div id="cBM" style="width:100%;height:320px"></div></div>';}
+    var bmTitle='Diagrama De Bode - Magnitude'+(curMalha==='fechada'?' [Malha Fechada]':' [Malha Aberta]');
+    h+='<div class="rcard"><h4>'+bmTitle+'</h4><div id="cBM" style="width:100%;height:320px"></div></div>';}
   if(selAn.bp){
-    h+='<div class="rcard"><h4>Diagrama De Bode - Fase</h4><div id="cBP" style="width:100%;height:320px"></div></div>';}
+    var bpTitle='Diagrama De Bode - Fase'+(curMalha==='fechada'?' [Malha Fechada]':' [Malha Aberta]');
+    h+='<div class="rcard"><h4>'+bpTitle+'</h4>';
+    /* Calcula margens sobre a malha aberta (correto para ambos os modos) */
+    var bdMA=bode(tf,wr.a,wr.b,600);
+    var gm=calcGM(bdMA),pm=calcPM(bdMA);
+    h+='<div style="display:flex;gap:16px;margin-bottom:6px;flex-wrap:wrap">';
+    h+='<span style="font-size:12px;color:var(--txm)">Margem de Ganho (MA): <b style="color:'+(gm>0?'#34d399':'#f87171')+'">'+fN(gm)+' dB</b></span>';
+    h+='<span style="font-size:12px;color:var(--txm)">Margem de Fase (MA): <b style="color:'+(pm>0?'#34d399':'#f87171')+'">'+fN(pm)+'°</b></span>';
+    h+='</div><div id="cBP" style="width:100%;height:320px"></div></div>';}
   if(curMalha==='aberta'&&selAn.nyqst){
     h+='<div class="rcard"><h4>Nyquist</h4><div id="cNyq" style="width:100%;height:380px"></div>';
     var nps=roots(tf.d),npsd=0;nps.forEach(function(p){if(p.r>1e-6)npsd++});
