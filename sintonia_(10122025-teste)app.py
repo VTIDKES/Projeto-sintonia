@@ -1567,8 +1567,9 @@ function forceResp(tf,sig,tMax,nP){var ln2=Math.LN2,ts=[],ys=[],us=[];var om=2*M
       var uv;if(sig==='rampa')uv=1/(sv*sv);else if(sig==='impulso')uv=1;
       else if(sig==='parabolica')uv=2/(sv*sv*sv);else if(sig==='senoidal')uv=om/(sv*sv+om*om);
       else uv=1/sv;
-      s+=SV[j]*nv*uv/dv}
-    ys.push(s*ln2/t);
+      var contrib=SV[j]*nv*uv/dv;
+      if(isFinite(contrib))s+=contrib}
+    var yv=s*ln2/t;ys.push(isFinite(yv)?yv:0);
     if(sig==='rampa')us.push(t);else if(sig==='senoidal')us.push(Math.sin(om*t));
     else if(sig==='impulso')us.push(i===0?nP/tMax:0);else if(sig==='parabolica')us.push(t*t);
     else us.push(1)}
@@ -1642,8 +1643,15 @@ function bode(tf,wMin,wMax,nP){var fs=[],ms=[],ps=[],lm=Math.log10(wMin),lx=Math
   return{w:fs,m:ms,p:ps}}
 
 /* ===== AUTO RANGES ===== */
-function autoT(tf){var ps=roots(tf.d);if(!ps.length)return 10;var m=Infinity;
-  ps.forEach(function(p){if(Math.abs(p.r)>1e-6)m=Math.min(m,Math.abs(p.r))});return m===Infinity?10:Math.min(100,Math.max(2,7/m))}
+function autoT(tf){
+  var ps=roots(tf.d);if(!ps.length)return 20;
+  var temInstavel=ps.some(function(p){return p.r>1e-4});
+  if(temInstavel)return 15;
+  var temZero=ps.some(function(p){return Math.abs(p.r)<1e-6&&Math.abs(p.i)<1e-6});
+  if(temZero)return 50;
+  var m=Infinity;
+  ps.forEach(function(p){if(Math.abs(p.r)>1e-6)m=Math.min(m,Math.abs(p.r))});
+  return m===Infinity?20:Math.min(200,Math.max(5,8/m))}
 function autoW(tf){var ps=roots(tf.d).concat(roots(tf.n)),fs=ps.map(function(p){return Math.sqrt(p.r*p.r+p.i*p.i)}).filter(function(f){return f>1e-6});
   if(!fs.length)return{a:.01,b:1000};return{a:Math.max(.001,Math.min.apply(null,fs)/20),b:Math.min(1e5,Math.max.apply(null,fs)*20)}}
 
@@ -1700,15 +1708,22 @@ function showRes(tf){
   rd.classList.add("vis");
   /* Se malha fechada: calcula FTMF = G/(1+G) com realimentacao unitaria negativa */
   var tfAnalise=tf;
+  var ftmfErro=null;
   if(curMalha==='fechada'){
-    /* FTMF num = G.num * G.den_unit = G.num */
-    /* FTMF den = G.den + G.num */
-    var ftmfNum=pTrim(tf.n.slice());
-    var ftmfDen=pTrim(pAdd(tf.d,tf.n));
-    tfAnalise=pfReduce({n:ftmfNum,d:ftmfDen});
-    /* Normaliza pelo coef lider do denominador */
-    var lc2=tfAnalise.d[tfAnalise.d.length-1];
-    if(Math.abs(lc2)>1e-14&&Math.abs(lc2-1)>1e-10){tfAnalise.n=pScl(tfAnalise.n,1/lc2);tfAnalise.d=pScl(tfAnalise.d,1/lc2)}
+    try{
+      var ftmfNum=pTrim(tf.n.slice());
+      var ftmfDen=pTrim(pAdd(tf.d,tf.n));
+      /* Verifica se denominador nao degenerou (coef lider quase zero) */
+      var lc2=ftmfDen[ftmfDen.length-1];
+      if(Math.abs(lc2)<1e-10){
+        ftmfErro="Denominador da FTMF degenerado (G/(1+G) instável ou cancelamento).";
+        tfAnalise=tf; /* fallback para MA */
+      } else {
+        var reduced=pfReduce({n:ftmfNum,d:ftmfDen});
+        if(Math.abs(lc2-1)>1e-10){reduced.n=pScl(reduced.n,1/lc2);reduced.d=pScl(reduced.d,1/lc2)}
+        tfAnalise=reduced;
+      }
+    }catch(err){ftmfErro="Erro ao calcular FTMF: "+String(err);tfAnalise=tf;}
   }
   var ns=fP(tfAnalise.n),ds=fP(tfAnalise.d);
   var ps=roots(tfAnalise.d),zs=roots(tfAnalise.n),stb=ps.every(function(p){return p.r<1e-6});
@@ -1743,7 +1758,9 @@ function showRes(tf){
   chks.forEach(function(c){h+='<label style="font-size:12px;cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" '+(selAn[c[0]]?'checked':'')+' onchange="selAn.'+c[0]+'=this.checked;reRender()"> '+c[1]+'</label>'});
   h+='</div></div>';
   var tLabel=curMalha==='fechada'?'T(s) - Malha Fechada [G/(1+G)]':'G(s) - Malha Aberta';
-  h+='<div class="rcard"><h4>'+tLabel+'</h4><div class="tf-disp"><div style="display:inline-block;text-align:center"><div style="padding:0 8px">'+esc(ns)+'</div><div style="border-top:2px solid var(--acc);padding:4px 8px 0">'+esc(ds)+'</div></div></div></div>';
+  h+='<div class="rcard"><h4>'+tLabel+'</h4>';
+  if(ftmfErro)h+='<div style="color:#fbbf24;font-size:11px;margin-bottom:6px">⚠ '+esc(ftmfErro)+' Exibindo malha aberta como fallback.</div>';
+  h+='<div class="tf-disp"><div style="display:inline-block;text-align:center"><div style="padding:0 8px">'+esc(ns)+'</div><div style="border-top:2px solid var(--acc);padding:4px 8px 0">'+esc(ds)+'</div></div></div></div>';
   /* NOTA: Plotly requer <div>, nao <canvas>. Todos os containers sao <div> com altura explicita. */
   if(selAn.tempo){
     h+='<div class="rcard"><h4>Resposta no Tempo - '+sigNomes[curSig]+'</h4><div id="cStep" style="width:100%;height:320px"></div></div>';}
@@ -1774,13 +1791,13 @@ function showRes(tf){
   rb.innerHTML=h;
   /* Aguarda o DOM ser atualizado antes de chamar Plotly */
   setTimeout(function(){
-    if(selAn.tempo)chart2("cStep",sr.t,sr.u,sr.y,"Tempo (s)","Amplitude");
-    if(selAn.pz)chartPZ("cPZ",ps,zs);
-    if(selAn.bm)chart("cBM",bd.w,bd.m,"w (rad/s)","dB","#60a5fa",true);
-    if(selAn.bp)chart("cBP",bd.w,bd.p,"w (rad/s)","graus","#f472b6",true);
-    if(curMalha==='aberta'&&selAn.nyqst)chartXY("cNyq",nqd.re,nqd.im,"Parte Real","Parte Imaginaria");
-    if(curMalha==='fechada'&&selAn.lgr)chartLGR("cLGR",lgrData,tf); /* LGR usa malha aberta */
-  },50);
+    try{if(selAn.tempo)chart2("cStep",sr.t,sr.u,sr.y,"Tempo (s)","Amplitude");}catch(e){}
+    try{if(selAn.pz)chartPZ("cPZ",ps,zs);}catch(e){}
+    try{if(selAn.bm)chart("cBM",bd.w,bd.m,"w (rad/s)","dB","#60a5fa",true);}catch(e){}
+    try{if(selAn.bp)chart("cBP",bd.w,bd.p,"w (rad/s)","graus","#f472b6",true);}catch(e){}
+    try{if(curMalha==='aberta'&&selAn.nyqst)chartXY("cNyq",nqd.re,nqd.im,"Parte Real","Parte Imaginaria");}catch(e){}
+    try{if(curMalha==='fechada'&&selAn.lgr)chartLGR("cLGR",lgrData,tf);}catch(e){} /* LGR usa malha aberta */
+  },150);
   rd.scrollIntoView({behavior:"smooth"})}
 
 /* ===== MODE SWITCHING ===== */
