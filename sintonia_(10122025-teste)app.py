@@ -1698,14 +1698,26 @@ function showRes(tf){
   _lastTF=tf;
   var rd=document.getElementById("res"),rb=document.getElementById("rb");
   rd.classList.add("vis");
-  var ns=fP(tf.n),ds=fP(tf.d);
-  var ps=roots(tf.d),zs=roots(tf.n),stb=ps.every(function(p){return p.r<1e-6});
-  var tM=autoT(tf);
-  var sr=forceResp(tf,curSig,tM,400);
+  /* Se malha fechada: calcula FTMF = G/(1+G) com realimentacao unitaria negativa */
+  var tfAnalise=tf;
+  if(curMalha==='fechada'){
+    /* FTMF num = G.num * G.den_unit = G.num */
+    /* FTMF den = G.den + G.num */
+    var ftmfNum=pTrim(tf.n.slice());
+    var ftmfDen=pTrim(pAdd(tf.d,tf.n));
+    tfAnalise=pfReduce({n:ftmfNum,d:ftmfDen});
+    /* Normaliza pelo coef lider do denominador */
+    var lc2=tfAnalise.d[tfAnalise.d.length-1];
+    if(Math.abs(lc2)>1e-14&&Math.abs(lc2-1)>1e-10){tfAnalise.n=pScl(tfAnalise.n,1/lc2);tfAnalise.d=pScl(tfAnalise.d,1/lc2)}
+  }
+  var ns=fP(tfAnalise.n),ds=fP(tfAnalise.d);
+  var ps=roots(tfAnalise.d),zs=roots(tfAnalise.n),stb=ps.every(function(p){return p.r<1e-6});
+  var tM=autoT(tfAnalise);
+  var sr=forceResp(tfAnalise,curSig,tM,400);
   var pf=perf(sr.t,sr.y);
-  var wr=autoW(tf),bd=bode(tf,wr.a,wr.b,400);
-  var nqd=nyq(tf,wr.a,wr.b,400);
-  var lgrData=lgr(tf,300);
+  var wr=autoW(tfAnalise),bd=bode(tfAnalise,wr.a,wr.b,400);
+  var nqd=nyq(tfAnalise,wr.a,wr.b,400);
+  var lgrData=lgr(tf,300); /* LGR usa sempre a malha aberta */
   var sigNomes={degrau:'Degrau',rampa:'Rampa',senoidal:'Senoidal',impulso:'Impulso',parabolica:'Parabolica'};
   var h='';
   var ss='background:var(--sf2);border:1px solid var(--bd);border-radius:6px;color:var(--tx);padding:5px 10px;font-size:12px';
@@ -1730,7 +1742,8 @@ function showRes(tf){
   h+='<div style="display:flex;flex-wrap:wrap;gap:8px 16px">';
   chks.forEach(function(c){h+='<label style="font-size:12px;cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" '+(selAn[c[0]]?'checked':'')+' onchange="selAn.'+c[0]+'=this.checked;reRender()"> '+c[1]+'</label>'});
   h+='</div></div>';
-  h+='<div class="rcard"><h4>T(s)</h4><div class="tf-disp"><div style="display:inline-block;text-align:center"><div style="padding:0 8px">'+esc(ns)+'</div><div style="border-top:2px solid var(--acc);padding:4px 8px 0">'+esc(ds)+'</div></div></div></div>';
+  var tLabel=curMalha==='fechada'?'T(s) - Malha Fechada [G/(1+G)]':'G(s) - Malha Aberta';
+  h+='<div class="rcard"><h4>'+tLabel+'</h4><div class="tf-disp"><div style="display:inline-block;text-align:center"><div style="padding:0 8px">'+esc(ns)+'</div><div style="border-top:2px solid var(--acc);padding:4px 8px 0">'+esc(ds)+'</div></div></div></div>';
   /* NOTA: Plotly requer <div>, nao <canvas>. Todos os containers sao <div> com altura explicita. */
   if(selAn.tempo){
     h+='<div class="rcard"><h4>Resposta no Tempo - '+sigNomes[curSig]+'</h4><div id="cStep" style="width:100%;height:320px"></div></div>';}
@@ -1766,7 +1779,7 @@ function showRes(tf){
     if(selAn.bm)chart("cBM",bd.w,bd.m,"w (rad/s)","dB","#60a5fa",true);
     if(selAn.bp)chart("cBP",bd.w,bd.p,"w (rad/s)","graus","#f472b6",true);
     if(curMalha==='aberta'&&selAn.nyqst)chartXY("cNyq",nqd.re,nqd.im,"Parte Real","Parte Imaginaria");
-    if(curMalha==='fechada'&&selAn.lgr)chartLGR("cLGR",lgrData,tf);
+    if(curMalha==='fechada'&&selAn.lgr)chartLGR("cLGR",lgrData,tf); /* LGR usa malha aberta */
   },50);
   rd.scrollIntoView({behavior:"smooth"})}
 
