@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 """
 Sistema de Modelagem e Analise de Sistemas de Controle v2.0
@@ -1025,85 +1026,6 @@ def _render_ss_widget(uid, key_prefix):
 def modo_classico():
     st.title("Modo Clássico — Função de Transferência")
 
-    # CSS global para melhorar aparência da sidebar
-    st.markdown("""
-    <style>
-    [data-testid="stSidebar"] .block-container { padding-top: 1rem; }
-    .bloco-card {
-        background: linear-gradient(135deg, #1a1d2e, #252840);
-        border: 1px solid #333654;
-        border-radius: 10px;
-        padding: 12px 14px;
-        margin-bottom: 10px;
-        position: relative;
-    }
-    .bloco-card-header {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 6px;
-    }
-    .bloco-tipo-badge {
-        font-size: 10px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: .5px;
-        padding: 2px 8px;
-        border-radius: 20px;
-        background: rgba(91,107,224,.15);
-        color: #5b6be0;
-        border: 1px solid rgba(91,107,224,.3);
-    }
-    .bloco-nome {
-        font-size: 14px;
-        font-weight: 700;
-        color: #e0e4f0;
-    }
-    .bloco-tf {
-        font-family: monospace;
-        font-size: 12px;
-        background: rgba(0,0,0,.3);
-        border-radius: 6px;
-        padding: 6px 10px;
-        color: #a0b8d8;
-        text-align: center;
-    }
-    .bloco-tf-num {
-        border-bottom: 1px solid rgba(255,255,255,.15);
-        padding-bottom: 3px;
-        margin-bottom: 3px;
-        color: #e0e4f0;
-    }
-    .bloco-repr-badge {
-        font-size: 9px;
-        color: #34d399;
-        background: rgba(52,211,153,.1);
-        border: 1px solid rgba(52,211,153,.2);
-        border-radius: 4px;
-        padding: 1px 6px;
-        margin-top: 5px;
-        display: inline-block;
-    }
-    .conn-item-display {
-        background: rgba(91,107,224,.08);
-        border: 1px solid rgba(91,107,224,.2);
-        border-radius: 7px;
-        padding: 7px 10px;
-        margin-bottom: 6px;
-        font-size: 12px;
-        color: #c8cad8;
-    }
-    .conn-tipo {
-        font-size: 10px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: .4px;
-        color: #a78bfa;
-        margin-bottom: 2px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
     with st.sidebar:
         st.header("Navegação")
         if st.button("← Voltar à Tela Inicial", use_container_width=True):
@@ -1111,10 +1033,19 @@ def modo_classico():
             st.rerun()
 
         st.markdown("---")
-        st.header("➕ Adicionar Bloco")
 
-        nome = st.text_input("Nome do bloco", value=f"G{len(st.session_state.blocos)+1}")
-        tipo = st.selectbox("Tipo", ['Planta', 'Controlador', 'Sensor', 'Atuador'])
+        # ── Planta (primeira TF) ──
+        tem_planta = not st.session_state.blocos.empty
+        if not tem_planta:
+            st.header("Planta G(s)")
+            st.caption("Insira a função de transferência principal.")
+        else:
+            st.header("Adicionar Função de Transferência")
+
+        nome = st.text_input(
+            "Nome",
+            value=f"G{len(st.session_state.blocos)+1}",
+            key="cl_nome")
 
         representacao = st.radio(
             "Representação",
@@ -1128,117 +1059,75 @@ def modo_classico():
             denominador = st.text_input("Denominador", placeholder="ex: s^2+2s+3", key="cl_den")
             A_str = B_str = C_str = D_str = ''
         else:
-            # Espaço de Estados — widget bonito
             A_str, B_str, C_str, D_str = _render_ss_widget("sidebar", "cl_sidebar")
             numerador = denominador = ''
 
-        if st.button("✚ Adicionar", type="primary", use_container_width=True):
-            ok, msg = adicionar_bloco(nome, tipo, representacao,
+        # Se já existe planta, pedir operação
+        if tem_planta:
+            operacao_nova = st.selectbox(
+                "Operação com o sistema atual",
+                CONNECTION_TYPES,
+                key="cl_op_tipo")
+            if operacao_nova in ['Realimentacao Negativa', 'Realimentacao Positiva']:
+                st.caption("A nova TF será usada como H(s) na realimentação.")
+
+        if st.button(
+                "Definir Planta" if not tem_planta else "Adicionar e Aplicar",
+                type="primary", use_container_width=True):
+            tipo_bloco = 'Planta' if not tem_planta else 'Planta'
+            ok, msg = adicionar_bloco(nome, tipo_bloco, representacao,
                                       numerador, denominador,
                                       A_str, B_str, C_str, D_str)
             if ok:
+                if tem_planta:
+                    # Auto-aplicar operação com o bloco anterior
+                    nomes_existentes = list(st.session_state.blocos['nome'])
+                    # O bloco recém-adicionado é o último
+                    bloco_novo = nomes_existentes[-1]
+                    # O sistema acumulado até agora: usar todos os anteriores
+                    blocos_anteriores = nomes_existentes[:-1]
+                    if len(blocos_anteriores) >= 1:
+                        bloco_base = blocos_anteriores[-1]
+                        st.session_state.conexoes.append({
+                            'tipo': operacao_nova,
+                            'blocos': [bloco_base, bloco_novo],
+                        })
                 st.success(msg)
                 st.rerun()
             else:
                 st.error(msg)
 
-        # ── Blocos existentes ──
+        # ── Lista simples de TFs no sistema ──
         if not st.session_state.blocos.empty:
             st.markdown("---")
-            st.subheader("📦 Blocos do Sistema")
+            st.subheader("Sistema Atual")
 
-            CORES_TIPO = {
-                'Planta': '#60a5fa', 'Controlador': '#a78bfa',
-                'Sensor': '#f472b6', 'Atuador': '#34d399',
-                'Pre-filtro': '#fbbf24', 'Perturbacao': '#f87171',
-            }
-            ICONES_TIPO = {
-                'Planta': 'G(s)', 'Controlador': 'C(s)',
-                'Sensor': 'H(s)', 'Atuador': 'A(s)',
-                'Pre-filtro': 'F(s)', 'Perturbacao': 'D(s)',
-            }
+            simbolos = {'Serie': ' → ', 'Paralelo': ' || ',
+                        'Realimentacao Negativa': ' -fb ',
+                        'Realimentacao Positiva': ' +fb '}
 
             for idx, row in st.session_state.blocos.iterrows():
-                cor = CORES_TIPO.get(row['tipo'], '#8890b0')
-                icone = ICONES_TIPO.get(row['tipo'], '?')
                 tf_obj = row['tf']
                 num_s = _tf_to_str(tf_obj.num[0][0])
                 den_s = _tf_to_str(tf_obj.den[0][0])
-                repr_badge = "SS→TF" if row['representacao'] == 'Espaço de Estados' else "TF"
-
-                st.markdown(f"""
-                <div class="bloco-card" style="border-left: 3px solid {cor}">
-                    <div class="bloco-card-header">
-                        <span style="font-size:16px;font-weight:800;color:{cor}">{icone}</span>
-                        <span class="bloco-nome">{row['nome']}</span>
-                        <span class="bloco-tipo-badge" style="color:{cor};border-color:{cor}40;background:{cor}15">{row['tipo']}</span>
-                    </div>
-                    <div class="bloco-tf">
-                        <div class="bloco-tf-num">{num_s}</div>
-                        <div>{den_s}</div>
-                    </div>
-                    <span class="bloco-repr-badge">{repr_badge}</span>
-                </div>
-                """, unsafe_allow_html=True)
-
-                if st.button(f"🗑 Remover {row['nome']}", key=f"rm_cl_{idx}",
+                # Encontrar operação associada
+                op_label = ""
+                if idx > 0:
+                    for con in st.session_state.conexoes:
+                        if row['nome'] in con['blocos'] and con['blocos'][-1] == row['nome']:
+                            op_label = f" [{con['tipo']}]"
+                            break
+                st.text(f"{row['nome']}: ({num_s}) / ({den_s}){op_label}")
+                if st.button(f"Remover {row['nome']}", key=f"rm_cl_{idx}",
                              use_container_width=True):
                     remover_bloco(row['nome'])
                     st.rerun()
 
-        # ── Conexões ──
-        if len(st.session_state.blocos) >= 2:
-            st.markdown("---")
-            st.subheader("🔗 Conexões")
-            tipo_conexao = st.selectbox(
-                "Tipo de conexão", CONNECTION_TYPES, key="conn_tipo_classico")
-            nomes_disp = list(st.session_state.blocos['nome'])
-
-            if tipo_conexao in ['Realimentacao Negativa', 'Realimentacao Positiva']:
-                st.caption("Bloco 1 = G(s) direto  |  Bloco 2 = H(s) feedback")
-                max_sel = 2
-            else:
-                max_sel = len(nomes_disp)
-
-            blocos_conexao = st.multiselect(
-                "Blocos (na ordem)", nomes_disp,
-                max_selections=max_sel, key="conn_blocos_classico")
-
-            if st.button("＋ Adicionar Conexão", key="btn_add_conn", use_container_width=True):
-                if len(blocos_conexao) < 2:
-                    st.error("Selecione pelo menos 2 blocos.")
-                else:
-                    st.session_state.conexoes.append({
-                        'tipo': tipo_conexao,
-                        'blocos': blocos_conexao,
-                    })
-                    st.success(f"Conexão adicionada.")
-                    st.rerun()
-
-            if st.session_state.conexoes:
-                st.markdown("**Conexões definidas:**")
-                simbolos = {'Serie': '→', 'Paralelo': '‖',
-                            'Realimentacao Negativa': '−fb→',
-                            'Realimentacao Positiva': '+fb→'}
-                for i, con in enumerate(st.session_state.conexoes):
-                    st.markdown(f"""
-                    <div class="conn-item-display">
-                        <div class="conn-tipo">{con['tipo']}</div>
-                        {(' ' + simbolos.get(con['tipo'], '→') + ' ').join(con['blocos'])}
-                    </div>
-                    """, unsafe_allow_html=True)
-                    if st.button("✕ Remover", key=f"rmcon_c_{i}", use_container_width=True):
-                        st.session_state.conexoes.pop(i)
-                        st.rerun()
-        else:
-            if not st.session_state.blocos.empty:
-                st.caption("Adicione pelo menos 2 blocos para definir conexões.")
-
         st.markdown("---")
-        st.header("⚙️ Configurações")
-        lbl_erro = ("✅ Desabilitar Cálculo de Erro"
+        st.header("Configurações")
+        lbl_erro = ("Desabilitar Cálculo de Erro"
                     if st.session_state.calculo_erro_habilitado
-                    else "📐 Habilitar Cálculo de Erro")
+                    else "Habilitar Cálculo de Erro")
         if st.button(lbl_erro, use_container_width=True):
             st.session_state.calculo_erro_habilitado = (
                 not st.session_state.calculo_erro_habilitado)
@@ -1248,7 +1137,7 @@ def modo_classico():
 
     # Cálculo de erro
     if st.session_state.calculo_erro_habilitado:
-        st.subheader("📐 Cálculo de Erro Estacionário")
+        st.subheader("Cálculo de Erro Estacionário")
         c1, c2 = st.columns(2)
         with c1:
             num_erro = st.text_input("Numerador G(s)", value="", key="num_erro")
@@ -1268,64 +1157,29 @@ def modo_classico():
                 st.error(f"Erro: {e}")
         st.markdown("---")
 
-    # ── Painel de Operações ──
-    if len(st.session_state.blocos) >= 2:
-        with st.expander("⚙️ Operações entre Sistemas (Série / Paralelo / Realimentação)", expanded=False):
-            nomes_blocos = list(st.session_state.blocos['nome'])
-            op_col1, op_col2, op_col3 = st.columns([1, 1, 1])
-
-            with op_col1:
-                op_g1  = st.selectbox("Sistema G₁", nomes_blocos, key="op_g1")
-                op_tipo = st.selectbox("Operação", CONNECTION_TYPES, key="op_tipo")
-
-            with op_col2:
-                usar_unit = False
-                if op_tipo in ['Realimentacao Negativa', 'Realimentacao Positiva']:
-                    usar_unit = st.checkbox("H(s) = 1 (unitária)", value=True, key="op_unit")
-                    op_g2 = None if usar_unit else st.selectbox("H(s) = G₂", nomes_blocos, key="op_g2_fb")
-                else:
-                    op_g2 = st.selectbox("Sistema G₂", nomes_blocos, key="op_g2")
-
-            with op_col3:
-                nome_res = st.text_input("Nome do resultado", value="G_res", key="op_nome_res")
-                if st.button("▶ Calcular Operação", type="primary", key="btn_op", use_container_width=True):
-                    ok, msg, tf_res = calcular_operacao_entre_sistemas(
-                        nome_res, op_g1, op_tipo, op_g2, usar_unit)
-                    if ok:
-                        st.success(msg)
-                        if tf_res is not None:
-                            n_s = _tf_to_str(tf_res.num[0][0])
-                            d_s = _tf_to_str(tf_res.den[0][0])
-                            st.latex(f"{nome_res}(s) = \\frac{{{n_s}}}{{{d_s}}}")
-                        st.rerun()
-                    else:
-                        st.error(msg)
-
-    st.markdown("---")
-
     # ── Configuração de análise ──
     col1, col2 = st.columns([2, 1])
 
     with col2:
-        st.subheader("⚙️ Configuração")
+        st.subheader("Configuração")
         tipo_malha = st.selectbox("Tipo de Sistema", ["Malha Aberta", "Malha Fechada"])
         usar_ganho = st.checkbox("Adicionar ganho K ajustável", value=False)
         K = st.slider("Ganho K", 0.1, 100.0, 1.0, 0.1) if usar_ganho else 1.0
 
-        st.subheader("📊 Análises")
+        st.subheader("Análises")
         chave = "malha_fechada" if tipo_malha == "Malha Fechada" else "malha_aberta"
         analise_opcoes = ANALYSIS_OPTIONS[chave]
         analises = st.multiselect("Escolha:", analise_opcoes, default=[analise_opcoes[0]])
         entrada = st.selectbox("Sinal de Entrada", INPUT_SIGNALS)
 
     with col1:
-        st.subheader("📈 Resultados")
+        st.subheader("Resultados")
 
-        if st.button("▶ Executar Simulação", use_container_width=True, type="primary"):
+        if st.button("Executar Simulação", use_container_width=True, type="primary"):
             try:
                 df = st.session_state.blocos
                 if df.empty:
-                    st.warning("Adicione blocos primeiro.")
+                    st.warning("Adicione a planta primeiro.")
                     st.stop()
 
                 ganho_tf = TransferFunction([K], [1])
@@ -1339,7 +1193,7 @@ def modo_classico():
                             c['tipo'].startswith('Realimentacao')
                             for c in st.session_state.conexoes):
                         sistema = ctrl.feedback(sistema, TransferFunction([1], [1]))
-                    label_extra = " (conexões definidas)"
+                    label_extra = " (com conexões)"
                 else:
                     planta      = obter_bloco_por_tipo('Planta')
                     controlador = obter_bloco_por_tipo('Controlador')
@@ -1606,7 +1460,7 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 <div class="manual-sec" id="manualSec">
 <div class="man-tabs">
 <button class="man-tab active" id="subDirect" onclick="setSubMode('direct')">T(s) Direta</button>
-<button class="man-tab" id="subClosed" onclick="setSubMode('closed')">Malha Fechada G/(1+GH)</button>
+<button class="man-tab" id="subClosed" onclick="setSubMode('closed')">Malha Fechada</button>
 <button class="man-tab" id="subOpen" onclick="setSubMode('open')">Malha Aberta G*H</button>
 <button class="man-tab" id="subSS" onclick="setSubMode('ss')">Espaco de Estados</button>
 </div>
@@ -1619,7 +1473,14 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 <div class="man-hint">Formato: <code>s^2+3s+1</code> ou <code>2s^3+s+5</code>. Use <code>^</code> para potencias.</div>
 </div>
 <div id="manClosed" style="display:none">
-<h4>Malha Fechada: T(s) = G(s) / (1 + G(s)&middot;H(s))</h4>
+<div class="man-row" style="margin-bottom:8px">
+<div class="pg"><label>Tipo de Realimentacao</label>
+<select id="manFbType" style="width:100%;padding:8px;background:var(--sf2);border:1px solid var(--bd);border-radius:6px;color:var(--tx);font-size:13px" onchange="updateFbLabel()">
+<option value="neg">Negativa: T(s) = G / (1 + G&middot;H)</option>
+<option value="pos">Positiva: T(s) = G / (1 - G&middot;H)</option>
+</select></div>
+</div>
+<h4 id="manClosedLabel">Malha Fechada: T(s) = G(s) / (1 + G(s)&middot;H(s))</h4>
 <div class="man-row">
 <div class="pg"><label>G(s) Numerador</label><input id="manGN" value="10" placeholder="ex: 10"></div>
 <div class="pg"><label>G(s) Denominador</label><input id="manGD" value="s^2+3s+1" placeholder="ex: s^2+3s+1"></div>
@@ -1781,7 +1642,7 @@ function autoW(tf){var ps=roots(tf.d).concat(roots(tf.n));var fs=ps.map(function
 function perf(t,y){if(!y.length)return{};var l=y.slice(Math.floor(y.length*.9)),yf=l.reduce(function(a,b){return a+b},0)/l.length;var ym=Math.max.apply(null,y),os=Math.abs(yf)>1e-6?Math.max(0,(ym-yf)/Math.abs(yf)*100):0;var t10=null,t90=null;if(yf>0)for(var i=0;i<y.length;i++){if(t10===null&&y[i]>=yf*.1)t10=t[i];if(t90===null&&y[i]>=yf*.9){t90=t[i];break}}var tr=t10!==null&&t90!==null?t90-t10:NaN,ts2=NaN;if(Math.abs(yf)>1e-6)for(var i=y.length-1;i>=0;i--)if(Math.abs(y[i]-yf)>.02*Math.abs(yf)){ts2=i<y.length-1?t[i+1]:t[i];break}return{"Valor Final":fN(yf),"Sobressinal":fN(os)+"%","T. Subida":isNaN(tr)?"N/A":fN(tr)+"s","T. Acomod.":isNaN(ts2)?"N/A":fN(ts2)+"s","Pico":fN(ym)}}
 function fC(c){if(Math.abs(c.i)<1e-8)return fN(c.r);return fN(c.r)+(c.i>=0?" + ":" - ")+fN(Math.abs(c.i))+"j"}
 function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
-var curSig='degrau',curMalha='aberta';
+var curSig='degrau',curMalha='aberta',curFbSign='neg';
 var selAn={tempo:true,desemp:true,pz:true,bm:true,bp:true,nyqst:true,lgr:true};
 var _lastTF=null;
 function reRender(){if(_lastTF)showRes(_lastTF)}
@@ -1790,7 +1651,7 @@ function calcPM(bd){for(var i=1;i<bd.m.length;i++){if(bd.m[i-1]>=0&&bd.m[i]<0){v
 function showRes(tf){
   _lastTF=tf;var rd=document.getElementById("res"),rb=document.getElementById("rb");rd.classList.add("vis");
   var tfAnalise=tf;var ftmfErro=null;
-  if(curMalha==='fechada'){try{var ftmfNum=pTrim(tf.n.slice());var ftmfDen=pTrim(pAdd(tf.d,tf.n));var lc2=ftmfDen[ftmfDen.length-1];if(Math.abs(lc2)<1e-10){ftmfErro="Denominador da FTMF degenerado.";tfAnalise=tf;}else{var reduced=pfReduce({n:ftmfNum,d:ftmfDen});if(Math.abs(lc2-1)>1e-10){reduced.n=pScl(reduced.n,1/lc2);reduced.d=pScl(reduced.d,1/lc2)}tfAnalise=reduced;}}catch(err){ftmfErro="Erro ao calcular FTMF: "+String(err);tfAnalise=tf;}}
+  if(curMalha==='fechada'){try{var ftmfNum=pTrim(tf.n.slice());var ftmfDen=curFbSign==='pos'?pTrim(pSub(tf.d,tf.n)):pTrim(pAdd(tf.d,tf.n));var lc2=ftmfDen[ftmfDen.length-1];if(Math.abs(lc2)<1e-10){ftmfErro="Denominador da FTMF degenerado.";tfAnalise=tf;}else{var reduced=pfReduce({n:ftmfNum,d:ftmfDen});if(Math.abs(lc2-1)>1e-10){reduced.n=pScl(reduced.n,1/lc2);reduced.d=pScl(reduced.d,1/lc2)}tfAnalise=reduced;}}catch(err){ftmfErro="Erro ao calcular FTMF: "+String(err);tfAnalise=tf;}}
   var ns=fP(tfAnalise.n),ds=fP(tfAnalise.d);var ps=roots(tfAnalise.d),zs=roots(tfAnalise.n),stb=ps.every(function(p){return p.r<1e-6});var tM=autoT(tfAnalise);var sr=forceResp(tfAnalise,curSig,tM,400);var pf=perf(sr.t,sr.y);var wr=autoW(tfAnalise),bd=bode(tfAnalise,wr.a,wr.b,600);var nqd=nyq(tfAnalise,wr.a,wr.b,400);var lgrData=lgr(tf,300);
   var sigNomes={degrau:'Degrau',rampa:'Rampa',senoidal:'Senoidal',impulso:'Impulso',parabolica:'Parabolica'};
   var h='';var ss='background:var(--sf2);border:1px solid var(--bd);border-radius:6px;color:var(--tx);padding:5px 10px;font-size:12px';
@@ -1801,6 +1662,7 @@ function showRes(tf){
   h+='<option value="aberta"'+(curMalha==='aberta'?' selected':'')+'>Malha Aberta</option>';
   h+='<option value="fechada"'+(curMalha==='fechada'?' selected':'')+'>Malha Fechada</option>';
   h+='</select></div>';
+  if(curMalha==='fechada'){h+='<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px;color:var(--txm);font-weight:600">Realimentacao:</span>';h+='<select onchange="curFbSign=this.value;reRender()" style="'+ss+';font-weight:600">';h+='<option value="neg"'+(curFbSign==='neg'?' selected':'')+'>Negativa G/(1+GH)</option>';h+='<option value="pos"'+(curFbSign==='pos'?' selected':'')+'>Positiva G/(1-GH)</option>';h+='</select></div>';}
   h+='<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px;color:var(--txm)">Sinal:</span>';
   h+='<select onchange="curSig=this.value;reRender()" style="'+ss+'">';
   ['degrau','rampa','senoidal','impulso','parabolica'].forEach(function(s){h+='<option value="'+s+'"'+(curSig===s?' selected':'')+'>'+sigNomes[s]+'</option>'});
@@ -1835,12 +1697,13 @@ function showRes(tf){
     try{if(curMalha==='fechada'&&selAn.lgr)chartLGR("cLGR",lgrData,tf);}catch(e){}
   },150);rd.scrollIntoView({behavior:"smooth"})}
 var curMode="diag",curSubMode="direct";
+function updateFbLabel(){var sel=document.getElementById("manFbType");var lbl=document.getElementById("manClosedLabel");if(sel&&lbl){if(sel.value==="pos"){lbl.innerHTML="Malha Fechada: T(s) = G(s) / (1 - G(s)&middot;H(s))";}else{lbl.innerHTML="Malha Fechada: T(s) = G(s) / (1 + G(s)&middot;H(s))";}} }
 function setMode(m){curMode=m;document.getElementById("modeDiag").classList.toggle("active",m==="diag");document.getElementById("modeMan").classList.toggle("active",m==="manual");document.getElementById("diag-workspace").style.display=m==="diag"?"flex":"none";document.getElementById("diag-toolbar").style.display=m==="diag"?"flex":"none";document.getElementById("manualSec").classList.toggle("vis",m==="manual");document.getElementById("btnCalcMain").innerHTML=m==="diag"?"&#9654; CALCULAR DIAGRAMA":"&#9654; CALCULAR T(s)"}
 function setSubMode(m){curSubMode=m;["Direct","Closed","Open","SS"].forEach(function(n){document.getElementById("sub"+n).classList.toggle("active","sub"+n==="sub"+m.charAt(0).toUpperCase()+m.slice(1))});document.getElementById("manDirect").style.display=m==="direct"?"block":"none";document.getElementById("manClosed").style.display=m==="closed"?"block":"none";document.getElementById("manOpen").style.display=m==="open"?"block":"none";document.getElementById("manSS").style.display=m==="ss"?"block":"none"}
 function onCalc(){
   if(curMode==="manual"){var tf;
     if(curSubMode==="direct"){tf={n:parseP(document.getElementById("manNum").value),d:parseP(document.getElementById("manDen").value)};}
-    else if(curSubMode==="closed"){var gn=parseP(document.getElementById("manGN").value),gd=parseP(document.getElementById("manGD").value),hn=parseP(document.getElementById("manHN").value),hd=parseP(document.getElementById("manHD").value);tf={n:pMul(gn,hd),d:pAdd(pMul(gd,hd),pMul(gn,hn))};}
+    else if(curSubMode==="closed"){var gn=parseP(document.getElementById("manGN").value),gd=parseP(document.getElementById("manGD").value),hn=parseP(document.getElementById("manHN").value),hd=parseP(document.getElementById("manHD").value);var fbType=(document.getElementById("manFbType")||{}).value||"neg";if(fbType==="pos"){tf={n:pMul(gn,hd),d:pSub(pMul(gd,hd),pMul(gn,hn))};}else{tf={n:pMul(gn,hd),d:pAdd(pMul(gd,hd),pMul(gn,hn))};}}
     else if(curSubMode==="open"){var gn=parseP(document.getElementById("manOGN").value),gd=parseP(document.getElementById("manOGD").value),hn=parseP(document.getElementById("manOHN").value),hd=parseP(document.getElementById("manOHD").value);tf={n:pMul(gn,hn),d:pMul(gd,hd)};}
     else if(curSubMode==="ss"){try{tf=ssToTF(document.getElementById("manA").value,document.getElementById("manB").value,document.getElementById("manC").value,document.getElementById("manD").value);}catch(e){var rd=document.getElementById("res"),rb=document.getElementById("rb");rd.classList.add("vis");rb.innerHTML='<div class="ebox">Erro: '+esc(String(e))+'</div>';rd.scrollIntoView({behavior:"smooth"});return}}
     var lc=tf.d[tf.d.length-1];if(Math.abs(lc)>1e-14&&Math.abs(lc-1)>1e-10){tf.n=pScl(tf.n,1/lc);tf.d=pScl(tf.d,1/lc)}tf=pfReduce(tf);showRes(tf);return;}
