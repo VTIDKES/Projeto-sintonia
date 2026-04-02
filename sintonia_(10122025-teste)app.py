@@ -81,34 +81,48 @@ def formatar_numero(valor):
 
 
 def _parse_value(v):
-    """Parse a single value: supports numbers, fractions, and sympy expressions."""
+    """Parse a single value: numbers, math expressions, or expressions with 's'."""
     v = v.strip()
     if not v:
-        return 0.0
+        return sp.Integer(0)
     try:
-        return float(v)
-    except ValueError:
+        return sp.Rational(v) if '/' in v else sp.Float(float(v))
+    except (ValueError, TypeError):
         s = sp.Symbol('s')
-        expr = parse_expr(v.replace('^', '**'), local_dict={'s': s})
-        val = complex(expr.evalf())
-        if val.imag == 0:
-            return val.real
-        return val
+        return parse_expr(v.replace('^', '**'), local_dict={'s': s})
 
 
 def parse_matrix(text):
+    """Parse matrix text. Returns (matrix, has_s).
+    matrix is np.array (float) if purely numeric, or sp.Matrix if contains 's'.
+    has_s indicates whether any entry contains the variable s."""
     text = text.strip()
     if text.startswith('['):
         try:
-            return np.array(json.loads(text), dtype=float)
+            return np.array(json.loads(text), dtype=float), False
         except Exception:
             text = text.replace('[', '').replace(']', '')
     rows = [r.strip() for r in text.split(';') if r.strip()]
     matrix = []
+    has_s = False
     for row in rows:
         vals = re.split(r'[,\s]+', row.strip())
-        matrix.append([_parse_value(v) for v in vals if v])
-    return np.array(matrix, dtype=float)
+        parsed_row = []
+        for v in vals:
+            if not v:
+                continue
+            pv = _parse_value(v)
+            if isinstance(pv, sp.Basic) and pv.free_symbols:
+                has_s = True
+            parsed_row.append(pv)
+        matrix.append(parsed_row)
+    if has_s:
+        return sp.Matrix(matrix), True
+    # All numeric — convert to numpy float
+    float_matrix = []
+    for row in matrix:
+        float_matrix.append([float(v.evalf()) if isinstance(v, sp.Basic) else float(v) for v in row])
+    return np.array(float_matrix, dtype=float), False
 
 
 # ══════════════════════════════════════════════════
@@ -130,10 +144,64 @@ def converter_para_tf(numerador_str, denominador_str):
 
 
 def converter_ss_para_tf(A_str, B_str, C_str, D_str):
-    A = np.atleast_2d(parse_matrix(A_str)).astype(float)
-    B = np.atleast_2d(parse_matrix(B_str)).astype(float)
-    C = np.atleast_2d(parse_matrix(C_str)).astype(float)
-    D = np.atleast_2d(parse_matrix(D_str)).astype(float)
+    A_mat, a_s = parse_matrix(A_str)
+    B_mat, b_s = parse_matrix(B_str)
+    C_mat, c_s = parse_matrix(C_str)
+    D_mat, d_s = parse_matrix(D_str)
+
+    has_symbolic = a_s or b_s or c_s or d_s
+
+    s = sp.Symbol('s')
+
+    if has_symbolic:
+        # ── Caminho simbólico: G(s) = C(sI − A)⁻¹B + D ──
+        A = sp.Matrix(A_mat) if not isinstance(A_mat, sp.Matrix) else A_mat
+        B = sp.Matrix(B_mat) if not isinstance(B_mat, sp.Matrix) else B_mat
+        C = sp.Matrix(C_mat) if not isinstance(C_mat, sp.Matrix) else C_mat
+        D = sp.Matrix(D_mat) if not isinstance(D_mat, sp.Matrix) else D_mat
+
+        n = A.shape[0]
+        if A.shape[0] != A.shape[1]:
+            raise ValueError(f"Matriz A deve ser quadrada ({n}x{n})")
+        if B.shape[0] != n:
+            B = B.T
+        if C.shape[1] != n:
+            C = C.T
+        if B.shape[0] != n:
+            raise ValueError(f"Matriz B deve ter {n} linhas")
+        if C.shape[1] != n:
+            raise ValueError(f"Matriz C deve ter {n} colunas")
+
+        sI_A = s * sp.eye(n) - A
+        G_matrix = C * sI_A.inv() * B + D
+        tf_expr = sp.simplify(G_matrix[0, 0])
+        num_sym, den_sym = sp.fraction(sp.together(tf_expr))
+
+        num_poly = sp.Poly(sp.expand(num_sym), s)
+        den_poly = sp.Poly(sp.expand(den_sym), s)
+        num_coeffs = [float(c) for c in num_poly.all_coeffs()]
+        den_coeffs = [float(c) for c in den_poly.all_coeffs()]
+
+        if den_coeffs and den_coeffs[0] != 1:
+            fator = den_coeffs[0]
+            num_coeffs = [c / fator for c in num_coeffs]
+            den_coeffs = [c / fator for c in den_coeffs]
+
+        tf_sys = TransferFunction(num_coeffs, den_coeffs)
+        return {
+            "tipo": "SISO",
+            "tf": tf_sys,
+            "simbolico": tf_expr,
+            "num": num_sym,
+            "den": den_sym,
+            "ss": None
+        }
+
+    # ── Caminho numérico (original) ──
+    A = np.atleast_2d(A_mat).astype(float)
+    B = np.atleast_2d(B_mat).astype(float)
+    C = np.atleast_2d(C_mat).astype(float)
+    D = np.atleast_2d(D_mat).astype(float)
 
     n = A.shape[0]
     if A.shape != (n, n):
@@ -149,8 +217,6 @@ def converter_ss_para_tf(A_str, B_str, C_str, D_str):
 
     ss_sys = ctrl.ss(A, B, C, D)
     tf_sys = ctrl.tf(ss_sys)
-
-    s = sp.Symbol('s')
 
     if tf_sys.ninputs == 1 and tf_sys.noutputs == 1:
         num_coeffs = list(tf_sys.num[0][0])
@@ -599,8 +665,8 @@ def adicionar_bloco(nome, tipo, representacao, numerador='', denominador='',
             tf_obj, tf_symb = converter_para_tf(numerador, denominador)
             ss_sys = None
         else:
-            A_mat = parse_matrix(A_str)
-            if A_mat.ndim == 2 and A_mat.shape[0] > 4:
+            A_mat, _ = parse_matrix(A_str)
+            if A_mat.shape[0] > 4:
                 return False, "Erro: dimensao maxima permitida e 4x4."
             resultado = converter_ss_para_tf(A_str, B_str, C_str, D_str)
             tf_obj  = resultado["tf"]
