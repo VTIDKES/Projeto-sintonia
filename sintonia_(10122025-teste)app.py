@@ -80,6 +80,22 @@ def formatar_numero(valor):
     return f"{valor:.3f}"
 
 
+def _parse_value(v):
+    """Parse a single value: supports numbers, fractions, and sympy expressions."""
+    v = v.strip()
+    if not v:
+        return 0.0
+    try:
+        return float(v)
+    except ValueError:
+        s = sp.Symbol('s')
+        expr = parse_expr(v.replace('^', '**'), local_dict={'s': s})
+        val = complex(expr.evalf())
+        if val.imag == 0:
+            return val.real
+        return val
+
+
 def parse_matrix(text):
     text = text.strip()
     if text.startswith('['):
@@ -91,7 +107,7 @@ def parse_matrix(text):
     matrix = []
     for row in rows:
         vals = re.split(r'[,\s]+', row.strip())
-        matrix.append([float(v) for v in vals if v])
+        matrix.append([_parse_value(v) for v in vals if v])
     return np.array(matrix, dtype=float)
 
 
@@ -936,17 +952,16 @@ def _render_ss_widget(uid, key_prefix):
         cols = st.columns(_n)
         row = []
         for j in range(_n):
-            default = 1.0 if i == j else 0.0
-            val = cols[j].number_input(
+            default = "1" if i == j else "0"
+            val = cols[j].text_input(
                 f"a[{i+1},{j+1}]",
                 value=default,
-                format="%.4g",
                 key=f"{key_prefix}_A_{i}_{j}",
                 label_visibility="collapsed"
             )
-            row.append(val)
+            row.append(val.strip() if val.strip() else "0")
         A_vals.append(row)
-    A_str = "; ".join(" ".join(f"{v:.10g}" for v in row) for row in A_vals)
+    A_str = "; ".join(" ".join(row) for row in A_vals)
 
     st.markdown("<div style='margin: 8px 0'></div>", unsafe_allow_html=True)
 
@@ -957,44 +972,41 @@ def _render_ss_widget(uid, key_prefix):
         st.markdown('<div class="ss-matrix-label">B <span class="ss-matrix-sub">(nx1) — Entrada</span></div>', unsafe_allow_html=True)
         B_vals = []
         for i in range(_n):
-            val = st.number_input(
+            val = st.text_input(
                 f"b[{i+1},1]",
-                value=0.0,
-                format="%.4g",
+                value="0",
                 key=f"{key_prefix}_B_{i}",
                 label_visibility="collapsed"
             )
-            B_vals.append(val)
-        B_str = "; ".join(f"{v:.10g}" for v in B_vals)
+            B_vals.append(val.strip() if val.strip() else "0")
+        B_str = "; ".join(B_vals)
 
     with col_c:
         st.markdown('<div class="ss-matrix-label">C <span class="ss-matrix-sub">(1xn) — Saída</span></div>', unsafe_allow_html=True)
         C_vals = []
         c_cols = st.columns(_n)
         for j in range(_n):
-            default = 1.0 if j == 0 else 0.0
-            val = c_cols[j].number_input(
+            default = "1" if j == 0 else "0"
+            val = c_cols[j].text_input(
                 f"c[1,{j+1}]",
                 value=default,
-                format="%.4g",
                 key=f"{key_prefix}_C_{j}",
                 label_visibility="collapsed"
             )
-            C_vals.append(val)
-        C_str = " ".join(f"{v:.10g}" for v in C_vals)
+            C_vals.append(val.strip() if val.strip() else "0")
+        C_str = " ".join(C_vals)
 
     st.markdown("<div style='margin: 8px 0'></div>", unsafe_allow_html=True)
 
     # ── Matriz D ──
     st.markdown('<div class="ss-matrix-label">D <span class="ss-matrix-sub">(1x1) — Transmissão direta</span></div>', unsafe_allow_html=True)
-    D_val = st.number_input(
+    D_val = st.text_input(
         "d[1,1]",
-        value=0.0,
-        format="%.4g",
+        value="0",
         key=f"{key_prefix}_D",
         label_visibility="collapsed"
     )
-    D_str = f"{D_val:.10g}"
+    D_str = D_val.strip() if D_val.strip() else "0"
 
     # Preview da TF convertida
     try:
