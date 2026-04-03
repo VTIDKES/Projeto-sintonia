@@ -1,9 +1,9 @@
 
 # -*- coding: utf-8 -*-
 """
-Sistema de Modelagem e Analise de Sistemas de Controle v2.0
-Refatorado com: tela inicial, espaco de estados, modal de blocos,
-logica corrigida de serie/paralelo/feedback, simplificacao automatica.
+Sistema de Modelagem e Análise de Sistemas de Controle v2.0
+Refatorado com: tela inicial, espaço de estados, modal de blocos,
+lógica corrigida de série/paralelo/feedback, simplificação automática.
 """
 
 import streamlit as st
@@ -35,21 +35,21 @@ ANALYSIS_OPTIONS = {
     ],
 }
 
-INPUT_SIGNALS = ['Degrau', 'Rampa', 'Senoidal', 'Impulso', 'Parabolica']
+INPUT_SIGNALS = ['Degrau', 'Rampa', 'Senoidal', 'Impulso', 'Parabólica']
 
 BLOCK_TYPES = {
     'Planta': {'icon': 'G(s)', 'desc': 'Função de transferência da planta'},
     'Controlador': {'icon': 'C(s)', 'desc': 'Controlador (PID, Lead-Lag, etc.)'},
-    'Sensor': {'icon': 'H(s)', 'desc': 'Sensor na malha de realimentacao'},
+    'Sensor': {'icon': 'H(s)', 'desc': 'Sensor na malha de realimentação'},
     'Atuador': {'icon': 'A(s)', 'desc': 'Atuador do sistema'},
     'Pre-filtro': {'icon': 'F(s)', 'desc': 'Filtro antes do somador'},
-    'Perturbacao': {'icon': 'D(s)', 'desc': 'Perturbacao/disturbio'},
+    'Perturbação': {'icon': 'D(s)', 'desc': 'Perturbação/distúrbio'},
 }
 
-CONNECTION_TYPES = ['Serie', 'Paralelo', 'Realimentacao Negativa', 'Realimentacao Positiva']
+CONNECTION_TYPES = ['Série', 'Paralelo', 'Realimentação Negativa', 'Realimentação Positiva']
 
 # ══════════════════════════════════════════════════
-# INICIALIZACAO DO SESSION STATE
+# INICIALIZAÇÃO DO SESSION STATE
 # ══════════════════════════════════════════════════
 
 def inicializar_estado():
@@ -69,7 +69,7 @@ def inicializar_estado():
 
 
 # ══════════════════════════════════════════════════
-# FUNCOES UTILITARIAS
+# FUNÇÕES UTILITÁRIAS
 # ══════════════════════════════════════════════════
 
 def formatar_numero(valor):
@@ -126,7 +126,7 @@ def parse_matrix(text):
 
 
 # ══════════════════════════════════════════════════
-# FUNCOES DE TRANSFERENCIA E ESPACO DE ESTADOS
+# FUNÇÕES DE TRANSFERÊNCIA E ESPAÇO DE ESTADOS
 # ══════════════════════════════════════════════════
 
 def converter_para_tf(numerador_str, denominador_str):
@@ -281,7 +281,7 @@ def constantes_de_erro(G):
 
 
 # ══════════════════════════════════════════════════
-# INTERCONEXAO DE BLOCOS
+# INTERCONEXÃO DE BLOCOS
 # ══════════════════════════════════════════════════
 
 def blocos_em_serie(tf_list):
@@ -330,15 +330,15 @@ def simplificar_diagrama(blocos_df, conexoes):
                 resultado = tfs[0] if resultado is None else resultado * tfs[0]
             continue
 
-        if tipo_con == 'Serie':
+        if tipo_con == 'Série':
             parcial = blocos_em_serie(tfs)
         elif tipo_con == 'Paralelo':
             parcial = blocos_em_paralelo(tfs)
-        elif tipo_con == 'Realimentacao Negativa':
+        elif tipo_con == 'Realimentação Negativa':
             G = tfs[0]
             H = tfs[1] if len(tfs) > 1 else TransferFunction([1], [1])
             parcial = realimentacao(G, H, positiva=False)
-        elif tipo_con == 'Realimentacao Positiva':
+        elif tipo_con == 'Realimentação Positiva':
             G = tfs[0]
             H = tfs[1] if len(tfs) > 1 else TransferFunction([1], [1])
             parcial = realimentacao(G, H, positiva=True)
@@ -368,7 +368,7 @@ def calcular_malha_fechada(planta, controlador=None, sensor=None):
 
 
 # ══════════════════════════════════════════════════
-# ANALISE DE SISTEMAS
+# ANÁLISE DE SISTEMAS
 # ══════════════════════════════════════════════════
 
 def calcular_desempenho(tf_sys):
@@ -394,10 +394,10 @@ def calcular_desempenho(tf_sys):
 def _desempenho_ordem1(polos, resultado):
     tau = -1 / polos[0].real
     resultado.update({
-        'Tipo': '1a Ordem',
+        'Tipo': '1ª Ordem',
         'Const. tempo (t)': f"{formatar_numero(tau)} s",
         'Temp. subida (Tr)': f"{formatar_numero(2.2 * tau)} s",
-        'Temp. acomodacao (Ts)': f"{formatar_numero(4 * tau)} s",
+        'Temp. acomodação (Ts)': f"{formatar_numero(4 * tau)} s",
         'Freq. natural (wn)': f"{formatar_numero(1/tau)} rad/s",
         'Fator amortec. (z)': "1.0",
     })
@@ -413,14 +413,14 @@ def _desempenho_ordem2(polos, resultado):
     Tp = np.pi / wd if wd > 0 else float('inf')
     Ts = 4 / (zeta * wn) if zeta * wn > 0 else float('inf')
     resultado.update({
-        'Tipo': '2a Ordem',
+        'Tipo': '2ª Ordem',
         'Freq. natural (wn)': f"{formatar_numero(wn)} rad/s",
         'Fator amortec. (z)': f"{formatar_numero(zeta)}",
         'Freq. amortec. (wd)': f"{formatar_numero(wd)} rad/s",
         'Sobressinal (Mp)': f"{formatar_numero(Mp)}%",
         'Temp. subida (Tr)': f"{formatar_numero(Tr)} s",
         'Temp. pico (Tp)': f"{formatar_numero(Tp)} s",
-        'Temp. acomodacao (Ts)': f"{formatar_numero(Ts)} s",
+        'Temp. acomodação (Ts)': f"{formatar_numero(Ts)} s",
     })
     return resultado
 
@@ -448,7 +448,7 @@ def _desempenho_ordem_superior(polos, ordem, resultado):
     Tr = (np.pi - np.arccos(zeta)) / omega_d if zeta < 1 and omega_d > 0 else float('inf')
     Tp = np.pi / omega_d if omega_d > 0 else float('inf')
     Ts = 4 / (zeta * wn) if zeta * wn > 0 else float('inf')
-    label = f'{ordem}a Ordem (Par dominante)' if par_dominante else f'{ordem}a Ordem (Polo dominante)'
+    label = f'{ordem}ª Ordem (Par dominante)' if par_dominante else f'{ordem}ª Ordem (Polo dominante)'
     resultado.update({
         'Tipo': label,
         'Freq. natural (wn)': f"{formatar_numero(wn)} rad/s",
@@ -457,7 +457,7 @@ def _desempenho_ordem_superior(polos, ordem, resultado):
         'Sobressinal (Mp)': f"{formatar_numero(Mp)} %",
         'Temp. subida (Tr)': f"{formatar_numero(Tr)} s",
         'Temp. pico (Tp)': f"{formatar_numero(Tp)} s",
-        'Temp. acomodacao (Ts)': f"{formatar_numero(Ts)} s",
+        'Temp. acomodação (Ts)': f"{formatar_numero(Ts)} s",
     })
     return resultado
 
@@ -477,7 +477,7 @@ def estimar_tempo_final_simulacao(tf_sys):
 
 
 # ══════════════════════════════════════════════════
-# FUNCOES DE PLOTAGEM
+# FUNÇÕES DE PLOTAGEM
 # ══════════════════════════════════════════════════
 
 PLOTLY_DARK = dict(
@@ -510,12 +510,12 @@ def plot_polos_zeros(tf_sys, fig=None):
         fig.add_trace(go.Scatter(
             x=np.real(zeros), y=np.imag(zeros), mode='markers',
             marker=dict(symbol='circle', size=12, color='blue'), name='Zeros',
-            hovertemplate='Zero<br>Real: %{x:.3f}<br>Imaginario: %{y:.3f}<extra></extra>'))
+            hovertemplate='Zero<br>Real: %{x:.3f}<br>Imaginário: %{y:.3f}<extra></extra>'))
     if len(polos) > 0:
         fig.add_trace(go.Scatter(
             x=np.real(polos), y=np.imag(polos), mode='markers',
             marker=dict(symbol='x', size=12, color='red'), name='Polos',
-            hovertemplate='Polo<br>Real: %{x:.3f}<br>Imaginario: %{y:.3f}<extra></extra>'))
+            hovertemplate='Polo<br>Real: %{x:.3f}<br>Imaginário: %{y:.3f}<extra></extra>'))
     fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.7)
     fig.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.7)
     fig.update_layout(
@@ -530,7 +530,7 @@ def _gerar_sinal_entrada(entrada, t):
         'Rampa': t,
         'Senoidal': np.sin(2 * np.pi * t),
         'Impulso': np.concatenate([[1], np.zeros(len(t) - 1)]),
-        'Parabolica': t**2,
+        'Parabólica': t**2,
     }
     return sinais[entrada]
 
@@ -549,8 +549,8 @@ def plot_resposta_temporal(sistema, entrada):
         line=dict(dash='dash', color='blue'), name='Entrada',
         hovertemplate='Tempo: %{x:.2f}s<br>Entrada: %{y:.3f}<extra></extra>'))
     fig.add_trace(go.Scatter(
-        x=t_out, y=y, mode='lines', line=dict(color='red'), name='Saida',
-        hovertemplate='Tempo: %{x:.2f}s<br>Saida: %{y:.3f}<extra></extra>'))
+        x=t_out, y=y, mode='lines', line=dict(color='red'), name='Saída',
+        hovertemplate='Tempo: %{x:.2f}s<br>Saída: %{y:.3f}<extra></extra>'))
     fig.update_layout(
         title=f'Resposta Temporal - Entrada: {entrada}',
         xaxis_title='Tempo (s)', yaxis_title='Amplitude',
@@ -575,8 +575,8 @@ def plot_bode(sistema, tipo='both'):
         fig.add_trace(go.Scatter(
             x=w, y=phase, mode='lines', line=dict(color='red', width=3),
             name='Fase', showlegend=False), row=2, col=1)
-        fig.update_xaxes(title_text="Frequencia (rad/s)", type="log", row=1, col=1)
-        fig.update_xaxes(title_text="Frequencia (rad/s)", type="log", row=2, col=1)
+        fig.update_xaxes(title_text="Frequência (rad/s)", type="log", row=1, col=1)
+        fig.update_xaxes(title_text="Frequência (rad/s)", type="log", row=2, col=1)
         fig.update_yaxes(title_text="Magnitude (dB)", row=1, col=1)
         fig.update_yaxes(title_text="Fase (deg)", row=2, col=1)
         fig.update_layout(height=700, title_text="Diagrama de Bode")
@@ -586,7 +586,7 @@ def plot_bode(sistema, tipo='both'):
             x=w, y=mag, mode='lines', line=dict(color='blue', width=3),
             name='Magnitude'))
         fig.update_layout(
-            title='Bode - Magnitude', xaxis_title="Frequencia (rad/s)",
+            title='Bode - Magnitude', xaxis_title="Frequência (rad/s)",
             yaxis_title="Magnitude (dB)", xaxis_type='log')
     else:
         fig = go.Figure()
@@ -594,7 +594,7 @@ def plot_bode(sistema, tipo='both'):
             x=w, y=phase, mode='lines', line=dict(color='red', width=3),
             name='Fase'))
         fig.update_layout(
-            title='Bode - Fase', xaxis_title="Frequencia (rad/s)",
+            title='Bode - Fase', xaxis_title="Frequência (rad/s)",
             yaxis_title="Fase (deg)", xaxis_type='log')
     return configurar_linhas_interativas(fig)
 
@@ -620,7 +620,7 @@ def plot_lgr(sistema):
     fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.7)
     fig.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.7)
     fig.update_layout(
-        title='Lugar Geometrico das Raizes (LGR)',
+        title='Lugar Geométrico das Raízes (LGR)',
         xaxis_title='Parte Real', yaxis_title='Parte Imaginaria',
         showlegend=True, hovermode='closest')
     return configurar_linhas_interativas(fig)
@@ -636,11 +636,11 @@ def plot_nyquist(sistema):
         line=dict(color='blue', width=2), name='Nyquist'))
     fig.add_trace(go.Scatter(
         x=H.real, y=-H.imag, mode='lines',
-        line=dict(dash='dash', color='gray', width=1), name='Reflexo simetrico'))
+        line=dict(dash='dash', color='gray', width=1), name='Reflexo simétrico'))
     fig.add_trace(go.Scatter(
         x=[-1], y=[0], mode='markers',
         marker=dict(symbol='circle', size=12, color='red'),
-        name='Ponto critico (-1,0)'))
+        name='Ponto crítico (-1,0)'))
     fig.add_hline(y=0, line_color="black", line_width=1)
     fig.add_vline(x=0, line_color="black", line_width=1)
     fig.update_layout(
@@ -667,7 +667,7 @@ def adicionar_bloco(nome, tipo, representacao, numerador='', denominador='',
         else:
             A_mat, _ = parse_matrix(A_str)
             if A_mat.shape[0] > 4:
-                return False, "Erro: dimensao maxima permitida e 4x4."
+                return False, "Erro: dimensão máxima permitida é 4x4."
             resultado = converter_ss_para_tf(A_str, B_str, C_str, D_str)
             tf_obj  = resultado["tf"]
             tf_symb = resultado.get("simbolico", resultado.get("G", None))
@@ -716,30 +716,30 @@ def calcular_operacao_entre_sistemas(nome_resultado, nome_g1, operacao, nome_g2,
     try:
         G1 = obter_bloco_por_nome(nome_g1)
         if G1 is None:
-            return False, f"Bloco '{nome_g1}' nao encontrado.", None
+            return False, f"Bloco '{nome_g1}' não encontrado.", None
 
         if nome_g2_unit:
             G2 = TransferFunction([1], [1])
         else:
             G2 = obter_bloco_por_nome(nome_g2)
             if G2 is None:
-                return False, f"Bloco '{nome_g2}' nao encontrado.", None
+                return False, f"Bloco '{nome_g2}' não encontrado.", None
 
-        if operacao == 'Serie':
+        if operacao == 'Série':
             resultado = G1 * G2
         elif operacao == 'Paralelo':
             resultado = G1 + G2
-        elif operacao == 'Realimentacao Negativa':
+        elif operacao == 'Realimentação Negativa':
             resultado = ctrl.feedback(G1, G2, sign=-1)
-        elif operacao == 'Realimentacao Positiva':
+        elif operacao == 'Realimentação Positiva':
             resultado = ctrl.feedback(G1, G2, sign=+1)
         else:
-            return False, f"Operacao '{operacao}' desconhecida.", None
+            return False, f"Operação '{operacao}' desconhecida.", None
 
         resultado = ctrl.minreal(resultado, verbose=False)
 
         if any(st.session_state.blocos['nome'] == nome_resultado):
-            return False, f"Nome '{nome_resultado}' ja existe. Escolha outro.", None
+            return False, f"Nome '{nome_resultado}' já existe. Escolha outro.", None
 
         num_str = str(list(resultado.num[0][0]))
         den_str = str(list(resultado.den[0][0]))
@@ -753,11 +753,11 @@ def calcular_operacao_entre_sistemas(nome_resultado, nome_g1, operacao, nome_g2,
         return True, f"✅ {nome_resultado} criado com sucesso.", resultado
 
     except Exception as e:
-        return False, f"Erro ao calcular operacao: {e}", None
+        return False, f"Erro ao calcular operação: {e}", None
 
 
 # ══════════════════════════════════════════════════
-# EXECUCAO DE ANALISES
+# EXECUÇÃO DE ANÁLISES
 # ══════════════════════════════════════════════════
 
 def executar_analises(sistema, analises, entrada, tipo_malha):
@@ -791,7 +791,7 @@ def executar_analises(sistema, analises, entrada, tipo_malha):
                 c1, c2, c3 = st.columns(3)
                 c1.metric("Polos SPD (P)", polos_spd)
                 c2.metric("Voltas (N)", voltas)
-                c3.metric("Z = P + N", f"{Z} ({'Estavel' if Z == 0 else 'Instavel'})")
+                c3.metric("Z = P + N", f"{Z} ({'Estável' if Z == 0 else 'Instável'})")
                 st.plotly_chart(fig, use_container_width=True)
         except Exception as e:
             st.error(f"Erro em '{analise}': {e}")
@@ -890,11 +890,11 @@ def tela_inicial():
                       <circle cx="225" cy="17" r="3.5" fill="#5b6be0"/>
                     </svg>
                 </div>
-                <div class="mode-title">Modo Classico</div>
+                <div class="mode-title">Modo Clássico</div>
                 <div class="mode-desc">
-                    Insira Planta, Controlador e Sensor por funcao de
-                    transferencia ou espaco de estados. Analise em
-                    malha aberta ou fechada com ganho K ajustavel.
+                    Insira Planta, Controlador e Sensor por função de
+                    transferência ou espaço de estados. Análise em
+                    malha aberta ou fechada com ganho K ajustável.
                 </div>
             </div>
         </div>
@@ -928,7 +928,7 @@ def tela_inicial():
                 <div class="mode-desc">
                     Editor visual de diagrama de blocos. Arraste, conecte
                     e calcule a FT equivalente graficamente.
-                    Entrada manual e espaco de estados integrados.
+                    Entrada manual e espaço de estados integrados.
                 </div>
             </div>
         </div>
@@ -939,7 +939,7 @@ def tela_inicial():
 
 
 # ══════════════════════════════════════════════════
-# WIDGET DE ESPACO DE ESTADOS (BONITO)
+# WIDGET DE ESPAÇO DE ESTADOS (BONITO)
 # ══════════════════════════════════════════════════
 
 def _render_ss_widget(uid, key_prefix):
@@ -1098,7 +1098,7 @@ def _render_ss_widget(uid, key_prefix):
 
 
 # ══════════════════════════════════════════════════
-# MODO CLASSICO
+# MODO CLÁSSICO
 # ══════════════════════════════════════════════════
 
 def modo_classico():
@@ -1146,7 +1146,7 @@ def modo_classico():
                 "Operação com o sistema atual",
                 CONNECTION_TYPES,
                 key="cl_op_tipo")
-            if operacao_nova in ['Realimentacao Negativa', 'Realimentacao Positiva']:
+            if operacao_nova in ['Realimentação Negativa', 'Realimentação Positiva']:
                 st.caption("A nova TF será usada como H(s) na realimentação.")
 
         if st.button(
@@ -1180,9 +1180,9 @@ def modo_classico():
             st.markdown("---")
             st.subheader("Sistema Atual")
 
-            simbolos = {'Serie': ' → ', 'Paralelo': ' || ',
-                        'Realimentacao Negativa': ' -fb ',
-                        'Realimentacao Positiva': ' +fb '}
+            simbolos = {'Série': ' → ', 'Paralelo': ' || ',
+                        'Realimentação Negativa': ' -fb ',
+                        'Realimentação Positiva': ' +fb '}
 
             for idx, row in st.session_state.blocos.iterrows():
                 tf_obj = row['tf']
@@ -1268,7 +1268,7 @@ def modo_classico():
                     if usar_ganho and K != 1.0:
                         sistema = ganho_tf * sistema
                     if tipo_malha == "Malha Fechada" and not any(
-                            c['tipo'].startswith('Realimentacao')
+                            c['tipo'].startswith('Realimentação')
                             for c in st.session_state.conexoes):
                         sistema = ctrl.feedback(sistema, TransferFunction([1], [1]))
                     label_extra = " (com conexões)"
@@ -1451,24 +1451,24 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 <div id="modalGrid">
 <div class="cat-label">Sinais</div>
 <div class="block-grid">
-<div class="block-option" onclick="pickBlock('input')"><div class="bo-icon" style="color:var(--grn)">R(s)</div><div class="bo-label">Entrada</div><div class="bo-desc">Sinal de referencia</div></div>
-<div class="block-option" onclick="pickBlock('output')"><div class="bo-icon" style="color:var(--red)">Y(s)</div><div class="bo-label">Saida</div><div class="bo-desc">Sinal de saida</div></div>
+<div class="block-option" onclick="pickBlock('input')"><div class="bo-icon" style="color:var(--grn)">R(s)</div><div class="bo-label">Entrada</div><div class="bo-desc">Sinal de referência</div></div>
+<div class="block-option" onclick="pickBlock('output')"><div class="bo-icon" style="color:var(--red)">Y(s)</div><div class="bo-label">Saída</div><div class="bo-desc">Sinal de saída</div></div>
 </div>
-<div class="cat-label">Blocos de Transferencia</div>
+<div class="cat-label">Blocos de Transferência</div>
 <div class="block-grid">
-<div class="block-option" onclick="pickBlock('tf')"><div class="bo-icon" style="color:var(--blu)">G(s)</div><div class="bo-label">Planta</div><div class="bo-desc">Funcao de transferencia</div></div>
-<div class="block-option" onclick="pickBlock('ss')"><div class="bo-icon" style="color:var(--grn)">SS</div><div class="bo-label">Espaco de Estados</div><div class="bo-desc">Matrizes A,B,C,D livres</div></div>
+<div class="block-option" onclick="pickBlock('tf')"><div class="bo-icon" style="color:var(--blu)">G(s)</div><div class="bo-label">Planta</div><div class="bo-desc">Função de transferência</div></div>
+<div class="block-option" onclick="pickBlock('ss')"><div class="bo-icon" style="color:var(--grn)">SS</div><div class="bo-label">Espaço de Estados</div><div class="bo-desc">Matrizes A,B,C,D livres</div></div>
 <div class="block-option" onclick="pickBlock('gain')"><div class="bo-icon" style="color:var(--pur)">K</div><div class="bo-label">Ganho</div><div class="bo-desc">Ganho constante</div></div>
 <div class="block-option" onclick="pickBlock('pid')"><div class="bo-icon" style="color:var(--pur)">PID</div><div class="bo-label">Controlador PID</div><div class="bo-desc">Kp + Ki/s + Kd*s</div></div>
-<div class="block-option" onclick="pickBlock('int')"><div class="bo-icon" style="color:var(--yel)">1/s</div><div class="bo-label">Integrador</div><div class="bo-desc">Integracao pura</div></div>
-<div class="block-option" onclick="pickBlock('der')"><div class="bo-icon" style="color:#aaa">s</div><div class="bo-label">Derivador</div><div class="bo-desc">Derivacao pura</div></div>
-<div class="block-option" onclick="pickBlock('actuator')"><div class="bo-icon" style="color:var(--blu)">A(s)</div><div class="bo-label">Atuador</div><div class="bo-desc">Dinamica do atuador</div></div>
+<div class="block-option" onclick="pickBlock('int')"><div class="bo-icon" style="color:var(--yel)">1/s</div><div class="bo-label">Integrador</div><div class="bo-desc">Integração pura</div></div>
+<div class="block-option" onclick="pickBlock('der')"><div class="bo-icon" style="color:#aaa">s</div><div class="bo-label">Derivador</div><div class="bo-desc">Derivação pura</div></div>
+<div class="block-option" onclick="pickBlock('actuator')"><div class="bo-icon" style="color:var(--blu)">A(s)</div><div class="bo-label">Atuador</div><div class="bo-desc">Dinâmica do atuador</div></div>
 </div>
-<div class="cat-label">Realimentacao</div>
+<div class="cat-label">Realimentação</div>
 <div class="block-grid">
-<div class="block-option" onclick="pickBlock('sensor')"><div class="bo-icon" style="color:var(--pnk)">H(s)</div><div class="bo-label">Sensor</div><div class="bo-desc">Malha de realimentacao</div></div>
-<div class="block-option" onclick="pickBlock('sum')"><div class="bo-icon" style="color:var(--grn)">&Sigma;</div><div class="bo-label">Somador</div><div class="bo-desc">Soma/subtracao de sinais</div></div>
-<div class="block-option" onclick="pickBlock('branch')"><div class="bo-icon" style="color:var(--blu)">&bull;</div><div class="bo-label">Ramificacao</div><div class="bo-desc">Divide sinal em dois</div></div>
+<div class="block-option" onclick="pickBlock('sensor')"><div class="bo-icon" style="color:var(--pnk)">H(s)</div><div class="bo-label">Sensor</div><div class="bo-desc">Malha de realimentação</div></div>
+<div class="block-option" onclick="pickBlock('sum')"><div class="bo-icon" style="color:var(--grn)">&Sigma;</div><div class="bo-label">Somador</div><div class="bo-desc">Soma/subtração de sinais</div></div>
+<div class="block-option" onclick="pickBlock('branch')"><div class="bo-icon" style="color:var(--blu)">&bull;</div><div class="bo-label">Ramificação</div><div class="bo-desc">Divide sinal em dois</div></div>
 </div>
 </div>
 <div class="cfg-panel" id="cfgPanel">
@@ -1487,7 +1487,7 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 <div id="connBlockList" style="max-height:280px;overflow-y:auto;padding:4px"></div>
 <p id="connSelCount" style="font-size:11px;color:var(--txm);margin:8px 0 4px;text-align:center">0 blocos selecionados</p>
 <div style="margin-top:8px;display:flex;gap:8px">
-<button class="cfg-btn" style="padding:12px 28px;font-size:14px" onclick="applyConn()">&#10003; Aplicar Conexao</button>
+<button class="cfg-btn" style="padding:12px 28px;font-size:14px" onclick="applyConn()">&#10003; Aplicar Conexão</button>
 <button class="cfg-btn" style="background:var(--sf2);border:1px solid var(--bd);padding:12px 20px" onclick="closeConnModal()">Cancelar</button>
 </div>
 </div></div></div>
@@ -1495,15 +1495,15 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 <div class="toolbar" id="diag-toolbar">
 <button class="tb tb-add" onclick="openModal()">+ Adicionar Bloco</button>
 <div class="sep"></div>
-<span class="lbl">Rapido:</span>
+<span class="lbl">Rápido:</span>
 <button class="tb" style="background:#162038;border-color:#2d558a;color:var(--blu)" data-add="tf">G(s)</button>
 <button class="tb" style="background:#1a3d2a;border-color:#2d8a50;color:var(--grn)" onclick="pickBlock('ss')">SS</button>
 <button class="tb" style="background:#201638;border-color:#5a2d8a;color:var(--pur)" data-add="gain">K</button>
 <button class="tb" data-add="sum">&Sigma;</button>
 <button class="tb" style="background:#381628;border-color:#8a2d5a;color:var(--pnk)" data-add="sensor">H(s)</button>
 <div class="sep"></div>
-<span class="lbl">Conexao:</span>
-<button class="tb" style="background:#0e2a1a;border-color:#2d8a55;color:#34d399" id="btnSerie" onclick="openConnModal('serie')">Serie</button>
+<span class="lbl">Conexão:</span>
+<button class="tb" style="background:#0e2a1a;border-color:#2d8a55;color:#34d399" id="btnSérie" onclick="openConnModal('serie')">Série</button>
 <button class="tb" style="background:#1a1040;border-color:#6d5acd;color:#a78bfa" id="btnParalelo" onclick="openConnModal('paralelo')">Paralelo</button>
 <button class="tb" style="background:#2a1020;border-color:#8a2d50;color:#f472b6" id="btnFbNeg" onclick="openConnModal('fb_neg')">FB -</button>
 <button class="tb" style="background:#2a2010;border-color:#8a7a2d;color:#fbbf24" id="btnFbPos" onclick="openConnModal('fb_pos')">FB +</button>
@@ -1522,12 +1522,12 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 <div class="panel-section"><h4>Sistema</h4>
 <div style="display:grid;grid-template-columns:1fr auto;gap:4px 8px;font-size:12px">
 <span style="color:var(--txm)">Blocos:</span><span id="pB" style="font-weight:600">0</span>
-<span style="color:var(--txm)">Conexoes:</span><span id="pE" style="font-weight:600">0</span>
+<span style="color:var(--txm)">Conexões:</span><span id="pE" style="font-weight:600">0</span>
 </div></div>
-<div class="panel-section"><h4>Parametros</h4><div id="pA"><span class="hint">Selecione um bloco.</span></div></div>
+<div class="panel-section"><h4>Parâmetros</h4><div id="pA"><span class="hint">Selecione um bloco.</span></div></div>
 <div class="panel-section"><h4>Dicas</h4><div class="hint">
 <b>Conectar:</b> porta <span style="color:var(--blu)">azul</span> &rarr; porta <span style="color:var(--grn)">verde</span><br>
-<b>Calcular:</b> botao verde abaixo<br><b>Mobile:</b> toque e arraste!
+<b>Calcular:</b> botão verde abaixo<br><b>Mobile:</b> toque e arraste!
 </div></div></div></div>
 
 <div class="mode-bar">
@@ -1540,19 +1540,19 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 <button class="man-tab active" id="subDirect" onclick="setSubMode('direct')">T(s) Direta</button>
 <button class="man-tab" id="subClosed" onclick="setSubMode('closed')">Malha Fechada</button>
 <button class="man-tab" id="subOpen" onclick="setSubMode('open')">Malha Aberta G*H</button>
-<button class="man-tab" id="subSS" onclick="setSubMode('ss')">Espaco de Estados</button>
+<button class="man-tab" id="subSS" onclick="setSubMode('ss')">Espaço de Estados</button>
 </div>
 <div id="manDirect">
-<h4>Funcao de Transferencia T(s) = Num / Den</h4>
+<h4>Função de Transferência T(s) = Num / Den</h4>
 <div class="man-row">
 <div class="pg"><label>Numerador</label><input id="manNum" value="1" placeholder="ex: s+1"></div>
 <div class="pg"><label>Denominador</label><input id="manDen" value="s^2+2s+1" placeholder="ex: s^2+2s+1"></div>
 </div>
-<div class="man-hint">Formato: <code>s^2+3s+1</code> ou <code>2s^3+s+5</code>. Use <code>^</code> para potencias.</div>
+<div class="man-hint">Formato: <code>s^2+3s+1</code> ou <code>2s^3+s+5</code>. Use <code>^</code> para potências.</div>
 </div>
 <div id="manClosed" style="display:none">
 <div class="man-row" style="margin-bottom:8px">
-<div class="pg"><label>Tipo de Realimentacao</label>
+<div class="pg"><label>Tipo de Realimentação</label>
 <select id="manFbType" style="width:100%;padding:8px;background:var(--sf2);border:1px solid var(--bd);border-radius:6px;color:var(--tx);font-size:13px" onchange="updateFbLabel()">
 <option value="neg">Negativa: T(s) = G / (1 + G&middot;H)</option>
 <option value="pos">Positiva: T(s) = G / (1 - G&middot;H)</option>
@@ -1580,7 +1580,7 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 </div>
 </div>
 <div id="manSS" style="display:none">
-<h4>Espaco de Estados: dx/dt = Ax + Bu, y = Cx + Du</h4>
+<h4>Espaço de Estados: dx/dt = Ax + Bu, y = Cx + Du</h4>
 <div class="man-row">
 <div class="pg"><label>Matriz A (nxn)</label><input id="manA" value="0 1; -2 -3" placeholder="0 1; -2 -3"></div>
 <div class="pg"><label>Matriz B (nx1)</label><input id="manB" value="0; 1" placeholder="0; 1"></div>
@@ -1693,13 +1693,13 @@ function bTF(nd){var p=nd.params||{},t=nd.type;
 function solve(nodes,edges){
   if(!nodes.length)return{e:"Adicione blocos."};
   var inp=null,out=null;nodes.forEach(function(n){if(n.type==="input")inp=n;if(n.type==="output")out=n});
-  if(!inp)return{e:"Adicione Entrada R(s)."};if(!out)return{e:"Adicione Saida Y(s)."};if(!edges.length)return{e:"Conecte os blocos."};
+  if(!inp)return{e:"Adicione Entrada R(s)."};if(!out)return{e:"Adicione Saída Y(s)."};if(!edges.length)return{e:"Conecte os blocos."};
   var N=nodes.length,ix={};nodes.forEach(function(n,i){ix[n.id]=i});
   var A=[],b=[];for(var i=0;i<N;i++){A.push([]);for(var j=0;j<N;j++)A[i].push(pfC(0));b.push(pfC(0))}
   for(var i=0;i<N;i++){var nd=nodes[i];A[i][i]=pfC(1);if(nd.type==="input"){b[i]=pfC(1);continue}var inc=edges.filter(function(e){return e.dst===nd.id});
     if(nd.type==="sum"){var sg=((nd.params||{}).signs||"+ -").trim().split(/\s+/);inc.forEach(function(e){var si=ix[e.src];if(si===undefined)return;var pi=parseInt((e.dstPort||"in0").replace("in",""))||0;var sign=sg[pi]==="-"?-1:1;A[i][si]=pfSub(A[i][si],pfC(sign))})}
     else{var tf=bTF(nd);inc.forEach(function(e){var si=ix[e.src];if(si===undefined)return;A[i][si]=pfSub(A[i][si],tf)})}}
-  for(var c=0;c<N;c++){var pv=-1;for(var r=c;r<N;r++)if(!pfZ(A[r][c])){pv=r;break}if(pv<0)return{e:"Sistema singular - verifique as conexoes."};if(pv!==c){var t=A[c];A[c]=A[pv];A[pv]=t;var t2=b[c];b[c]=b[pv];b[pv]=t2}for(var r=c+1;r<N;r++){if(pfZ(A[r][c]))continue;var f=pfDiv(A[r][c],A[c][c]);for(var j=c;j<N;j++)A[r][j]=pfSub(A[r][j],pfMul(f,A[c][j]));b[r]=pfSub(b[r],pfMul(f,b[c]))}}
+  for(var c=0;c<N;c++){var pv=-1;for(var r=c;r<N;r++)if(!pfZ(A[r][c])){pv=r;break}if(pv<0)return{e:"Sistema singular - verifique as conexões."};if(pv!==c){var t=A[c];A[c]=A[pv];A[pv]=t;var t2=b[c];b[c]=b[pv];b[pv]=t2}for(var r=c+1;r<N;r++){if(pfZ(A[r][c]))continue;var f=pfDiv(A[r][c],A[c][c]);for(var j=c;j<N;j++)A[r][j]=pfSub(A[r][j],pfMul(f,A[c][j]));b[r]=pfSub(b[r],pfMul(f,b[c]))}}
   var x=[];for(var i=0;i<N;i++)x.push(pfC(0));for(var i=N-1;i>=0;i--){var s=b[i];for(var j=i+1;j<N;j++)s=pfSub(s,pfMul(A[i][j],x[j]));x[i]=pfDiv(s,A[i][i])}
   var oi=ix[out.id],tf={n:pTrim(x[oi].n),d:pTrim(x[oi].d)};
   if(tf.d[tf.d.length-1]<0){tf.n=pScl(tf.n,-1);tf.d=pScl(tf.d,-1)}var lc=tf.d[tf.d.length-1];if(Math.abs(lc)>1e-14&&Math.abs(lc-1)>1e-10){tf.n=pScl(tf.n,1/lc);tf.d=pScl(tf.d,1/lc)}
@@ -1715,7 +1715,7 @@ function _pAx(title,extra){var o={title:title,gridcolor:'#252840',zerolinecolor:
 function chartLGR(id,branches,tf){var el=document.getElementById(id);if(!el)return;var traces=[],cols=['#5b6be0','#60a5fa','#a78bfa','#f472b6','#fbbf24'];branches.forEach(function(br,bi){traces.push({x:br.re,y:br.im,mode:'lines',line:{color:cols[bi%cols.length],width:1.5},name:'Ramo '+(bi+1),showlegend:false,hovertemplate:'Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'})});var ps2=roots(tf.d);if(ps2.length)traces.push({x:ps2.map(function(p){return p.r}),y:ps2.map(function(p){return p.i}),mode:'markers',marker:{color:'#ff4444',size:12,symbol:'x'},name:'Polos',hovertemplate:'Polo<br>Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'});var zs2=roots(tf.n);if(zs2.length)traces.push({x:zs2.map(function(z){return z.r}),y:zs2.map(function(z){return z.i}),mode:'markers',marker:{color:'#44ff44',size:10,symbol:'circle-open',line:{width:2,color:'#44ff44'}},name:'Zeros',hovertemplate:'Zero<br>Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'});var lay=Object.assign({},_PT,{xaxis:_pAx('Parte Real'),yaxis:_pAx('Parte Imaginaria'),height:380,showlegend:true,legend:{x:0.01,y:0.99,bgcolor:'rgba(0,0,0,0.3)',font:{color:'#e0e4f0'}},hovermode:'closest',shapes:[{type:'line',x0:0,x1:0,y0:-1e6,y1:1e6,line:{color:'#555',width:1,dash:'dash'}},{type:'line',x0:-1e6,x1:1e6,y0:0,y1:0,line:{color:'#555',width:1,dash:'dash'}}]});Plotly.newPlot(el,traces,lay,{responsive:true})}
 function chartPZ(id,ps,zs){var el=document.getElementById(id);if(!el)return;var traces=[];if(zs.length)traces.push({x:zs.map(function(z){return z.r}),y:zs.map(function(z){return z.i}),mode:'markers',marker:{color:'#60a5fa',size:12,symbol:'circle-open',line:{width:2,color:'#60a5fa'}},name:'Zeros',hovertemplate:'Zero<br>Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'});if(ps.length)traces.push({x:ps.map(function(p){return p.r}),y:ps.map(function(p){return p.i}),mode:'markers',marker:{color:'#ff4444',size:12,symbol:'x'},name:'Polos',hovertemplate:'Polo<br>Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'});var lay=Object.assign({},_PT,{xaxis:_pAx('Parte Real'),yaxis:_pAx('Parte Imaginaria'),height:350,showlegend:true,legend:{x:0.01,y:0.99,bgcolor:'rgba(0,0,0,0.3)',font:{color:'#e0e4f0'}},hovermode:'closest',shapes:[{type:'line',x0:0,x1:0,y0:-1e6,y1:1e6,line:{color:'#555',width:1,dash:'dash'}},{type:'line',x0:-1e6,x1:1e6,y0:0,y1:0,line:{color:'#555',width:1,dash:'dash'}}]});Plotly.newPlot(el,traces,lay,{responsive:true})}
 function bode(tf,wMin,wMax,nP){var fs=[],ms=[],ps=[],lm=Math.log10(wMin),lx=Math.log10(wMax);for(var i=0;i<nP;i++){var w=Math.pow(10,lm+i*(lx-lm)/(nP-1));fs.push(w);var jw={r:0,i:w},nc=cEvP(tf.n,jw),dc=cEvP(tf.d,jw),T=cDiv(nc,dc),mg=cAbs(T);ms.push(mg>1e-30?20*Math.log10(mg):-600);ps.push(Math.atan2(T.i,T.r)*180/Math.PI)}for(var i=1;i<ps.length;i++){while(ps[i]-ps[i-1]>180)ps[i]-=360;while(ps[i]-ps[i-1]<-180)ps[i]+=360}return{w:fs,m:ms,p:ps}}
-function autoT(tf){var ps=roots(tf.d);if(!ps.length)return 20;var temInstavel=ps.some(function(p){return p.r>1e-4});if(temInstavel)return 15;var temZero=ps.some(function(p){return Math.abs(p.r)<1e-6&&Math.abs(p.i)<1e-6});if(temZero)return 50;var m=Infinity;ps.forEach(function(p){if(Math.abs(p.r)>1e-6)m=Math.min(m,Math.abs(p.r))});return m===Infinity?20:Math.min(200,Math.max(5,8/m))}
+function autoT(tf){var ps=roots(tf.d);if(!ps.length)return 20;var temInstável=ps.some(function(p){return p.r>1e-4});if(temInstável)return 15;var temZero=ps.some(function(p){return Math.abs(p.r)<1e-6&&Math.abs(p.i)<1e-6});if(temZero)return 50;var m=Infinity;ps.forEach(function(p){if(Math.abs(p.r)>1e-6)m=Math.min(m,Math.abs(p.r))});return m===Infinity?20:Math.min(200,Math.max(5,8/m))}
 function autoW(tf){var ps=roots(tf.d).concat(roots(tf.n));var fs=ps.map(function(p){return Math.sqrt(p.r*p.r+p.i*p.i)}).filter(function(f){return f>1e-6});if(!fs.length)return{a:.01,b:1000};var wMin=Math.max(1e-3,Math.min.apply(null,fs)/100);var wMax=Math.min(1e5,Math.max.apply(null,fs)*100);if(Math.log10(wMax/wMin)<4)wMax=wMin*1e4;return{a:wMin,b:wMax}}
 function perf(t,y){if(!y.length)return{};var l=y.slice(Math.floor(y.length*.9)),yf=l.reduce(function(a,b){return a+b},0)/l.length;var ym=Math.max.apply(null,y),os=Math.abs(yf)>1e-6?Math.max(0,(ym-yf)/Math.abs(yf)*100):0;var t10=null,t90=null;if(yf>0)for(var i=0;i<y.length;i++){if(t10===null&&y[i]>=yf*.1)t10=t[i];if(t90===null&&y[i]>=yf*.9){t90=t[i];break}}var tr=t10!==null&&t90!==null?t90-t10:NaN,ts2=NaN;if(Math.abs(yf)>1e-6)for(var i=y.length-1;i>=0;i--)if(Math.abs(y[i]-yf)>.02*Math.abs(yf)){ts2=i<y.length-1?t[i+1]:t[i];break}return{"Valor Final":fN(yf),"Sobressinal":fN(os)+"%","T. Subida":isNaN(tr)?"N/A":fN(tr)+"s","T. Acomod.":isNaN(ts2)?"N/A":fN(ts2)+"s","Pico":fN(ym)}}
 function fC(c){if(Math.abs(c.i)<1e-8)return fN(c.r);return fN(c.r)+(c.i>=0?" + ":" - ")+fN(Math.abs(c.i))+"j"}
@@ -1728,19 +1728,19 @@ function calcGM(bd){for(var i=1;i<bd.p.length;i++){if(bd.p[i-1]>-180&&bd.p[i]<=-
 function calcPM(bd){for(var i=1;i<bd.m.length;i++){if(bd.m[i-1]>=0&&bd.m[i]<0){var w=bd.m[i-1]/(bd.m[i-1]-bd.m[i]);var ph=bd.p[i-1]+w*(bd.p[i]-bd.p[i-1]);return ph+180}}return Infinity}
 function showRes(tf){
   _lastTF=tf;var rd=document.getElementById("res"),rb=document.getElementById("rb");rd.classList.add("vis");
-  var tfAnalise=tf;var ftmfErro=null;
-  if(curMalha==='fechada'){try{var ftmfNum=pTrim(tf.n.slice());var ftmfDen=curFbSign==='pos'?pTrim(pSub(tf.d,tf.n)):pTrim(pAdd(tf.d,tf.n));var lc2=ftmfDen[ftmfDen.length-1];if(Math.abs(lc2)<1e-10){ftmfErro="Denominador da FTMF degenerado.";tfAnalise=tf;}else{var reduced=pfReduce({n:ftmfNum,d:ftmfDen});if(Math.abs(lc2-1)>1e-10){reduced.n=pScl(reduced.n,1/lc2);reduced.d=pScl(reduced.d,1/lc2)}tfAnalise=reduced;}}catch(err){ftmfErro="Erro ao calcular FTMF: "+String(err);tfAnalise=tf;}}
-  var ns=fP(tfAnalise.n),ds=fP(tfAnalise.d);var ps=roots(tfAnalise.d),zs=roots(tfAnalise.n),stb=ps.every(function(p){return p.r<1e-6});var tM=autoT(tfAnalise);var sr=forceResp(tfAnalise,curSig,tM,400);var pf=perf(sr.t,sr.y);var wr=autoW(tfAnalise),bd=bode(tfAnalise,wr.a,wr.b,600);var nqd=nyq(tfAnalise,wr.a,wr.b,400);var lgrData=lgr(tf,300);
-  var sigNomes={degrau:'Degrau',rampa:'Rampa',senoidal:'Senoidal',impulso:'Impulso',parabolica:'Parabolica'};
+  var tfAnálise=tf;var ftmfErro=null;
+  if(curMalha==='fechada'){try{var ftmfNum=pTrim(tf.n.slice());var ftmfDen=curFbSign==='pos'?pTrim(pSub(tf.d,tf.n)):pTrim(pAdd(tf.d,tf.n));var lc2=ftmfDen[ftmfDen.length-1];if(Math.abs(lc2)<1e-10){ftmfErro="Denominador da FTMF degenerado.";tfAnálise=tf;}else{var reduced=pfReduce({n:ftmfNum,d:ftmfDen});if(Math.abs(lc2-1)>1e-10){reduced.n=pScl(reduced.n,1/lc2);reduced.d=pScl(reduced.d,1/lc2)}tfAnálise=reduced;}}catch(err){ftmfErro="Erro ao calcular FTMF: "+String(err);tfAnálise=tf;}}
+  var ns=fP(tfAnálise.n),ds=fP(tfAnálise.d);var ps=roots(tfAnálise.d),zs=roots(tfAnálise.n),stb=ps.every(function(p){return p.r<1e-6});var tM=autoT(tfAnálise);var sr=forceResp(tfAnálise,curSig,tM,400);var pf=perf(sr.t,sr.y);var wr=autoW(tfAnálise),bd=bode(tfAnálise,wr.a,wr.b,600);var nqd=nyq(tfAnálise,wr.a,wr.b,400);var lgrData=lgr(tf,300);
+  var sigNomes={degrau:'Degrau',rampa:'Rampa',senoidal:'Senoidal',impulso:'Impulso',parabolica:'Parabólica'};
   var h='';var ss='background:var(--sf2);border:1px solid var(--bd);border-radius:6px;color:var(--tx);padding:5px 10px;font-size:12px';
-  h+='<div class="rcard"><h4>Configuracoes de Analise</h4>';
+  h+='<div class="rcard"><h4>Configurações de Análise</h4>';
   h+='<div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:12px">';
   h+='<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px;color:var(--txm);font-weight:600">Tipo de Malha:</span>';
   h+='<select onchange="curMalha=this.value;reRender()" style="'+ss+';font-weight:600">';
   h+='<option value="aberta"'+(curMalha==='aberta'?' selected':'')+'>Malha Aberta</option>';
   h+='<option value="fechada"'+(curMalha==='fechada'?' selected':'')+'>Malha Fechada</option>';
   h+='</select></div>';
-  if(curMalha==='fechada'){h+='<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px;color:var(--txm);font-weight:600">Realimentacao:</span>';h+='<select onchange="curFbSign=this.value;reRender()" style="'+ss+';font-weight:600">';h+='<option value="neg"'+(curFbSign==='neg'?' selected':'')+'>Negativa G/(1+GH)</option>';h+='<option value="pos"'+(curFbSign==='pos'?' selected':'')+'>Positiva G/(1-GH)</option>';h+='</select></div>';}
+  if(curMalha==='fechada'){h+='<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px;color:var(--txm);font-weight:600">Realimentação:</span>';h+='<select onchange="curFbSign=this.value;reRender()" style="'+ss+';font-weight:600">';h+='<option value="neg"'+(curFbSign==='neg'?' selected':'')+'>Negativa G/(1+GH)</option>';h+='<option value="pos"'+(curFbSign==='pos'?' selected':'')+'>Positiva G/(1-GH)</option>';h+='</select></div>';}
   h+='<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px;color:var(--txm)">Sinal:</span>';
   h+='<select onchange="curSig=this.value;reRender()" style="'+ss+'">';
   ['degrau','rampa','senoidal','impulso','parabolica'].forEach(function(s){h+='<option value="'+s+'"'+(curSig===s?' selected':'')+'>'+sigNomes[s]+'</option>'});
@@ -1760,11 +1760,11 @@ function showRes(tf){
   if(selAn.pz){h+='<div class="rcard"><h4>Diagrama de Polos e Zeros</h4><div id="cPZ" style="width:100%;height:360px"></div>';h+='<div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:8px"><div><b style="color:var(--red)">Polos:</b><div class="pzl">';ps.forEach(function(p){h+='<div style="color:var(--red)">'+fC(p)+'</div>'});if(!ps.length)h+="<div>-</div>";h+='</div></div><div><b style="color:var(--blu)">Zeros:</b><div class="pzl">';zs.forEach(function(z){h+='<div style="color:var(--blu)">'+fC(z)+'</div>'});if(!zs.length)h+="<div>-</div>";h+='</div></div></div>';h+='<div style="margin-top:8px;padding:6px 10px;border-radius:6px;font-weight:700;font-size:13px;'+(stb?'background:#16382a;color:#34d399">ESTAVEL':'background:#3a1520;color:#f87171">INSTAVEL')+'</div></div>';}
   if(selAn.bm){h+='<div class="rcard"><h4>Bode - Magnitude</h4><div id="cBM" style="width:100%;height:320px"></div></div>';}
   if(selAn.bp){h+='<div class="rcard"><h4>Bode - Fase</h4>';var bdMA=bode(tf,wr.a,wr.b,600);var gm=calcGM(bdMA),pm=calcPM(bdMA);h+='<div style="display:flex;gap:16px;margin-bottom:6px;flex-wrap:wrap"><span style="font-size:12px;color:var(--txm)">Margem de Ganho: <b style="color:'+(gm>0?'#34d399':'#f87171')+'">'+fN(gm)+' dB</b></span><span style="font-size:12px;color:var(--txm)">Margem de Fase: <b style="color:'+(pm>0?'#34d399':'#f87171')+'">'+fN(pm)+'°</b></span></div><div id="cBP" style="width:100%;height:320px"></div></div>';}
-  if(curMalha==='aberta'&&selAn.nyqst){h+='<div class="rcard"><h4>Nyquist</h4><div id="cNyq" style="width:100%;height:380px"></div>';var nps=roots(tf.d),npsd=0;nps.forEach(function(p){if(p.r>1e-6)npsd++});h+='<div style="margin-top:8px;font-size:12px"><b>Polos SPD (P):</b> '+npsd+' | <b>Z = P + N:</b> '+(npsd===0?'Estavel':'Instavel')+'</div></div>';}
+  if(curMalha==='aberta'&&selAn.nyqst){h+='<div class="rcard"><h4>Nyquist</h4><div id="cNyq" style="width:100%;height:380px"></div>';var nps=roots(tf.d),npsd=0;nps.forEach(function(p){if(p.r>1e-6)npsd++});h+='<div style="margin-top:8px;font-size:12px"><b>Polos SPD (P):</b> '+npsd+' | <b>Z = P + N:</b> '+(npsd===0?'Estável':'Instável')+'</div></div>';}
   if(curMalha==='fechada'&&selAn.lgr){h+='<div class="rcard"><h4>LGR</h4><div id="cLGR" style="width:100%;height:380px"></div></div>';}
   rb.innerHTML=h;
   setTimeout(function(){
-    function chart2(id,xD,y1,y2,xL,yL){var el=document.getElementById(id);if(!el)return;Plotly.newPlot(el,[{x:xD,y:y1,mode:'lines',line:{color:'#60a5fa',width:1.5,dash:'dash'},name:'Entrada'},{x:xD,y:y2,mode:'lines',line:{color:'#f44336',width:2},name:'Saida'}],Object.assign({},_PT,{xaxis:_pAx(xL),yaxis:_pAx(yL),height:300,showlegend:true,hovermode:'x unified'}),{responsive:true})}
+    function chart2(id,xD,y1,y2,xL,yL){var el=document.getElementById(id);if(!el)return;Plotly.newPlot(el,[{x:xD,y:y1,mode:'lines',line:{color:'#60a5fa',width:1.5,dash:'dash'},name:'Entrada'},{x:xD,y:y2,mode:'lines',line:{color:'#f44336',width:2},name:'Saída'}],Object.assign({},_PT,{xaxis:_pAx(xL),yaxis:_pAx(yL),height:300,showlegend:true,hovermode:'x unified'}),{responsive:true})}
     function chart(id,xD,yD,xL,yL,col,logX){var el=document.getElementById(id);if(!el)return;Plotly.newPlot(el,[{x:xD,y:yD,mode:'lines',line:{color:col,width:2.5}}],Object.assign({},_PT,{xaxis:_pAx(xL,{type:logX?'log':'linear'}),yaxis:_pAx(yL),height:300,showlegend:false,hovermode:'x unified'}),{responsive:true})}
     function chartXY(id,xD,yD,xL,yL){var el=document.getElementById(id);if(!el)return;Plotly.newPlot(el,[{x:xD,y:yD,mode:'lines',line:{color:'#5b6be0',width:2},name:'Nyquist'},{x:xD,y:yD.map(function(v){return -v}),mode:'lines',line:{color:'#888',width:1,dash:'dash'},name:'Reflexo'},{x:[-1],y:[0],mode:'markers',marker:{color:'#ff4444',size:10,symbol:'circle'},name:'(-1,0)'}],Object.assign({},_PT,{xaxis:_pAx(xL),yaxis:_pAx(yL,{scaleanchor:'x'}),height:380,showlegend:true,hovermode:'closest'}),{responsive:true})}
     try{if(selAn.tempo)chart2("cStep",sr.t,sr.u,sr.y,"Tempo (s)","Amplitude");}catch(e){}
@@ -1792,7 +1792,7 @@ var model={nodes:[],edges:[]},selId=null,dragSt=null,conSt=null;
 var cw=document.getElementById("cw"),cv=document.getElementById("cv"),wSvg=document.getElementById("wires");
 function nxtId(){var m=0;model.nodes.forEach(function(n){var v=parseInt(n.id.replace("n",""))||0;if(v>m)m=v});return"n"+(m+1)}
 function ptr(e){if(e.touches&&e.touches.length)return{x:e.touches[0].clientX,y:e.touches[0].clientY};if(e.changedTouches&&e.changedTouches.length)return{x:e.changedTouches[0].clientX,y:e.changedTouches[0].clientY};return{x:e.clientX,y:e.clientY}}
-var BL={tf:"Planta",ss:"Espaço de Estados",gain:"Ganho",sum:"Somador",int:"Integrador",der:"Derivador",pid:"PID",sensor:"Sensor",actuator:"Atuador",input:"Entrada",output:"Saida",branch:"Ramificacao"};
+var BL={tf:"Planta",ss:"Espaço de Estados",gain:"Ganho",sum:"Somador",int:"Integrador",der:"Derivador",pid:"PID",sensor:"Sensor",actuator:"Atuador",input:"Entrada",output:"Saída",branch:"Ramificação"};
 function dPar(t){if(t==="tf")return{num:"1",den:"s+1"};if(t==="ss")return{ssA:"0 1; -2 -3",ssB:"0; 1",ssC:"1 0",ssD:"0"};if(t==="gain")return{k:"1"};if(t==="sum")return{signs:"+ -"};if(t==="pid")return{kp:"1",ki:"0",kd:"0"};if(t==="sensor"||t==="actuator")return{num:"1",den:"1"};if(t==="input")return{label:"R(s)"};if(t==="output")return{label:"Y(s)"};return{}}
 function gPC(t,p){if(t==="input")return{i:[],o:[{id:"out0"}]};if(t==="output")return{i:[{id:"in0"}],o:[]};if(t==="branch")return{i:[{id:"in0"}],o:[{id:"out0"},{id:"out1"}]};if(t==="sum"){var sg=(p&&p.signs?p.signs:"+ -").trim().split(/\s+/);return{i:sg.map(function(s,i){return{id:"in"+i,sign:s}}),o:[{id:"out0"}]}}return{i:[{id:"in0"}],o:[{id:"out0"}]}}
 function bTxt(n){var p=n.params||{};if(n.type==="tf"||n.type==="actuator")return'<div class="block-tf-disp"><div class="tf-num">'+(p.num||"1")+'</div><div>'+(p.den||"1")+'</div></div>';if(n.type==="ss"){var tf=ssToTF(p.ssA||"0",p.ssB||"0",p.ssC||"1",p.ssD||"0");return'<div class="block-tf-disp"><div class="tf-num">'+fP(tf.n)+'</div><div>'+fP(tf.d)+'</div></div>'}if(n.type==="gain")return"K="+(p.k||"1");if(n.type==="pid"){var _tf=bTF(n);return'<div class="block-tf-disp"><div class="tf-num">'+fP(_tf.n)+'</div><div>'+fP(_tf.d)+'</div></div>';}if(n.type==="sensor")return'<div class="block-tf-disp"><div class="tf-num">'+(p.num||"1")+'</div><div>'+(p.den||"1")+'</div></div>';if(n.type==="input")return p.label||"R(s)";if(n.type==="output")return p.label||"Y(s)";if(n.type==="sum")return"\u03a3";if(n.type==="int")return"1/s";if(n.type==="der")return"s";return""}
@@ -1815,12 +1815,12 @@ function onPC(e,pl){e.preventDefault();var nid=pl.dataset.nid,pid=pl.dataset.por
 function updP(){document.getElementById("pB").textContent=model.nodes.length;document.getElementById("pE").textContent=model.edges.length;var pa=document.getElementById("pA");if(!selId){pa.innerHTML='<span class="hint">Selecione um bloco.</span>';return}var nd=model.nodes.find(function(n){return n.id===selId});if(!nd){pa.innerHTML="";return}var p=nd.params||{};var h='<div style="font-size:11px;color:var(--txm);margin-bottom:6px">'+BL[nd.type]+' <b style="color:var(--tx)">'+nd.id+'</b></div>';if(nd.type==="tf"||nd.type==="sensor"||nd.type==="actuator"){h+=pI("Num","num",p.num||"1");h+=pI("Den","den",p.den||"1")}else if(nd.type==="ss"){h+=pI("Matriz A","ssA",p.ssA||"0 1; -2 -3");h+=pI("Matriz B","ssB",p.ssB||"0; 1");h+=pI("Matriz C","ssC",p.ssC||"1 0");h+=pI("Matriz D","ssD",p.ssD||"0")}else if(nd.type==="gain")h+=pI("K","k",p.k||"1");else if(nd.type==="sum")h+=pI("Sinais","signs",p.signs||"+ -");else if(nd.type==="pid"){h+=pI("Kp","kp",p.kp||"1");h+=pI("Ki","ki",p.ki||"0");h+=pI("Kd","kd",p.kd||"0")}else if(nd.type==="input"||nd.type==="output")h+=pI("Label","label",p.label||"");pa.innerHTML=h;pa.querySelectorAll("input[data-key]").forEach(function(inp){inp.addEventListener("input",function(){nd.params[inp.dataset.key]=inp.value;if(inp.dataset.key==="signs")render();else{var bl=document.querySelector('.block[data-id="'+nd.id+'"] .block-body');if(bl)bl.innerHTML=bTxt(nd)}})})}
 function pI(l,k,v){return'<div class="pg"><label>'+l+'</label><input data-key="'+k+'" value="'+esc(String(v))+'"></div>'}
 var connType=null,connSel=[];
-function openConnModal(tipo){connType=tipo;connSel=[];var titles={serie:'Serie',paralelo:'Paralelo',fb_neg:'Realimentacao Negativa',fb_pos:'Realimentacao Positiva'};var hints={serie:'Selecione 2+ blocos na ordem da cadeia.',paralelo:'Selecione 2+ blocos para somar.',fb_neg:'Selecione 2 blocos: G(s) e H(s).',fb_pos:'Selecione 2 blocos: G(s) e H(s).'};document.getElementById('connModalTitle').textContent=titles[tipo]||'Conexao';document.getElementById('connModalHint').textContent=hints[tipo]||'';var avail=model.nodes.filter(function(n){return['tf','ss','gain','pid','sensor','actuator','int','der'].indexOf(n.type)>=0});var cl=document.getElementById('connBlockList');var h='';if(!avail.length){h='<p style="color:#ef4444;font-size:13px;padding:12px">Nenhum bloco disponivel.</p>'}else{avail.forEach(function(n){var lbl=BL[n.type]+' ('+n.id+')';var det='';if(n.params){if(n.params.num)det=n.params.num+'/'+n.params.den;else if(n.params.k)det='K='+n.params.k;else if(n.params.ssA)det='SS'}h+='<div class="conn-item" data-connid="'+n.id+'" onclick="toggleConnSel(this,\''+n.id+'\')">';h+='<span class="conn-chk">&#9744;</span> ';h+='<span style="font-weight:600;color:var(--tx)">'+esc(lbl)+'</span>';if(det)h+='<span style="color:var(--txm);font-size:10px;margin-left:auto">'+esc(det)+'</span>';h+='</div>'})}cl.innerHTML=h;document.getElementById('connModal').classList.add('vis')}
+function openConnModal(tipo){connType=tipo;connSel=[];var titles={serie:'Série',paralelo:'Paralelo',fb_neg:'Realimentação Negativa',fb_pos:'Realimentação Positiva'};var hints={serie:'Selecione 2+ blocos na ordem da cadeia.',paralelo:'Selecione 2+ blocos para somar.',fb_neg:'Selecione 2 blocos: G(s) e H(s).',fb_pos:'Selecione 2 blocos: G(s) e H(s).'};document.getElementById('connModalTitle').textContent=titles[tipo]||'Conexão';document.getElementById('connModalHint').textContent=hints[tipo]||'';var avail=model.nodes.filter(function(n){return['tf','ss','gain','pid','sensor','actuator','int','der'].indexOf(n.type)>=0});var cl=document.getElementById('connBlockList');var h='';if(!avail.length){h='<p style="color:#ef4444;font-size:13px;padding:12px">Nenhum bloco disponivel.</p>'}else{avail.forEach(function(n){var lbl=BL[n.type]+' ('+n.id+')';var det='';if(n.params){if(n.params.num)det=n.params.num+'/'+n.params.den;else if(n.params.k)det='K='+n.params.k;else if(n.params.ssA)det='SS'}h+='<div class="conn-item" data-connid="'+n.id+'" onclick="toggleConnSel(this,\''+n.id+'\')">';h+='<span class="conn-chk">&#9744;</span> ';h+='<span style="font-weight:600;color:var(--tx)">'+esc(lbl)+'</span>';if(det)h+='<span style="color:var(--txm);font-size:10px;margin-left:auto">'+esc(det)+'</span>';h+='</div>'})}cl.innerHTML=h;document.getElementById('connModal').classList.add('vis')}
 function closeConnModal(){document.getElementById('connModal').classList.remove('vis');connType=null;connSel=[]}
 function toggleConnSel(el,nid){var idx=connSel.indexOf(nid);var chk=el.querySelector('.conn-chk');if(idx>=0){connSel.splice(idx,1);el.classList.remove('conn-sel');if(chk)chk.innerHTML='&#9744;'}else{if((connType==='fb_neg'||connType==='fb_pos')&&connSel.length>=2){alert('Feedback: maximo 2 blocos.');return}connSel.push(nid);el.classList.add('conn-sel');if(chk)chk.innerHTML='&#9745;'}var cnt=document.getElementById('connSelCount');if(cnt)cnt.textContent=connSel.length+' bloco'+(connSel.length!==1?'s':'')+' selecionado'+(connSel.length!==1?'s':'')}
-function applyConn(){if(connSel.length<2){alert('Selecione pelo menos 2 blocos.');return}if(connType==='serie')buildSerie(connSel.slice());else if(connType==='paralelo')buildParalelo(connSel.slice());else if(connType==='fb_neg')buildFeedback(connSel.slice(),false);else if(connType==='fb_pos')buildFeedback(connSel.slice(),true);closeConnModal();render()}
+function applyConn(){if(connSel.length<2){alert('Selecione pelo menos 2 blocos.');return}if(connType==='serie')buildSérie(connSel.slice());else if(connType==='paralelo')buildParalelo(connSel.slice());else if(connType==='fb_neg')buildFeedback(connSel.slice(),false);else if(connType==='fb_pos')buildFeedback(connSel.slice(),true);closeConnModal();render()}
 function mkEid(){return 'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
-function buildSerie(ids){for(var i=0;i<ids.length-1;i++){var a=ids[i],b=ids[i+1];var already=model.edges.some(function(e){return e.src===a&&e.dst===b});if(!already)model.edges.push({id:mkEid(),src:a,srcPort:'out0',dst:b,dstPort:'in0'})}var baseX=80,baseY=180;ids.forEach(function(id,i){var nd=model.nodes.find(function(n){return n.id===id});if(nd){nd.x=baseX+i*200;nd.y=baseY}})}
+function buildSérie(ids){for(var i=0;i<ids.length-1;i++){var a=ids[i],b=ids[i+1];var already=model.edges.some(function(e){return e.src===a&&e.dst===b});if(!already)model.edges.push({id:mkEid(),src:a,srcPort:'out0',dst:b,dstPort:'in0'})}var baseX=80,baseY=180;ids.forEach(function(id,i){var nd=model.nodes.find(function(n){return n.id===id});if(nd){nd.x=baseX+i*200;nd.y=baseY}})}
 function buildParalelo(ids){var nb=ids.length;var baseX=60,baseY=80;var brIds=[];for(var i=0;i<nb-1;i++){var br={id:nxtId(),type:'branch',x:baseX,y:baseY+50+i*50,params:{}};model.nodes.push(br);brIds.push(br.id);if(i>0)model.edges.push({id:mkEid(),src:brIds[i-1],srcPort:'out0',dst:br.id,dstPort:'in0'})}var signs='';for(var i=0;i<nb;i++)signs+=(i>0?' ':'')+'+';var smX=baseX+420,smY=baseY+(nb-1)*55;var sm={id:nxtId(),type:'sum',x:smX,y:smY,params:{signs:signs}};model.nodes.push(sm);ids.forEach(function(id,i){var nd=model.nodes.find(function(n){return n.id===id});if(nd){nd.x=baseX+200;nd.y=baseY+i*120}if(i===0){model.edges.push({id:mkEid(),src:brIds[0],srcPort:'out1',dst:id,dstPort:'in0'})}else if(i<nb-1){model.edges.push({id:mkEid(),src:brIds[i],srcPort:'out1',dst:id,dstPort:'in0'})}else{model.edges.push({id:mkEid(),src:brIds[nb-2],srcPort:'out0',dst:id,dstPort:'in0'})}model.edges.push({id:mkEid(),src:id,srcPort:'out0',dst:sm.id,dstPort:'in'+i})})}
 function buildFeedback(ids,positive){if(ids.length<2)return;var gId=ids[0],hId=ids[1];var gNd=model.nodes.find(function(n){return n.id===gId});var baseX=gNd?Math.max(60,gNd.x-120):80,baseY=gNd?gNd.y:160;var signStr=positive?'+ +':'+ -';var sm={id:nxtId(),type:'sum',x:baseX,y:baseY+15,params:{signs:signStr}};model.nodes.push(sm);var br={id:nxtId(),type:'branch',x:baseX+380,y:baseY+15,params:{}};model.nodes.push(br);var hNd=model.nodes.find(function(n){return n.id===hId});if(gNd){gNd.x=baseX+180;gNd.y=baseY}if(hNd){hNd.x=baseX+220;hNd.y=baseY+160}model.edges.push({id:mkEid(),src:sm.id,srcPort:'out0',dst:gId,dstPort:'in0'});model.edges.push({id:mkEid(),src:gId,srcPort:'out0',dst:br.id,dstPort:'in0'});model.edges.push({id:mkEid(),src:br.id,srcPort:'out1',dst:hId,dstPort:'in0'});model.edges.push({id:mkEid(),src:hId,srcPort:'out0',dst:sm.id,dstPort:'in1'})}
 document.querySelectorAll(".tb[data-add]").forEach(function(b){b.addEventListener("click",function(){addB(b.dataset.add)})});
@@ -1918,7 +1918,7 @@ def _format_complex_list(arr):
 def _build_canvas_model(blocos_df, conexoes):
     tipo_map = {
         'Planta': 'tf', 'Controlador': 'tf', 'Sensor': 'sensor',
-        'Atuador': 'actuator', 'Pre-filtro': 'tf', 'Perturbacao': 'tf',
+        'Atuador': 'actuator', 'Pre-filtro': 'tf', 'Perturbação': 'tf',
     }
     nodes = []
     edges = []
@@ -1971,7 +1971,7 @@ def _build_canvas_model(blocos_df, conexoes):
         if len(nomes) < 2:
             continue
 
-        if tipo_con == 'Serie':
+        if tipo_con == 'Série':
             for i, nome in enumerate(nomes):
                 b = bloco_map[nome]
                 b_id = mk_id()
@@ -2022,8 +2022,8 @@ def _build_canvas_model(blocos_df, conexoes):
             prev_out_port = 'out0'
             x_offset += 520
 
-        elif tipo_con.startswith('Realimentacao'):
-            is_pos = tipo_con == 'Realimentacao Positiva'
+        elif tipo_con.startswith('Realimentação'):
+            is_pos = tipo_con == 'Realimentação Positiva'
             sign_str = '+ +' if is_pos else '+ -'
             sum_id = mk_id()
             nodes.append({'id': sum_id, 'type': 'sum',
@@ -2080,15 +2080,15 @@ def modo_canvas():
         st.markdown("### Como usar")
         st.markdown("""
         **Diagrama de Blocos:**
-        1. Clique **+ Adicionar Bloco** ou use os botoes rapidos
+        1. Clique **+ Adicionar Bloco** ou use os botões rápidos
         2. Arraste para posicionar
-        3. Conecte: porta azul (saida) → porta verde (entrada)
-        4. Edite parametros no painel lateral
+        3. Conecte: porta azul (saída) → porta verde (entrada)
+        4. Edite parâmetros no painel lateral
         5. Clique **CALCULAR** para ver resultados
 
         **Entrada Manual:**
         1. Clique em "Entrada Manual"
-        2. Escolha: T(s) Direta, Malha Fechada, Malha Aberta ou Espaco de Estados
+        2. Escolha: T(s) Direta, Malha Fechada, Malha Aberta ou Espaço de Estados
         3. Preencha os campos
         4. Clique **CALCULAR T(s)**
         """)
@@ -2107,7 +2107,7 @@ def modo_canvas():
 
 
 # ══════════════════════════════════════════════════
-# APLICACAO PRINCIPAL
+# APLICAÇÃO PRINCIPAL
 # ══════════════════════════════════════════════════
 
 def main():
