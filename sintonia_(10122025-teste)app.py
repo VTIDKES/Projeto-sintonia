@@ -1649,12 +1649,12 @@ function cAbs(a){return Math.sqrt(a.r*a.r+a.i*a.i)}
 function cEvP(p,z){var r={r:0,i:0};for(var i=p.length-1;i>=0;i--){r=cMul(r,z);r.r+=p[i]}return r}
 function pfC(c){return{n:[c],d:[1]}}
 function pfZ(a){var t=pTrim(a.n);return t.length===1&&Math.abs(t[0])<1e-14}
-function pfAdd(a,b){return{n:pAdd(pMul(a.n,b.d),pMul(b.n,a.d)),d:pMul(a.d,b.d)}}
-function pfSub(a,b){return{n:pSub(pMul(a.n,b.d),pMul(b.n,a.d)),d:pMul(a.d,b.d)}}
-function pfMul(a,b){return{n:pMul(a.n,b.n),d:pMul(a.d,b.d)}}
-function pfDiv(a,b){return{n:pMul(a.n,b.d),d:pMul(a.d,b.n)}}
-function polyRem(a,b){a=a.slice();b=pTrim(b);if(b.length>a.length)return pTrim(a);for(var i=a.length-1;i>=b.length-1;i--){var c=a[i]/b[b.length-1];for(var j=0;j<b.length;j++)a[j+i-b.length+1]-=c*b[j]}var r=a.slice(0,b.length-1).map(function(v){return Math.abs(v)<1e-8?0:v});return pTrim(r)}
-function polyGCD(a,b){a=pTrim(a);b=pTrim(b);while(b.length>1||(b.length===1&&Math.abs(b[0])>1e-8)){var r=polyRem(a,b);a=b;b=r}var lc=a[a.length-1];if(Math.abs(lc)>1e-14)a=a.map(function(c){return c/lc});return pTrim(a)}
+function pfAdd(a,b){return pfReduce({n:pAdd(pMul(a.n,b.d),pMul(b.n,a.d)),d:pMul(a.d,b.d)})}
+function pfSub(a,b){return pfReduce({n:pSub(pMul(a.n,b.d),pMul(b.n,a.d)),d:pMul(a.d,b.d)})}
+function pfMul(a,b){return pfReduce({n:pMul(a.n,b.n),d:pMul(a.d,b.d)})}
+function pfDiv(a,b){return pfReduce({n:pMul(a.n,b.d),d:pMul(a.d,b.n)})}
+function polyRem(a,b){a=a.slice();b=pTrim(b);if(b.length>a.length)return pTrim(a);var mx=0;for(var i=0;i<a.length;i++)mx=Math.max(mx,Math.abs(a[i]));for(var i=a.length-1;i>=b.length-1;i--){var c=a[i]/b[b.length-1];for(var j=0;j<b.length;j++)a[j+i-b.length+1]-=c*b[j]}var tol=1e-10*Math.max(1,mx);var r=a.slice(0,b.length-1).map(function(v){return Math.abs(v)<tol?0:v});return pTrim(r)}
+function polyGCD(a,b){a=pTrim(a);b=pTrim(b);if(a.length<b.length){var t=a;a=b;b=t}for(var it=0;it<50;it++){b=pTrim(b);if(b.length<=1){var mx2=0;for(var i=0;i<a.length;i++)mx2=Math.max(mx2,Math.abs(a[i]));if(Math.abs(b[0])<1e-8*Math.max(1,mx2))break;return[1]}var r=polyRem(a,b);var mr=0;for(var i=0;i<r.length;i++)mr=Math.max(mr,Math.abs(r[i]));var mb=0;for(var i=0;i<b.length;i++)mb=Math.max(mb,Math.abs(b[i]));if(mr<1e-8*Math.max(1,mb)){a=b;break}a=b;b=r}a=pTrim(a);var lc=a[a.length-1];if(Math.abs(lc)>1e-14)a=a.map(function(c){return c/lc});return pTrim(a)}
 function polyDivQ(a,b){a=a.slice();b=pTrim(b);if(b.length===1)return pTrim(a.map(function(c){return c/b[0]}));if(b.length>a.length)return[0];var q=new Array(a.length-b.length+1);for(var i=a.length-1;i>=b.length-1;i--){var c=a[i]/b[b.length-1];q[i-b.length+1]=c;for(var j=0;j<b.length;j++)a[j+i-b.length+1]-=c*b[j]}return pTrim(q)}
 function pfReduce(pf){var n=pTrim(pf.n),d=pTrim(pf.d);var g=polyGCD(n,d);if(g.length<=1)return{n:n,d:d};return{n:pTrim(polyDivQ(n,g)),d:pTrim(polyDivQ(d,g))}}
 function parseP(s){
