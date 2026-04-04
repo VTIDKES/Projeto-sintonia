@@ -472,7 +472,7 @@ def estimar_tempo_final_simulacao(tf_sys):
         return 100.0
     sigma_dominante = max(partes_reais_estaveis)
     ts_estimado = 4 / abs(sigma_dominante)
-    return np.clip(ts_estimado * 1.5, a_min=10, a_max=500)
+    return np.clip(ts_estimado * 1.2, a_min=5, a_max=60)
 
 
 # ══════════════════════════════════════════════════
@@ -486,6 +486,16 @@ PLOTLY_DARK = dict(
     xaxis=dict(gridcolor='#333654', zerolinecolor='#444870', linecolor='#333654'),
     yaxis=dict(gridcolor='#333654', zerolinecolor='#444870', linecolor='#333654'),
     legend=dict(bgcolor='rgba(26,29,46,0.8)', bordercolor='#333654', borderwidth=1),
+    margin=dict(l=60, r=30, t=50, b=50),
+)
+
+PLOTLY_LIGHT = dict(
+    paper_bgcolor='white',
+    plot_bgcolor='white',
+    font=dict(color='black', family='system-ui, sans-serif'),
+    xaxis=dict(gridcolor='#d9d9d9', zerolinecolor='#cccccc', linecolor='#000000'),
+    yaxis=dict(gridcolor='#d9d9d9', zerolinecolor='#cccccc', linecolor='#000000'),
+    legend=dict(bgcolor='rgba(255,255,255,0.85)', bordercolor='#cccccc', borderwidth=1),
     margin=dict(l=60, r=30, t=50, b=50),
 )
 
@@ -520,6 +530,7 @@ def plot_polos_zeros(tf_sys, fig=None):
     fig.update_layout(
         title='Diagrama de Polos e Zeros', xaxis_title='Parte Real',
         yaxis_title='Parte Imaginaria', showlegend=True, hovermode='closest')
+    fig.update_layout(**PLOTLY_LIGHT)
     return configurar_linhas_interativas(fig)
 
 
@@ -554,6 +565,7 @@ def plot_resposta_temporal(sistema, entrada):
         title=f'Resposta Temporal - Entrada: {entrada}',
         xaxis_title='Tempo (s)', yaxis_title='Amplitude',
         showlegend=True, hovermode='x unified')
+    fig.update_layout(**PLOTLY_LIGHT)
     return configurar_linhas_interativas(fig), t_out, y
 
 
@@ -595,6 +607,7 @@ def plot_bode(sistema, tipo='both'):
         fig.update_layout(
             title='Bode - Fase', xaxis_title="Frequência (rad/s)",
             yaxis_title="Fase (deg)", xaxis_type='log')
+    fig.update_layout(**PLOTLY_LIGHT)
     return configurar_linhas_interativas(fig)
 
 
@@ -622,6 +635,7 @@ def plot_lgr(sistema):
         title='Lugar Geométrico das Raízes (LGR)',
         xaxis_title='Parte Real', yaxis_title='Parte Imaginaria',
         showlegend=True, hovermode='closest')
+    fig.update_layout(**PLOTLY_LIGHT)
     return configurar_linhas_interativas(fig)
 
 
@@ -646,6 +660,7 @@ def plot_nyquist(sistema):
         title='Diagrama de Nyquist', xaxis_title='Parte Real',
         yaxis_title='Parte Imaginaria', showlegend=True, hovermode='closest')
     fig = configurar_linhas_interativas(fig)
+    fig.update_layout(**PLOTLY_LIGHT)
     polos = ctrl.poles(sistema)
     polos_spd = sum(1 for p in polos if np.real(p) > 0)
     voltas = 0
