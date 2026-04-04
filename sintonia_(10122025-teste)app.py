@@ -287,24 +287,42 @@ def blocos_em_serie(tf_list):
     resultado = tf_list[0]
     for tf in tf_list[1:]:
         resultado = resultado * tf
-    return resultado
+    return ctrl.minreal(resultado, verbose=False)
 
 
 def blocos_em_paralelo(tf_list):
     resultado = tf_list[0]
     for tf in tf_list[1:]:
         resultado = resultado + tf
-    return resultado
+    return ctrl.minreal(resultado, verbose=False)
 
 
 def realimentacao(G, H=None, positiva=False):
+    """
+    Realimentação:
+    negativa -> G / (1 + G.H)
+    positiva -> G / (1 - G.H)
+    """
     if H is None:
         H = TransferFunction([1], [1])
-    sign = 1 if positiva else -1
-    return ctrl.feedback(G, H, sign=sign)
+
+    if positiva:
+        return ctrl.minreal(ctrl.feedback(G, H, sign=1), verbose=False)
+    return ctrl.minreal(ctrl.feedback(G, H, sign=-1), verbose=False)
 
 
 def simplificar_diagrama(blocos_df, conexoes):
+    """
+    Monta o sistema a partir das conexões registradas.
+
+    Regras:
+    - Sem conexões explícitas: assume série na ordem dos blocos.
+    - Série: multiplica os blocos da conexão na ordem informada.
+    - Paralelo: soma os blocos da conexão.
+    - Feedback: usa o primeiro bloco como G e o segundo como H.
+    - O resultado acumulado é composto em série APENAS entre conexões explícitas,
+      preservando a lógica original do app, mas evitando montagens incorretas.
+    """
     if blocos_df.empty:
         raise ValueError("Nenhum bloco definido.")
 
@@ -313,58 +331,65 @@ def simplificar_diagrama(blocos_df, conexoes):
         tf_map[row['nome']] = row['tf']
 
     if not conexoes:
-        tfs = list(tf_map.values())
+        tfs = [tf_map[row['nome']] for _, row in blocos_df.iterrows()]
         if len(tfs) == 1:
-            return tfs[0]
+            return ctrl.minreal(tfs[0], verbose=False)
         return blocos_em_serie(tfs)
 
     resultado = None
+
     for con in conexoes:
         tipo_con = con['tipo']
         nomes = con['blocos']
-        tfs = [tf_map[n] for n in nomes if n in tf_map]
 
-        if len(tfs) < 2:
-            if len(tfs) == 1:
-                resultado = tfs[0] if resultado is None else resultado * tfs[0]
+        if not nomes:
+            continue
+
+        tfs = [tf_map[n] for n in nomes if n in tf_map]
+        if not tfs:
             continue
 
         if tipo_con == 'Série':
             parcial = blocos_em_serie(tfs)
+
         elif tipo_con == 'Paralelo':
+            if len(tfs) < 2:
+                raise ValueError("Conexão em paralelo precisa de pelo menos dois blocos.")
             parcial = blocos_em_paralelo(tfs)
+
         elif tipo_con == 'Realimentação Negativa':
-            G = tfs[0]
-            H = tfs[1] if len(tfs) > 1 else TransferFunction([1], [1])
-            parcial = realimentacao(G, H, positiva=False)
+            if len(tfs) < 2:
+                raise ValueError("Realimentação Negativa precisa de G e H.")
+            parcial = realimentacao(tfs[0], tfs[1], positiva=False)
+
         elif tipo_con == 'Realimentação Positiva':
-            G = tfs[0]
-            H = tfs[1] if len(tfs) > 1 else TransferFunction([1], [1])
-            parcial = realimentacao(G, H, positiva=True)
+            if len(tfs) < 2:
+                raise ValueError("Realimentação Positiva precisa de G e H.")
+            parcial = realimentacao(tfs[0], tfs[1], positiva=True)
+
         else:
-            parcial = blocos_em_serie(tfs)
+            raise ValueError(f"Tipo de conexão desconhecido: {tipo_con}")
 
         if resultado is None:
             resultado = parcial
         else:
-            resultado = resultado * parcial
+            resultado = ctrl.minreal(resultado * parcial, verbose=False)
 
     if resultado is None:
-        tfs = list(tf_map.values())
-        resultado = blocos_em_serie(tfs) if len(tfs) > 1 else tfs[0]
+        tfs = [tf_map[row['nome']] for _, row in blocos_df.iterrows()]
+        resultado = tfs[0] if len(tfs) == 1 else blocos_em_serie(tfs)
 
     return ctrl.minreal(resultado, verbose=False)
 
-
-def calcular_malha_fechada(planta, controlador=None, sensor=None):
+def calcular_malha_fechada(planta, controlador=None, sensor=None, positiva=False):
     if controlador is None:
         controlador = TransferFunction([1], [1])
     if sensor is None:
         sensor = TransferFunction([1], [1])
+
     G = controlador * planta
     H = sensor
-    return ctrl.feedback(G, H)
-
+    return realimentacao(G, H, positiva=positiva)
 
 # ══════════════════════════════════════════════════
 # ANÁLISE DE SISTEMAS
@@ -535,27 +560,38 @@ def _gerar_sinal_entrada(entrada, t):
 
 
 def plot_resposta_temporal(sistema, entrada):
+    """
+    Gera a resposta temporal usando tempo adaptativo e T=t explícito.
+    Isso evita inconsistências de amostragem e melhora a coerência do gráfico.
+    """
+    sistema = ctrl.minreal(sistema, verbose=False)
+
     tempo_final = estimar_tempo_final_simulacao(sistema)
-    t = np.linspace(0, tempo_final, 1000)
+    t = np.linspace(0, tempo_final, 2000)
     u = _gerar_sinal_entrada(entrada, t)
+
     if entrada == 'Degrau':
-        t_out, y = step_response(sistema, t)
+        t_out, y = step_response(sistema, T=t)
     else:
-        t_out, y, _ = forced_response(sistema, t, u, return_x=True)
+        t_out, y = forced_response(sistema, T=t, U=u)
+
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=t_out, y=u[:len(t_out)], mode='lines',
         line=dict(dash='dash', color='blue'), name='Entrada',
-        hovertemplate='Tempo: %{x:.2f}s<br>Entrada: %{y:.3f}<extra></extra>'))
+        hovertemplate='Tempo: %{x:.4f} s<br>Entrada: %{y:.6f}<extra></extra>'
+    ))
     fig.add_trace(go.Scatter(
-        x=t_out, y=y, mode='lines', line=dict(color='red'), name='Saída',
-        hovertemplate='Tempo: %{x:.2f}s<br>Saída: %{y:.3f}<extra></extra>'))
+        x=t_out, y=y, mode='lines',
+        line=dict(color='red'), name='Saída',
+        hovertemplate='Tempo: %{x:.4f} s<br>Saída: %{y:.6f}<extra></extra>'
+    ))
     fig.update_layout(
         title=f'Resposta Temporal - Entrada: {entrada}',
         xaxis_title='Tempo (s)', yaxis_title='Amplitude',
-        showlegend=True, hovermode='x unified')
+        showlegend=True, hovermode='x unified'
+    )
     return configurar_linhas_interativas(fig), t_out, y
-
 
 def plot_bode(sistema, tipo='both'):
     numerator = sistema.num[0][0]
@@ -657,8 +693,8 @@ def plot_nyquist(sistema):
 # GERENCIAMENTO DE BLOCOS
 # ══════════════════════════════════════════════════
 
-def adicionar_bloco(nome, tipo, representacao, numerador='', denominador='',
-                    A_str='', B_str='', C_str='', D_str=''):
+def adicionar_bloco(nome, tipo, representacao, numerador='',
+                    denominador='', A_str='', B_str='', C_str='', D_str=''):
     try:
         if representacao == 'Função de Transferência':
             tf_obj, tf_symb = converter_para_tf(numerador, denominador)
@@ -667,25 +703,29 @@ def adicionar_bloco(nome, tipo, representacao, numerador='', denominador='',
             A_mat, _ = parse_matrix(A_str)
             if A_mat.shape[0] > 4:
                 return False, "Erro: dimensão máxima permitida é 4x4."
+
             resultado = converter_ss_para_tf(A_str, B_str, C_str, D_str)
-            tf_obj  = resultado["tf"]
+            tf_obj = resultado["tf"]
             tf_symb = resultado.get("simbolico", resultado.get("G", None))
-            ss_sys  = resultado.get("ss", None)
-            numerador   = " ".join(f"{v:.10g}" for v in tf_obj.num[0][0])
+            ss_sys = resultado.get("ss", None)
+
+            numerador = " ".join(f"{v:.10g}" for v in tf_obj.num[0][0])
             denominador = " ".join(f"{v:.10g}" for v in tf_obj.den[0][0])
+
+        if not st.session_state.blocos.empty and any(st.session_state.blocos['nome'] == nome):
+            return False, f"Erro: já existe um bloco com o nome '{nome}'."
 
         novo = pd.DataFrame([{
             'nome': nome, 'tipo': tipo, 'representacao': representacao,
             'numerador': numerador, 'denominador': denominador,
             'A': A_str, 'B': B_str, 'C': C_str, 'D': D_str,
-            'tf': tf_obj, 'tf_simbolico': tf_symb,
+            'tf': ctrl.minreal(tf_obj, verbose=False), 'tf_simbolico': tf_symb,
         }])
         st.session_state.blocos = pd.concat(
             [st.session_state.blocos, novo], ignore_index=True)
         return True, f"Bloco '{nome}' adicionado com sucesso."
     except Exception as e:
         return False, f"Erro: {e}"
-
 
 def remover_bloco(nome):
     st.session_state.blocos = st.session_state.blocos[
@@ -794,7 +834,6 @@ def executar_analises(sistema, analises, entrada, tipo_malha):
                 st.plotly_chart(fig, use_container_width=True)
         except Exception as e:
             st.error(f"Erro em '{analise}': {e}")
-
 
 # ══════════════════════════════════════════════════
 # TELA INICIAL
@@ -1111,18 +1150,25 @@ def modo_classico():
 
         st.markdown("---")
 
-        # ── Planta (primeira TF) ──
         tem_planta = not st.session_state.blocos.empty
+
         if not tem_planta:
             st.header("Planta G(s)")
             st.caption("Insira a função de transferência principal.")
+            tipo_bloco_escolhido = 'Planta'
         else:
             st.header("Adicionar Função de Transferência")
+            tipo_bloco_escolhido = st.selectbox(
+                "Tipo do bloco",
+                ['Planta', 'Controlador', 'Sensor', 'Atuador', 'Pre-filtro', 'Perturbação'],
+                key="cl_tipo_bloco"
+            )
 
         nome = st.text_input(
             "Nome",
             value=f"G{len(st.session_state.blocos)+1}",
-            key="cl_nome")
+            key="cl_nome"
+        )
 
         representacao = st.radio(
             "Representação",
@@ -1132,36 +1178,35 @@ def modo_classico():
         )
 
         if representacao == 'Função de Transferência':
-            numerador   = st.text_input("Numerador",   placeholder="ex: 4",     key="cl_num")
+            numerador = st.text_input("Numerador", placeholder="ex: 4", key="cl_num")
             denominador = st.text_input("Denominador", placeholder="ex: s^2+2s+3", key="cl_den")
             A_str = B_str = C_str = D_str = ''
         else:
             A_str, B_str, C_str, D_str = _render_ss_widget("sidebar", "cl_sidebar")
             numerador = denominador = ''
 
-        # Se já existe planta, pedir operação
+        operacao_nova = None
         if tem_planta:
             operacao_nova = st.selectbox(
                 "Operação com o sistema atual",
                 CONNECTION_TYPES,
-                key="cl_op_tipo")
+                key="cl_op_tipo"
+            )
             if operacao_nova in ['Realimentação Negativa', 'Realimentação Positiva']:
                 st.caption("A nova TF será usada como H(s) na realimentação.")
 
         if st.button(
-                "Definir Planta" if not tem_planta else "Adicionar e Aplicar",
-                type="primary", use_container_width=True):
-            tipo_bloco = 'Planta' if not tem_planta else 'Planta'
-            ok, msg = adicionar_bloco(nome, tipo_bloco, representacao,
-                                      numerador, denominador,
-                                      A_str, B_str, C_str, D_str)
+            "Definir Planta" if not tem_planta else "Adicionar e Aplicar",
+            type="primary", use_container_width=True
+        ):
+            ok, msg = adicionar_bloco(
+                nome, tipo_bloco_escolhido, representacao,
+                numerador, denominador, A_str, B_str, C_str, D_str
+            )
             if ok:
-                if tem_planta:
-                    # Auto-aplicar operação com o bloco anterior
+                if tem_planta and operacao_nova is not None:
                     nomes_existentes = list(st.session_state.blocos['nome'])
-                    # O bloco recém-adicionado é o último
                     bloco_novo = nomes_existentes[-1]
-                    # O sistema acumulado até agora: usar todos os anteriores
                     blocos_anteriores = nomes_existentes[:-1]
                     if len(blocos_anteriores) >= 1:
                         bloco_base = blocos_anteriores[-1]
@@ -1174,45 +1219,41 @@ def modo_classico():
             else:
                 st.error(msg)
 
-        # ── Lista simples de TFs no sistema ──
         if not st.session_state.blocos.empty:
             st.markdown("---")
             st.subheader("Sistema Atual")
-
-            simbolos = {'Série': ' → ', 'Paralelo': ' || ',
-                        'Realimentação Negativa': ' -fb ',
-                        'Realimentação Positiva': ' +fb '}
 
             for idx, row in st.session_state.blocos.iterrows():
                 tf_obj = row['tf']
                 num_s = _tf_to_str(tf_obj.num[0][0])
                 den_s = _tf_to_str(tf_obj.den[0][0])
-                # Encontrar operação associada
+
                 op_label = ""
                 if idx > 0:
                     for con in st.session_state.conexoes:
                         if row['nome'] in con['blocos'] and con['blocos'][-1] == row['nome']:
                             op_label = f" [{con['tipo']}]"
                             break
-                st.text(f"{row['nome']}: ({num_s}) / ({den_s}){op_label}")
-                if st.button(f"Remover {row['nome']}", key=f"rm_cl_{idx}",
-                             use_container_width=True):
+
+                st.text(f"{row['nome']} ({row['tipo']}): ({num_s}) / ({den_s}){op_label}")
+
+                if st.button(f"Remover {row['nome']}", key=f"rm_cl_{idx}", use_container_width=True):
                     remover_bloco(row['nome'])
                     st.rerun()
 
         st.markdown("---")
         st.header("Configurações")
-        lbl_erro = ("Desabilitar Cálculo de Erro"
-                    if st.session_state.calculo_erro_habilitado
-                    else "Habilitar Cálculo de Erro")
+        lbl_erro = (
+            "Desabilitar Cálculo de Erro"
+            if st.session_state.calculo_erro_habilitado
+            else "Habilitar Cálculo de Erro"
+        )
         if st.button(lbl_erro, use_container_width=True):
             st.session_state.calculo_erro_habilitado = (
-                not st.session_state.calculo_erro_habilitado)
+                not st.session_state.calculo_erro_habilitado
+            )
             st.rerun()
 
-    # ── Área principal ──
-
-    # Cálculo de erro
     if st.session_state.calculo_erro_habilitado:
         st.subheader("Cálculo de Erro Estacionário")
         c1, c2 = st.columns(2)
@@ -1234,7 +1275,6 @@ def modo_classico():
                 st.error(f"Erro: {e}")
         st.markdown("---")
 
-    # ── Configuração de análise ──
     col1, col2 = st.columns([2, 1])
 
     with col2:
@@ -1263,18 +1303,17 @@ def modo_classico():
 
                 if st.session_state.conexoes:
                     sistema = simplificar_diagrama(
-                        st.session_state.blocos, st.session_state.conexoes)
+                        st.session_state.blocos, st.session_state.conexoes
+                    )
+
                     if usar_ganho and K != 1.0:
-                        sistema = ganho_tf * sistema
-                    if tipo_malha == "Malha Fechada" and not any(
-                            c['tipo'].startswith('Realimentação')
-                            for c in st.session_state.conexoes):
-                        sistema = ctrl.feedback(sistema, TransferFunction([1], [1]))
+                        sistema = ctrl.minreal(ganho_tf * sistema, verbose=False)
+
                     label_extra = " (com conexões)"
                 else:
-                    planta      = obter_bloco_por_tipo('Planta')
+                    planta = obter_bloco_por_tipo('Planta')
                     controlador = obter_bloco_por_tipo('Controlador')
-                    sensor      = obter_bloco_por_tipo('Sensor')
+                    sensor = obter_bloco_por_tipo('Sensor')
 
                     if planta is None:
                         st.error("Adicione pelo menos uma Planta.")
@@ -1287,7 +1326,9 @@ def modo_classico():
                     else:
                         planta_com_ganho = ganho_tf * planta
                         sistema = calcular_malha_fechada(
-                            planta_com_ganho, controlador, sensor)
+                            planta_com_ganho, controlador, sensor, positiva=False
+                        )
+
                     label_extra = ""
 
                 sistema = ctrl.minreal(sistema, verbose=False)
@@ -1297,11 +1338,16 @@ def modo_classico():
                 den_str = _tf_to_str(sistema.den[0][0])
                 st.latex(f"T(s) = \\frac{{{num_str}}}{{{den_str}}}")
 
+                try:
+                    ganho_dc = ctrl.dcgain(sistema)
+                    st.metric("Ganho DC", f"{ganho_dc:.6f}")
+                except Exception:
+                    pass
+
                 executar_analises(sistema, analises, entrada, tipo_malha)
 
             except Exception as e:
                 st.error(f"Erro durante a simulação: {e}")
-
 
 # ══════════════════════════════════════════════════
 # EDITOR VISUAL HTML (CANVAS)
