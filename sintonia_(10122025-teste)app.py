@@ -299,36 +299,21 @@ def blocos_em_paralelo(tf_list):
 
 def realimentacao(G, H=None, positiva=False):
     """
-    Realimentação:
     negativa -> G / (1 + G.H)
     positiva -> G / (1 - G.H)
     """
     if H is None:
         H = TransferFunction([1], [1])
-
     if positiva:
         return ctrl.minreal(ctrl.feedback(G, H, sign=1), verbose=False)
     return ctrl.minreal(ctrl.feedback(G, H, sign=-1), verbose=False)
 
 
 def simplificar_diagrama(blocos_df, conexoes):
-    """
-    Monta o sistema a partir das conexões registradas.
-
-    Regras:
-    - Sem conexões explícitas: assume série na ordem dos blocos.
-    - Série: multiplica os blocos da conexão na ordem informada.
-    - Paralelo: soma os blocos da conexão.
-    - Feedback: usa o primeiro bloco como G e o segundo como H.
-    - O resultado acumulado é composto em série APENAS entre conexões explícitas,
-      preservando a lógica original do app, mas evitando montagens incorretas.
-    """
     if blocos_df.empty:
         raise ValueError("Nenhum bloco definido.")
 
-    tf_map = {}
-    for _, row in blocos_df.iterrows():
-        tf_map[row['nome']] = row['tf']
+    tf_map = {row['nome']: row['tf'] for _, row in blocos_df.iterrows()}
 
     if not conexoes:
         tfs = [tf_map[row['nome']] for _, row in blocos_df.iterrows()]
@@ -381,15 +366,16 @@ def simplificar_diagrama(blocos_df, conexoes):
 
     return ctrl.minreal(resultado, verbose=False)
 
+
 def calcular_malha_fechada(planta, controlador=None, sensor=None, positiva=False):
     if controlador is None:
         controlador = TransferFunction([1], [1])
     if sensor is None:
         sensor = TransferFunction([1], [1])
-
     G = controlador * planta
     H = sensor
     return realimentacao(G, H, positiva=positiva)
+
 
 # ══════════════════════════════════════════════════
 # ANÁLISE DE SISTEMAS
@@ -560,14 +546,19 @@ def _gerar_sinal_entrada(entrada, t):
 
 
 def plot_resposta_temporal(sistema, entrada):
-    """
-    Gera a resposta temporal usando tempo adaptativo e T=t explícito.
-    Isso evita inconsistências de amostragem e melhora a coerência do gráfico.
-    """
     sistema = ctrl.minreal(sistema, verbose=False)
 
+    polos = ctrl.poles(sistema)
     tempo_final = estimar_tempo_final_simulacao(sistema)
-    t = np.linspace(0, tempo_final, 2000)
+
+    if len(polos) > 0:
+        reais_estaveis = [abs(np.real(p)) for p in polos if np.real(p) < 0]
+        if reais_estaveis:
+            polo_mais_rapido = max(reais_estaveis)
+            if polo_mais_rapido > 50:
+                tempo_final = min(0.1, tempo_final)
+
+    t = np.linspace(0, tempo_final, 3000)
     u = _gerar_sinal_entrada(entrada, t)
 
     if entrada == 'Degrau':
@@ -577,21 +568,15 @@ def plot_resposta_temporal(sistema, entrada):
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=t_out, y=u[:len(t_out)], mode='lines',
-        line=dict(dash='dash', color='blue'), name='Entrada',
-        hovertemplate='Tempo: %{x:.4f} s<br>Entrada: %{y:.6f}<extra></extra>'
-    ))
-    fig.add_trace(go.Scatter(
         x=t_out, y=y, mode='lines',
-        line=dict(color='red'), name='Saída',
-        hovertemplate='Tempo: %{x:.4f} s<br>Saída: %{y:.6f}<extra></extra>'
-    ))
+        line=dict(color='blue'), name='Saída',
+        hovertemplate='Tempo: %{x:.5f}s<br>Saída: %{y:.6f}<extra></extra>'))
     fig.update_layout(
-        title=f'Resposta Temporal - Entrada: {entrada}',
-        xaxis_title='Tempo (s)', yaxis_title='Amplitude',
-        showlegend=True, hovermode='x unified'
-    )
+        title='Resposta ao Degrau' if entrada == 'Degrau' else f'Resposta Temporal - {entrada}',
+        xaxis_title='Tempo (s)', yaxis_title='Saída',
+        showlegend=True, hovermode='x unified')
     return configurar_linhas_interativas(fig), t_out, y
+
 
 def plot_bode(sistema, tipo='both'):
     numerator = sistema.num[0][0]
@@ -693,8 +678,8 @@ def plot_nyquist(sistema):
 # GERENCIAMENTO DE BLOCOS
 # ══════════════════════════════════════════════════
 
-def adicionar_bloco(nome, tipo, representacao, numerador='',
-                    denominador='', A_str='', B_str='', C_str='', D_str=''):
+def adicionar_bloco(nome, tipo, representacao, numerador='', denominador='',
+                    A_str='', B_str='', C_str='', D_str=''):
     try:
         if representacao == 'Função de Transferência':
             tf_obj, tf_symb = converter_para_tf(numerador, denominador)
@@ -703,12 +688,10 @@ def adicionar_bloco(nome, tipo, representacao, numerador='',
             A_mat, _ = parse_matrix(A_str)
             if A_mat.shape[0] > 4:
                 return False, "Erro: dimensão máxima permitida é 4x4."
-
             resultado = converter_ss_para_tf(A_str, B_str, C_str, D_str)
             tf_obj = resultado["tf"]
             tf_symb = resultado.get("simbolico", resultado.get("G", None))
             ss_sys = resultado.get("ss", None)
-
             numerador = " ".join(f"{v:.10g}" for v in tf_obj.num[0][0])
             denominador = " ".join(f"{v:.10g}" for v in tf_obj.den[0][0])
 
@@ -726,6 +709,7 @@ def adicionar_bloco(nome, tipo, representacao, numerador='',
         return True, f"Bloco '{nome}' adicionado com sucesso."
     except Exception as e:
         return False, f"Erro: {e}"
+
 
 def remover_bloco(nome):
     st.session_state.blocos = st.session_state.blocos[
@@ -834,6 +818,7 @@ def executar_analises(sistema, analises, entrada, tipo_malha):
                 st.plotly_chart(fig, use_container_width=True)
         except Exception as e:
             st.error(f"Erro em '{analise}': {e}")
+
 
 # ══════════════════════════════════════════════════
 # TELA INICIAL
@@ -1167,8 +1152,7 @@ def modo_classico():
         nome = st.text_input(
             "Nome",
             value=f"G{len(st.session_state.blocos)+1}",
-            key="cl_nome"
-        )
+            key="cl_nome")
 
         representacao = st.radio(
             "Representação",
@@ -1190,19 +1174,16 @@ def modo_classico():
             operacao_nova = st.selectbox(
                 "Operação com o sistema atual",
                 CONNECTION_TYPES,
-                key="cl_op_tipo"
-            )
+                key="cl_op_tipo")
             if operacao_nova in ['Realimentação Negativa', 'Realimentação Positiva']:
                 st.caption("A nova TF será usada como H(s) na realimentação.")
 
         if st.button(
-            "Definir Planta" if not tem_planta else "Adicionar e Aplicar",
-            type="primary", use_container_width=True
-        ):
-            ok, msg = adicionar_bloco(
-                nome, tipo_bloco_escolhido, representacao,
-                numerador, denominador, A_str, B_str, C_str, D_str
-            )
+                "Definir Planta" if not tem_planta else "Adicionar e Aplicar",
+                type="primary", use_container_width=True):
+            ok, msg = adicionar_bloco(nome, tipo_bloco_escolhido, representacao,
+                                      numerador, denominador,
+                                      A_str, B_str, C_str, D_str)
             if ok:
                 if tem_planta and operacao_nova is not None:
                     nomes_existentes = list(st.session_state.blocos['nome'])
@@ -1227,31 +1208,26 @@ def modo_classico():
                 tf_obj = row['tf']
                 num_s = _tf_to_str(tf_obj.num[0][0])
                 den_s = _tf_to_str(tf_obj.den[0][0])
-
                 op_label = ""
                 if idx > 0:
                     for con in st.session_state.conexoes:
                         if row['nome'] in con['blocos'] and con['blocos'][-1] == row['nome']:
                             op_label = f" [{con['tipo']}]"
                             break
-
                 st.text(f"{row['nome']} ({row['tipo']}): ({num_s}) / ({den_s}){op_label}")
-
-                if st.button(f"Remover {row['nome']}", key=f"rm_cl_{idx}", use_container_width=True):
+                if st.button(f"Remover {row['nome']}", key=f"rm_cl_{idx}",
+                             use_container_width=True):
                     remover_bloco(row['nome'])
                     st.rerun()
 
         st.markdown("---")
         st.header("Configurações")
-        lbl_erro = (
-            "Desabilitar Cálculo de Erro"
-            if st.session_state.calculo_erro_habilitado
-            else "Habilitar Cálculo de Erro"
-        )
+        lbl_erro = ("Desabilitar Cálculo de Erro"
+                    if st.session_state.calculo_erro_habilitado
+                    else "Habilitar Cálculo de Erro")
         if st.button(lbl_erro, use_container_width=True):
             st.session_state.calculo_erro_habilitado = (
-                not st.session_state.calculo_erro_habilitado
-            )
+                not st.session_state.calculo_erro_habilitado)
             st.rerun()
 
     if st.session_state.calculo_erro_habilitado:
@@ -1303,12 +1279,9 @@ def modo_classico():
 
                 if st.session_state.conexoes:
                     sistema = simplificar_diagrama(
-                        st.session_state.blocos, st.session_state.conexoes
-                    )
-
+                        st.session_state.blocos, st.session_state.conexoes)
                     if usar_ganho and K != 1.0:
                         sistema = ctrl.minreal(ganho_tf * sistema, verbose=False)
-
                     label_extra = " (com conexões)"
                 else:
                     planta = obter_bloco_por_tipo('Planta')
@@ -1326,9 +1299,7 @@ def modo_classico():
                     else:
                         planta_com_ganho = ganho_tf * planta
                         sistema = calcular_malha_fechada(
-                            planta_com_ganho, controlador, sensor, positiva=False
-                        )
-
+                            planta_com_ganho, controlador, sensor, positiva=False)
                     label_extra = ""
 
                 sistema = ctrl.minreal(sistema, verbose=False)
@@ -1348,6 +1319,7 @@ def modo_classico():
 
             except Exception as e:
                 st.error(f"Erro durante a simulação: {e}")
+
 
 # ══════════════════════════════════════════════════
 # EDITOR VISUAL HTML (CANVAS)
@@ -1415,6 +1387,7 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 .block-int{background:linear-gradient(135deg,#3d3a1a,#2a2812);border:1px solid #8a7a2d}
 .block-der{background:linear-gradient(135deg,#2a2a2a,#1e1e1e);border:1px solid #555}
 .block-pid{background:linear-gradient(135deg,#2a1f4e,#1a1535);border:1px solid #5548a0}
+.block-pd{background:linear-gradient(135deg,#3a2358,#24153a);border:1px solid #7c5ac7}
 .block-sensor{background:linear-gradient(135deg,#4a1a2d,#351020);border:1px solid #8a2d50}
 .block-actuator{background:linear-gradient(135deg,#1a3a4a,#102535);border:1px solid #2d708a}
 .block-ss{background:linear-gradient(135deg,#1a3d2a,#0f2518);border:1px solid #2d8a50}
@@ -1505,6 +1478,7 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 <div class="block-option" onclick="pickBlock('ss')"><div class="bo-icon" style="color:var(--grn)">SS</div><div class="bo-label">Espaço de Estados</div><div class="bo-desc">Matrizes A,B,C,D livres</div></div>
 <div class="block-option" onclick="pickBlock('gain')"><div class="bo-icon" style="color:var(--pur)">K</div><div class="bo-label">Ganho</div><div class="bo-desc">Ganho constante</div></div>
 <div class="block-option" onclick="pickBlock('pid')"><div class="bo-icon" style="color:var(--pur)">PID</div><div class="bo-label">Controlador PID</div><div class="bo-desc">Kp + Ki/s + Kd*s</div></div>
+<div class="block-option" onclick="pickBlock('pd')"><div class="bo-icon" style="color:var(--pur)">PD</div><div class="bo-label">Controlador PD</div><div class="bo-desc">Kp + Kd*s</div></div>
 <div class="block-option" onclick="pickBlock('int')"><div class="bo-icon" style="color:var(--yel)">1/s</div><div class="bo-label">Integrador</div><div class="bo-desc">Integração pura</div></div>
 <div class="block-option" onclick="pickBlock('der')"><div class="bo-icon" style="color:#aaa">s</div><div class="bo-label">Derivador</div><div class="bo-desc">Derivação pura</div></div>
 <div class="block-option" onclick="pickBlock('actuator')"><div class="bo-icon" style="color:var(--blu)">A(s)</div><div class="bo-label">Atuador</div><div class="bo-desc">Dinâmica do atuador</div></div>
@@ -1656,7 +1630,7 @@ function pickBlock(t){
   document.getElementById("modalGrid").style.display="none";
   var cp=document.getElementById("cfgPanel");cp.classList.add("vis");
   var cf=document.getElementById("cfgFields");var h="";
-  var titles={tf:"Planta G(s)",ss:"Espaço de Estados",gain:"Ganho K",pid:"Controlador PID",sensor:"Sensor H(s)",sum:"Somador",actuator:"Atuador A(s)"};
+  var titles={tf:"Planta G(s)",ss:"Espaço de Estados",gain:"Ganho K",pid:"Controlador PID",pd:"Controlador PD",sensor:"Sensor H(s)",sum:"Somador",actuator:"Atuador A(s)"};
   document.getElementById("cfgTitle").textContent="Configurar: "+(titles[t]||t);
   if(t==="tf"||t==="sensor"||t==="actuator"){
     h+='<div class="cfg-row"><div><label>Numerador</label><input id="cfgNum" value="1" placeholder="ex: s+1"></div>';
@@ -1670,6 +1644,8 @@ function pickBlock(t){
   else if(t==="pid"){
     h+='<div class="cfg-row"><div><label>Kp</label><input id="cfgKp" value="1"></div><div><label>Ki</label><input id="cfgKi" value="0"></div></div>';
     h+='<div class="cfg-row"><div><label>Kd</label><input id="cfgKd" value="0"></div><div></div></div>'}
+  else if(t==="pd"){
+    h+='<div class="cfg-row"><div><label>Kp</label><input id="cfgPDKp" value="1"></div><div><label>Kd</label><input id="cfgPDKd" value="0"></div></div>'}
   else if(t==="sum"){h+='<div class="cfg-row"><div><label>Sinais (+ ou -)</label><input id="cfgSigns" value="+ -" placeholder="+ - +"></div><div></div></div>'}
   cf.innerHTML=h}
 function confirmAdd(){
@@ -1679,6 +1655,7 @@ function confirmAdd(){
   else if(t==="ss"){p.ssA=(document.getElementById("cfgSSA")||{}).value||"0";p.ssB=(document.getElementById("cfgSSB")||{}).value||"0";p.ssC=(document.getElementById("cfgSSC")||{}).value||"1";p.ssD=(document.getElementById("cfgSSD")||{}).value||"0"}
   else if(t==="gain"){p.k=(document.getElementById("cfgK")||{}).value||"1"}
   else if(t==="pid"){p.kp=(document.getElementById("cfgKp")||{}).value||"1";p.ki=(document.getElementById("cfgKi")||{}).value||"0";p.kd=(document.getElementById("cfgKd")||{}).value||"0"}
+  else if(t==="pd"){p.kp=(document.getElementById("cfgPDKp")||{}).value||"1";p.kd=(document.getElementById("cfgPDKd")||{}).value||"0"}
   else if(t==="sum"){p.signs=(document.getElementById("cfgSigns")||{}).value||"+ -"}
   addBP(t,p);closeModal()}
 
@@ -1734,6 +1711,7 @@ function bTF(nd){var p=nd.params||{},t=nd.type;
   if(t==="gain")return pfC(parseFloat(p.k)||1);
   if(t==="int")return{n:[1],d:[0,1]};if(t==="der")return{n:[0,1],d:[1]};
   if(t==="pid"){var kp=parseFloat(p.kp)||0,ki=parseFloat(p.ki)||0,kd=parseFloat(p.kd)||0;if(Math.abs(ki)<1e-14&&Math.abs(kd)<1e-14)return pfC(kp||1);if(Math.abs(ki)<1e-14)return{n:[kp,kd],d:[1]};if(Math.abs(kd)<1e-14)return{n:[ki,kp],d:[0,1]};return{n:[ki,kp,kd],d:[0,1]}}
+  if(t==="pd"){var kp2=parseFloat(p.kp)||0,kd2=parseFloat(p.kd)||0;if(Math.abs(kd2)<1e-14)return pfC(kp2||1);return{n:[kp2,kd2],d:[1]}}
   return pfC(1)}
 function solve(nodes,edges){
   if(!nodes.length)return{e:"Adicione blocos."};
@@ -1760,7 +1738,7 @@ function _pAx(title,extra){var o={title:title,gridcolor:'#252840',zerolinecolor:
 function chartLGR(id,branches,tf){var el=document.getElementById(id);if(!el)return;var traces=[],cols=['#5b6be0','#60a5fa','#a78bfa','#f472b6','#fbbf24'];branches.forEach(function(br,bi){traces.push({x:br.re,y:br.im,mode:'lines',line:{color:cols[bi%cols.length],width:1.5},name:'Ramo '+(bi+1),showlegend:false,hovertemplate:'Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'})});var ps2=roots(tf.d);if(ps2.length)traces.push({x:ps2.map(function(p){return p.r}),y:ps2.map(function(p){return p.i}),mode:'markers',marker:{color:'#ff4444',size:12,symbol:'x'},name:'Polos',hovertemplate:'Polo<br>Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'});var zs2=roots(tf.n);if(zs2.length)traces.push({x:zs2.map(function(z){return z.r}),y:zs2.map(function(z){return z.i}),mode:'markers',marker:{color:'#44ff44',size:10,symbol:'circle-open',line:{width:2,color:'#44ff44'}},name:'Zeros',hovertemplate:'Zero<br>Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'});var lay=Object.assign({},_PT,{xaxis:_pAx('Parte Real'),yaxis:_pAx('Parte Imaginaria'),height:380,showlegend:true,legend:{x:0.01,y:0.99,bgcolor:'rgba(0,0,0,0.3)',font:{color:'#e0e4f0'}},hovermode:'closest',shapes:[{type:'line',x0:0,x1:0,y0:-1e6,y1:1e6,line:{color:'#555',width:1,dash:'dash'}},{type:'line',x0:-1e6,x1:1e6,y0:0,y1:0,line:{color:'#555',width:1,dash:'dash'}}]});Plotly.newPlot(el,traces,lay,{responsive:true})}
 function chartPZ(id,ps,zs){var el=document.getElementById(id);if(!el)return;var traces=[];if(zs.length)traces.push({x:zs.map(function(z){return z.r}),y:zs.map(function(z){return z.i}),mode:'markers',marker:{color:'#60a5fa',size:12,symbol:'circle-open',line:{width:2,color:'#60a5fa'}},name:'Zeros',hovertemplate:'Zero<br>Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'});if(ps.length)traces.push({x:ps.map(function(p){return p.r}),y:ps.map(function(p){return p.i}),mode:'markers',marker:{color:'#ff4444',size:12,symbol:'x'},name:'Polos',hovertemplate:'Polo<br>Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'});var lay=Object.assign({},_PT,{xaxis:_pAx('Parte Real'),yaxis:_pAx('Parte Imaginaria'),height:350,showlegend:true,legend:{x:0.01,y:0.99,bgcolor:'rgba(0,0,0,0.3)',font:{color:'#e0e4f0'}},hovermode:'closest',shapes:[{type:'line',x0:0,x1:0,y0:-1e6,y1:1e6,line:{color:'#555',width:1,dash:'dash'}},{type:'line',x0:-1e6,x1:1e6,y0:0,y1:0,line:{color:'#555',width:1,dash:'dash'}}]});Plotly.newPlot(el,traces,lay,{responsive:true})}
 function bode(tf,wMin,wMax,nP){var fs=[],ms=[],ps=[],lm=Math.log10(wMin),lx=Math.log10(wMax);for(var i=0;i<nP;i++){var w=Math.pow(10,lm+i*(lx-lm)/(nP-1));fs.push(w);var jw={r:0,i:w},nc=cEvP(tf.n,jw),dc=cEvP(tf.d,jw),T=cDiv(nc,dc),mg=cAbs(T);ms.push(mg>1e-30?20*Math.log10(mg):-600);ps.push(Math.atan2(T.i,T.r)*180/Math.PI)}for(var i=1;i<ps.length;i++){while(ps[i]-ps[i-1]>180)ps[i]-=360;while(ps[i]-ps[i-1]<-180)ps[i]+=360}return{w:fs,m:ms,p:ps}}
-function autoT(tf){var ps=roots(tf.d);if(!ps.length)return 20;var temInstável=ps.some(function(p){return p.r>1e-4});if(temInstável)return 15;var temZero=ps.some(function(p){return Math.abs(p.r)<1e-6&&Math.abs(p.i)<1e-6});if(temZero)return 50;var m=Infinity;ps.forEach(function(p){if(Math.abs(p.r)>1e-6)m=Math.min(m,Math.abs(p.r))});return m===Infinity?20:Math.min(200,Math.max(5,8/m))}
+function autoT(tf){var ps=roots(tf.d);if(!ps.length)return 20;var temInstável=ps.some(function(p){return p.r>1e-4});if(temInstável)return 15;var temZero=ps.some(function(p){return Math.abs(p.r)<1e-6&&Math.abs(p.i)<1e-6});if(temZero)return 50;var maxR=0,minR=Infinity;ps.forEach(function(p){if(Math.abs(p.r)>1e-6){var ar=Math.abs(p.r);minR=Math.min(minR,ar);maxR=Math.max(maxR,ar)}});if(maxR>50)return 0.1;return minR===Infinity?20:Math.min(200,Math.max(0.1,8/minR))}
 function autoW(tf){var ps=roots(tf.d).concat(roots(tf.n));var fs=ps.map(function(p){return Math.sqrt(p.r*p.r+p.i*p.i)}).filter(function(f){return f>1e-6});if(!fs.length)return{a:.01,b:1000};var wMin=Math.max(1e-3,Math.min.apply(null,fs)/100);var wMax=Math.min(1e5,Math.max.apply(null,fs)*100);if(Math.log10(wMax/wMin)<4)wMax=wMin*1e4;return{a:wMin,b:wMax}}
 function perf(t,y){if(!y.length)return{};var l=y.slice(Math.floor(y.length*.9)),yf=l.reduce(function(a,b){return a+b},0)/l.length;var ym=Math.max.apply(null,y),os=Math.abs(yf)>1e-6?Math.max(0,(ym-yf)/Math.abs(yf)*100):0;var t10=null,t90=null;if(yf>0)for(var i=0;i<y.length;i++){if(t10===null&&y[i]>=yf*.1)t10=t[i];if(t90===null&&y[i]>=yf*.9){t90=t[i];break}}var tr=t10!==null&&t90!==null?t90-t10:NaN,ts2=NaN;if(Math.abs(yf)>1e-6)for(var i=y.length-1;i>=0;i--)if(Math.abs(y[i]-yf)>.02*Math.abs(yf)){ts2=i<y.length-1?t[i+1]:t[i];break}return{"Valor Final":fN(yf),"Sobressinal":fN(os)+"%","T. Subida":isNaN(tr)?"N/A":fN(tr)+"s","T. Acomod.":isNaN(ts2)?"N/A":fN(ts2)+"s","Pico":fN(ym)}}
 function fC(c){if(Math.abs(c.i)<1e-8)return fN(c.r);return fN(c.r)+(c.i>=0?" + ":" - ")+fN(Math.abs(c.i))+"j"}
@@ -1775,7 +1753,7 @@ function showRes(tf){
   _lastTF=tf;var rd=document.getElementById("res"),rb=document.getElementById("rb");rd.classList.add("vis");
   var tfAnálise=tf;var ftmfErro=null;
   if(curMalha==='fechada'){try{var ftmfNum=pTrim(tf.n.slice());var ftmfDen=curFbSign==='pos'?pTrim(pSub(tf.d,tf.n)):pTrim(pAdd(tf.d,tf.n));var lc2=ftmfDen[ftmfDen.length-1];if(Math.abs(lc2)<1e-10){ftmfErro="Denominador da FTMF degenerado.";tfAnálise=tf;}else{var reduced=pfReduce({n:ftmfNum,d:ftmfDen});if(Math.abs(lc2-1)>1e-10){reduced.n=pScl(reduced.n,1/lc2);reduced.d=pScl(reduced.d,1/lc2)}tfAnálise=reduced;}}catch(err){ftmfErro="Erro ao calcular FTMF: "+String(err);tfAnálise=tf;}}
-  var ns=fP(tfAnálise.n),ds=fP(tfAnálise.d);var ps=roots(tfAnálise.d),zs=roots(tfAnálise.n),stb=ps.every(function(p){return p.r<1e-6});var tM=autoT(tfAnálise);var sr=forceResp(tfAnálise,curSig,tM,400);var pf=perf(sr.t,sr.y);var wr=autoW(tfAnálise),bd=bode(tfAnálise,wr.a,wr.b,600);var nqd=nyq(tfAnálise,wr.a,wr.b,400);var lgrData=lgr(tf,300);
+  var ns=fP(tfAnálise.n),ds=fP(tfAnálise.d);var ps=roots(tfAnálise.d),zs=roots(tfAnálise.n),stb=ps.every(function(p){return p.r<1e-6});var tM=autoT(tfAnálise);var sr=forceResp(tfAnálise,curSig,tM,1200);var pf=perf(sr.t,sr.y);var wr=autoW(tfAnálise),bd=bode(tfAnálise,wr.a,wr.b,600);var nqd=nyq(tfAnálise,wr.a,wr.b,400);var lgrData=lgr(tf,300);
   var sigNomes={degrau:'Degrau',rampa:'Rampa',senoidal:'Senoidal',impulso:'Impulso',parabolica:'Parabólica'};
   var h='';var ss='background:var(--sf2);border:1px solid var(--bd);border-radius:6px;color:var(--tx);padding:5px 10px;font-size:12px';
   h+='<div class="rcard"><h4>Configurações de Análise</h4>';
@@ -1837,10 +1815,10 @@ var model={nodes:[],edges:[]},selId=null,dragSt=null,conSt=null;
 var cw=document.getElementById("cw"),cv=document.getElementById("cv"),wSvg=document.getElementById("wires");
 function nxtId(){var m=0;model.nodes.forEach(function(n){var v=parseInt(n.id.replace("n",""))||0;if(v>m)m=v});return"n"+(m+1)}
 function ptr(e){if(e.touches&&e.touches.length)return{x:e.touches[0].clientX,y:e.touches[0].clientY};if(e.changedTouches&&e.changedTouches.length)return{x:e.changedTouches[0].clientX,y:e.changedTouches[0].clientY};return{x:e.clientX,y:e.clientY}}
-var BL={tf:"Planta",ss:"Espaço de Estados",gain:"Ganho",sum:"Somador",int:"Integrador",der:"Derivador",pid:"PID",sensor:"Sensor",actuator:"Atuador",input:"Entrada",output:"Saída",branch:"Ramificação"};
-function dPar(t){if(t==="tf")return{num:"1",den:"s+1"};if(t==="ss")return{ssA:"0 1; -2 -3",ssB:"0; 1",ssC:"1 0",ssD:"0"};if(t==="gain")return{k:"1"};if(t==="sum")return{signs:"+ -"};if(t==="pid")return{kp:"1",ki:"0",kd:"0"};if(t==="sensor"||t==="actuator")return{num:"1",den:"1"};if(t==="input")return{label:"R(s)"};if(t==="output")return{label:"Y(s)"};return{}}
+var BL={tf:"Planta",ss:"Espaço de Estados",gain:"Ganho",sum:"Somador",int:"Integrador",der:"Derivador",pid:"PID",pd:"PD",sensor:"Sensor",actuator:"Atuador",input:"Entrada",output:"Saída",branch:"Ramificação"};
+function dPar(t){if(t==="tf")return{num:"1",den:"s+1"};if(t==="ss")return{ssA:"0 1; -2 -3",ssB:"0; 1",ssC:"1 0",ssD:"0"};if(t==="gain")return{k:"1"};if(t==="sum")return{signs:"+ -"};if(t==="pid")return{kp:"1",ki:"0",kd:"0"};if(t==="pd")return{kp:"1",kd:"0"};if(t==="sensor"||t==="actuator")return{num:"1",den:"1"};if(t==="input")return{label:"R(s)"};if(t==="output")return{label:"Y(s)"};return{}}
 function gPC(t,p){if(t==="input")return{i:[],o:[{id:"out0"}]};if(t==="output")return{i:[{id:"in0"}],o:[]};if(t==="branch")return{i:[{id:"in0"}],o:[{id:"out0"},{id:"out1"}]};if(t==="sum"){var sg=(p&&p.signs?p.signs:"+ -").trim().split(/\s+/);return{i:sg.map(function(s,i){return{id:"in"+i,sign:s}}),o:[{id:"out0"}]}}return{i:[{id:"in0"}],o:[{id:"out0"}]}}
-function bTxt(n){var p=n.params||{};if(n.type==="tf"||n.type==="actuator")return'<div class="block-tf-disp"><div class="tf-num">'+(p.num||"1")+'</div><div>'+(p.den||"1")+'</div></div>';if(n.type==="ss"){var tf=ssToTF(p.ssA||"0",p.ssB||"0",p.ssC||"1",p.ssD||"0");return'<div class="block-tf-disp"><div class="tf-num">'+fP(tf.n)+'</div><div>'+fP(tf.d)+'</div></div>'}if(n.type==="gain")return"K="+(p.k||"1");if(n.type==="pid"){var _tf=bTF(n);return'<div class="block-tf-disp"><div class="tf-num">'+fP(_tf.n)+'</div><div>'+fP(_tf.d)+'</div></div>';}if(n.type==="sensor")return'<div class="block-tf-disp"><div class="tf-num">'+(p.num||"1")+'</div><div>'+(p.den||"1")+'</div></div>';if(n.type==="input")return p.label||"R(s)";if(n.type==="output")return p.label||"Y(s)";if(n.type==="sum")return"\u03a3";if(n.type==="int")return"1/s";if(n.type==="der")return"s";return""}
+function bTxt(n){var p=n.params||{};if(n.type==="tf"||n.type==="actuator")return'<div class="block-tf-disp"><div class="tf-num">'+(p.num||"1")+'</div><div>'+(p.den||"1")+'</div></div>';if(n.type==="ss"){var tf=ssToTF(p.ssA||"0",p.ssB||"0",p.ssC||"1",p.ssD||"0");return'<div class="block-tf-disp"><div class="tf-num">'+fP(tf.n)+'</div><div>'+fP(tf.d)+'</div></div>'}if(n.type==="gain")return"K="+(p.k||"1");if(n.type==="pid"||n.type==="pd"){var _tf=bTF(n);return'<div class="block-tf-disp"><div class="tf-num">'+fP(_tf.n)+'</div><div>'+fP(_tf.d)+'</div></div>';}if(n.type==="sensor")return'<div class="block-tf-disp"><div class="tf-num">'+(p.num||"1")+'</div><div>'+(p.den||"1")+'</div></div>';if(n.type==="input")return p.label||"R(s)";if(n.type==="output")return p.label||"Y(s)";if(n.type==="sum")return"\u03a3";if(n.type==="int")return"1/s";if(n.type==="der")return"s";return""}
 function addB(t){var r=cw.getBoundingClientRect(),n={id:nxtId(),type:t,x:40+Math.random()*(r.width-200),y:40+Math.random()*(r.height-140),params:dPar(t)};if(t==="input"){n.x=30;n.y=r.height/2-30}if(t==="output"){n.x=r.width-160;n.y=r.height/2-30}model.nodes.push(n);render();setSel(n.id)}
 function addBP(t,p){var r=cw.getBoundingClientRect(),n={id:nxtId(),type:t,x:40+Math.random()*(r.width-200),y:40+Math.random()*(r.height-140),params:Object.assign(dPar(t),p)};if(t==="input"){n.x=30;n.y=r.height/2-30}if(t==="output"){n.x=r.width-160;n.y=r.height/2-30}model.nodes.push(n);render();setSel(n.id)}
 function delSel(){if(!selId)return;model.edges=model.edges.filter(function(e){return e.src!==selId&&e.dst!==selId});model.nodes=model.nodes.filter(function(n){return n.id!==selId});selId=null;conSt=null;render()}
@@ -1857,10 +1835,10 @@ document.addEventListener("mousemove",onPM);document.addEventListener("mouseup",
 cv.addEventListener("mousedown",function(e){if(e.target===cv){conSt=null;document.querySelectorAll(".port.active").forEach(function(p){p.classList.remove("active")});setSel(null)}});
 cv.addEventListener("touchstart",function(e){if(e.target===cv){conSt=null;document.querySelectorAll(".port.active").forEach(function(p){p.classList.remove("active")});setSel(null)}},{passive:false});
 function onPC(e,pl){e.preventDefault();var nid=pl.dataset.nid,pid=pl.dataset.port,kind=pl.dataset.kind;setSel(nid);if(conSt){if(conSt.nid===nid){conSt=null;document.querySelectorAll(".port.active").forEach(function(p){p.classList.remove("active")});return}var sI,sP,dI,dP;if(conSt.kind==="out"&&kind==="in"){sI=conSt.nid;sP=conSt.pid;dI=nid;dP=pid}else if(conSt.kind==="in"&&kind==="out"){sI=nid;sP=pid;dI=conSt.nid;dP=conSt.pid}else{conSt=null;document.querySelectorAll(".port.active").forEach(function(p){p.classList.remove("active")});return}if(!model.edges.some(function(ed){return ed.src===sI&&ed.srcPort===sP&&ed.dst===dI&&ed.dstPort===dP}))model.edges.push({id:"e"+Math.random().toString(36).slice(2),src:sI,srcPort:sP,dst:dI,dstPort:dP});conSt=null;document.querySelectorAll(".port.active").forEach(function(p){p.classList.remove("active")});render()}else{conSt={nid:nid,pid:pid,kind:kind};pl.classList.add("active")}}
-function updP(){document.getElementById("pB").textContent=model.nodes.length;document.getElementById("pE").textContent=model.edges.length;var pa=document.getElementById("pA");if(!selId){pa.innerHTML='<span class="hint">Selecione um bloco.</span>';return}var nd=model.nodes.find(function(n){return n.id===selId});if(!nd){pa.innerHTML="";return}var p=nd.params||{};var h='<div style="font-size:11px;color:var(--txm);margin-bottom:6px">'+BL[nd.type]+' <b style="color:var(--tx)">'+nd.id+'</b></div>';if(nd.type==="tf"||nd.type==="sensor"||nd.type==="actuator"){h+=pI("Num","num",p.num||"1");h+=pI("Den","den",p.den||"1")}else if(nd.type==="ss"){h+=pI("Matriz A","ssA",p.ssA||"0 1; -2 -3");h+=pI("Matriz B","ssB",p.ssB||"0; 1");h+=pI("Matriz C","ssC",p.ssC||"1 0");h+=pI("Matriz D","ssD",p.ssD||"0")}else if(nd.type==="gain")h+=pI("K","k",p.k||"1");else if(nd.type==="sum")h+=pI("Sinais","signs",p.signs||"+ -");else if(nd.type==="pid"){h+=pI("Kp","kp",p.kp||"1");h+=pI("Ki","ki",p.ki||"0");h+=pI("Kd","kd",p.kd||"0")}else if(nd.type==="input"||nd.type==="output")h+=pI("Label","label",p.label||"");pa.innerHTML=h;pa.querySelectorAll("input[data-key]").forEach(function(inp){inp.addEventListener("input",function(){nd.params[inp.dataset.key]=inp.value;if(inp.dataset.key==="signs")render();else{var bl=document.querySelector('.block[data-id="'+nd.id+'"] .block-body');if(bl)bl.innerHTML=bTxt(nd)}})})}
+function updP(){document.getElementById("pB").textContent=model.nodes.length;document.getElementById("pE").textContent=model.edges.length;var pa=document.getElementById("pA");if(!selId){pa.innerHTML='<span class="hint">Selecione um bloco.</span>';return}var nd=model.nodes.find(function(n){return n.id===selId});if(!nd){pa.innerHTML="";return}var p=nd.params||{};var h='<div style="font-size:11px;color:var(--txm);margin-bottom:6px">'+BL[nd.type]+' <b style="color:var(--tx)">'+nd.id+'</b></div>';if(nd.type==="tf"||nd.type==="sensor"||nd.type==="actuator"){h+=pI("Num","num",p.num||"1");h+=pI("Den","den",p.den||"1")}else if(nd.type==="ss"){h+=pI("Matriz A","ssA",p.ssA||"0 1; -2 -3");h+=pI("Matriz B","ssB",p.ssB||"0; 1");h+=pI("Matriz C","ssC",p.ssC||"1 0");h+=pI("Matriz D","ssD",p.ssD||"0")}else if(nd.type==="gain")h+=pI("K","k",p.k||"1");else if(nd.type==="sum")h+=pI("Sinais","signs",p.signs||"+ -");else if(nd.type==="pid"){h+=pI("Kp","kp",p.kp||"1");h+=pI("Ki","ki",p.ki||"0");h+=pI("Kd","kd",p.kd||"0")}else if(nd.type==="pd"){h+=pI("Kp","kp",p.kp||"1");h+=pI("Kd","kd",p.kd||"0")}else if(nd.type==="input"||nd.type==="output")h+=pI("Label","label",p.label||"");pa.innerHTML=h;pa.querySelectorAll("input[data-key]").forEach(function(inp){inp.addEventListener("input",function(){nd.params[inp.dataset.key]=inp.value;if(inp.dataset.key==="signs")render();else{var bl=document.querySelector('.block[data-id="'+nd.id+'"] .block-body');if(bl)bl.innerHTML=bTxt(nd)}})})}
 function pI(l,k,v){return'<div class="pg"><label>'+l+'</label><input data-key="'+k+'" value="'+esc(String(v))+'"></div>'}
 var connType=null,connSel=[];
-function openConnModal(tipo){connType=tipo;connSel=[];var titles={serie:'Série',paralelo:'Paralelo',fb_neg:'Realimentação Negativa',fb_pos:'Realimentação Positiva'};var hints={serie:'Selecione 2+ blocos na ordem da cadeia.',paralelo:'Selecione 2+ blocos para somar.',fb_neg:'Selecione 2 blocos: G(s) e H(s).',fb_pos:'Selecione 2 blocos: G(s) e H(s).'};document.getElementById('connModalTitle').textContent=titles[tipo]||'Conexão';document.getElementById('connModalHint').textContent=hints[tipo]||'';var avail=model.nodes.filter(function(n){return['tf','ss','gain','pid','sensor','actuator','int','der'].indexOf(n.type)>=0});var cl=document.getElementById('connBlockList');var h='';if(!avail.length){h='<p style="color:#ef4444;font-size:13px;padding:12px">Nenhum bloco disponivel.</p>'}else{avail.forEach(function(n){var lbl=BL[n.type]+' ('+n.id+')';var det='';if(n.params){if(n.params.num)det=n.params.num+'/'+n.params.den;else if(n.params.k)det='K='+n.params.k;else if(n.params.ssA)det='SS'}h+='<div class="conn-item" data-connid="'+n.id+'" onclick="toggleConnSel(this,\''+n.id+'\')">';h+='<span class="conn-chk">&#9744;</span> ';h+='<span style="font-weight:600;color:var(--tx)">'+esc(lbl)+'</span>';if(det)h+='<span style="color:var(--txm);font-size:10px;margin-left:auto">'+esc(det)+'</span>';h+='</div>'})}cl.innerHTML=h;document.getElementById('connModal').classList.add('vis')}
+function openConnModal(tipo){connType=tipo;connSel=[];var titles={serie:'Série',paralelo:'Paralelo',fb_neg:'Realimentação Negativa',fb_pos:'Realimentação Positiva'};var hints={serie:'Selecione 2+ blocos na ordem da cadeia.',paralelo:'Selecione 2+ blocos para somar.',fb_neg:'Selecione 2 blocos: G(s) e H(s).',fb_pos:'Selecione 2 blocos: G(s) e H(s).'};document.getElementById('connModalTitle').textContent=titles[tipo]||'Conexão';document.getElementById('connModalHint').textContent=hints[tipo]||'';var avail=model.nodes.filter(function(n){return['tf','ss','gain','pid','pd','sensor','actuator','int','der'].indexOf(n.type)>=0});var cl=document.getElementById('connBlockList');var h='';if(!avail.length){h='<p style="color:#ef4444;font-size:13px;padding:12px">Nenhum bloco disponivel.</p>'}else{avail.forEach(function(n){var lbl=BL[n.type]+' ('+n.id+')';var det='';if(n.params){if(n.params.num)det=n.params.num+'/'+n.params.den;else if(n.params.k)det='K='+n.params.k;else if(n.params.ssA)det='SS'}h+='<div class="conn-item" data-connid="'+n.id+'" onclick="toggleConnSel(this,\''+n.id+'\')">';h+='<span class="conn-chk">&#9744;</span> ';h+='<span style="font-weight:600;color:var(--tx)">'+esc(lbl)+'</span>';if(det)h+='<span style="color:var(--txm);font-size:10px;margin-left:auto">'+esc(det)+'</span>';h+='</div>'})}cl.innerHTML=h;document.getElementById('connModal').classList.add('vis')}
 function closeConnModal(){document.getElementById('connModal').classList.remove('vis');connType=null;connSel=[]}
 function toggleConnSel(el,nid){var idx=connSel.indexOf(nid);var chk=el.querySelector('.conn-chk');if(idx>=0){connSel.splice(idx,1);el.classList.remove('conn-sel');if(chk)chk.innerHTML='&#9744;'}else{if((connType==='fb_neg'||connType==='fb_pos')&&connSel.length>=2){alert('Feedback: maximo 2 blocos.');return}connSel.push(nid);el.classList.add('conn-sel');if(chk)chk.innerHTML='&#9745;'}var cnt=document.getElementById('connSelCount');if(cnt)cnt.textContent=connSel.length+' bloco'+(connSel.length!==1?'s':'')+' selecionado'+(connSel.length!==1?'s':'')}
 function applyConn(){if(connSel.length<2){alert('Selecione pelo menos 2 blocos.');return}if(connType==='serie')buildSérie(connSel.slice());else if(connType==='paralelo')buildParalelo(connSel.slice());else if(connType==='fb_neg')buildFeedback(connSel.slice(),false);else if(connType==='fb_pos')buildFeedback(connSel.slice(),true);closeConnModal();render()}
