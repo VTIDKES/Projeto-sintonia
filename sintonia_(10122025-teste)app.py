@@ -533,9 +533,11 @@ def plot_polos_zeros(tf_sys, fig=None):
         yaxis_title='Parte Imaginaria',
         showlegend=True,
         hovermode='closest',
+        template='plotly_white',
         **PLOTLY_LIGHT
     )
     return configurar_linhas_interativas(fig)
+
 
 def _gerar_sinal_entrada(entrada, t):
     sinais = {
@@ -570,9 +572,11 @@ def plot_resposta_temporal(sistema, entrada):
         yaxis_title='Amplitude',
         showlegend=True,
         hovermode='x unified',
+        template='plotly_white',
         **PLOTLY_LIGHT
     )
     return configurar_linhas_interativas(fig), t_out, y
+
 
 def plot_bode(sistema, tipo='both'):
     numerator = sistema.num[0][0]
@@ -612,9 +616,9 @@ def plot_bode(sistema, tipo='both'):
         fig.update_layout(
             title='Bode - Fase', xaxis_title="Frequência (rad/s)",
             yaxis_title="Fase (deg)", xaxis_type='log')
-
-    fig.update_layout(**PLOTLY_LIGHT)
+    fig.update_layout(template='plotly_white', **PLOTLY_LIGHT)
     return configurar_linhas_interativas(fig)
+
 
 def plot_lgr(sistema):
     rlist, klist = root_locus(sistema, plot=False)
@@ -642,9 +646,11 @@ def plot_lgr(sistema):
         yaxis_title='Parte Imaginaria',
         showlegend=True,
         hovermode='closest',
+        template='plotly_white',
         **PLOTLY_LIGHT
     )
     return configurar_linhas_interativas(fig)
+
 
 def plot_nyquist(sistema):
     sistema_scipy = signal.TransferFunction(sistema.num[0][0], sistema.den[0][0])
@@ -669,6 +675,7 @@ def plot_nyquist(sistema):
         yaxis_title='Parte Imaginaria',
         showlegend=True,
         hovermode='closest',
+        template='plotly_white',
         **PLOTLY_LIGHT
     )
     fig = configurar_linhas_interativas(fig)
@@ -677,6 +684,7 @@ def plot_nyquist(sistema):
     voltas = 0
     Z = polos_spd + voltas
     return fig, polos_spd, voltas, Z
+
 # ══════════════════════════════════════════════════
 # GERENCIAMENTO DE BLOCOS
 # ══════════════════════════════════════════════════
@@ -1769,8 +1777,8 @@ function showRes(tf){
   ['degrau','rampa','senoidal','impulso','parabolica'].forEach(function(s){h+='<option value="'+s+'"'+(curSig===s?' selected':'')+'>'+sigNomes[s]+'</option>'});
   h+='</select></div></div>';
   var chks;
-  if(curMalha==='aberta'){chks=[['tempo','Resposta no tempo'],['desemp','Desempenho'],['pz','Polos e Zeros'],['bm','Bode Magnitude'],['bp','Bode Fase'],['nyqst','Nyquist']];}
-  else{chks=[['tempo','Resposta no tempo'],['desemp','Desempenho'],['pz','Polos e Zeros'],['bm','Bode Magnitude'],['bp','Bode Fase'],['lgr','LGR']];}
+  if(curMalha==='aberta'){chks=[['tempo','Resposta no tempo'],['desemp','Desempenho'],['pz','Polos e Zeros'],['bm','Bode Magnitude'],['bp','Bode Fase']];}
+  else{chks=[['tempo','Resposta no tempo'],['desemp','Desempenho'],['pz','Polos e Zeros'],['bm','Bode Magnitude'],['bp','Bode Fase'],['nyqst','Nyquist'],['lgr','LGR']];}
   h+='<div style="display:flex;flex-wrap:wrap;gap:8px 16px">';
   chks.forEach(function(c){h+='<label style="font-size:12px;cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" '+(selAn[c[0]]?'checked':'')+' onchange="selAn.'+c[0]+'=this.checked;reRender()"> '+c[1]+'</label>'});
   h+='</div></div>';
