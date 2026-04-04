@@ -528,11 +528,14 @@ def plot_polos_zeros(tf_sys, fig=None):
     fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.7)
     fig.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.7)
     fig.update_layout(
-        title='Diagrama de Polos e Zeros', xaxis_title='Parte Real',
-        yaxis_title='Parte Imaginaria', showlegend=True, hovermode='closest')
-    fig.update_layout(**PLOTLY_LIGHT)
+        title='Diagrama de Polos e Zeros',
+        xaxis_title='Parte Real',
+        yaxis_title='Parte Imaginaria',
+        showlegend=True,
+        hovermode='closest',
+        **PLOTLY_LIGHT
+    )
     return configurar_linhas_interativas(fig)
-
 
 def _gerar_sinal_entrada(entrada, t):
     sinais = {
@@ -563,11 +566,13 @@ def plot_resposta_temporal(sistema, entrada):
         hovertemplate='Tempo: %{x:.2f}s<br>Saída: %{y:.3f}<extra></extra>'))
     fig.update_layout(
         title=f'Resposta Temporal - Entrada: {entrada}',
-        xaxis_title='Tempo (s)', yaxis_title='Amplitude',
-        showlegend=True, hovermode='x unified')
-    fig.update_layout(**PLOTLY_LIGHT)
+        xaxis_title='Tempo (s)',
+        yaxis_title='Amplitude',
+        showlegend=True,
+        hovermode='x unified',
+        **PLOTLY_LIGHT
+    )
     return configurar_linhas_interativas(fig), t_out, y
-
 
 def plot_bode(sistema, tipo='both'):
     numerator = sistema.num[0][0]
@@ -607,9 +612,9 @@ def plot_bode(sistema, tipo='both'):
         fig.update_layout(
             title='Bode - Fase', xaxis_title="Frequência (rad/s)",
             yaxis_title="Fase (deg)", xaxis_type='log')
+
     fig.update_layout(**PLOTLY_LIGHT)
     return configurar_linhas_interativas(fig)
-
 
 def plot_lgr(sistema):
     rlist, klist = root_locus(sistema, plot=False)
@@ -633,11 +638,13 @@ def plot_lgr(sistema):
     fig.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.7)
     fig.update_layout(
         title='Lugar Geométrico das Raízes (LGR)',
-        xaxis_title='Parte Real', yaxis_title='Parte Imaginaria',
-        showlegend=True, hovermode='closest')
-    fig.update_layout(**PLOTLY_LIGHT)
+        xaxis_title='Parte Real',
+        yaxis_title='Parte Imaginaria',
+        showlegend=True,
+        hovermode='closest',
+        **PLOTLY_LIGHT
+    )
     return configurar_linhas_interativas(fig)
-
 
 def plot_nyquist(sistema):
     sistema_scipy = signal.TransferFunction(sistema.num[0][0], sistema.den[0][0])
@@ -657,17 +664,19 @@ def plot_nyquist(sistema):
     fig.add_hline(y=0, line_color="black", line_width=1)
     fig.add_vline(x=0, line_color="black", line_width=1)
     fig.update_layout(
-        title='Diagrama de Nyquist', xaxis_title='Parte Real',
-        yaxis_title='Parte Imaginaria', showlegend=True, hovermode='closest')
+        title='Diagrama de Nyquist',
+        xaxis_title='Parte Real',
+        yaxis_title='Parte Imaginaria',
+        showlegend=True,
+        hovermode='closest',
+        **PLOTLY_LIGHT
+    )
     fig = configurar_linhas_interativas(fig)
-    fig.update_layout(**PLOTLY_LIGHT)
     polos = ctrl.poles(sistema)
     polos_spd = sum(1 for p in polos if np.real(p) > 0)
     voltas = 0
     Z = polos_spd + voltas
     return fig, polos_spd, voltas, Z
-
-
 # ══════════════════════════════════════════════════
 # GERENCIAMENTO DE BLOCOS
 # ══════════════════════════════════════════════════
