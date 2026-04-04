@@ -472,7 +472,7 @@ def estimar_tempo_final_simulacao(tf_sys):
         return 100.0
     sigma_dominante = max(partes_reais_estaveis)
     ts_estimado = 4 / abs(sigma_dominante)
-    return np.clip(ts_estimado * 1.2, a_min=5, a_max=60)
+    return np.clip(ts_estimado * 1.5, a_min=10, a_max=500)
 
 
 # ══════════════════════════════════════════════════
@@ -486,16 +486,6 @@ PLOTLY_DARK = dict(
     xaxis=dict(gridcolor='#333654', zerolinecolor='#444870', linecolor='#333654'),
     yaxis=dict(gridcolor='#333654', zerolinecolor='#444870', linecolor='#333654'),
     legend=dict(bgcolor='rgba(26,29,46,0.8)', bordercolor='#333654', borderwidth=1),
-    margin=dict(l=60, r=30, t=50, b=50),
-)
-
-PLOTLY_LIGHT = dict(
-    paper_bgcolor='white',
-    plot_bgcolor='white',
-    font=dict(color='black', family='system-ui, sans-serif'),
-    xaxis=dict(gridcolor='#d9d9d9', zerolinecolor='#cccccc', linecolor='#000000'),
-    yaxis=dict(gridcolor='#d9d9d9', zerolinecolor='#cccccc', linecolor='#000000'),
-    legend=dict(bgcolor='rgba(255,255,255,0.85)', bordercolor='#cccccc', borderwidth=1),
     margin=dict(l=60, r=30, t=50, b=50),
 )
 
@@ -528,14 +518,8 @@ def plot_polos_zeros(tf_sys, fig=None):
     fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.7)
     fig.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.7)
     fig.update_layout(
-        title='Diagrama de Polos e Zeros',
-        xaxis_title='Parte Real',
-        yaxis_title='Parte Imaginaria',
-        showlegend=True,
-        hovermode='closest',
-        template='plotly_white',
-        **PLOTLY_LIGHT
-    )
+        title='Diagrama de Polos e Zeros', xaxis_title='Parte Real',
+        yaxis_title='Parte Imaginaria', showlegend=True, hovermode='closest')
     return configurar_linhas_interativas(fig)
 
 
@@ -568,13 +552,8 @@ def plot_resposta_temporal(sistema, entrada):
         hovertemplate='Tempo: %{x:.2f}s<br>Saída: %{y:.3f}<extra></extra>'))
     fig.update_layout(
         title=f'Resposta Temporal - Entrada: {entrada}',
-        xaxis_title='Tempo (s)',
-        yaxis_title='Amplitude',
-        showlegend=True,
-        hovermode='x unified',
-        template='plotly_white',
-        **PLOTLY_LIGHT
-    )
+        xaxis_title='Tempo (s)', yaxis_title='Amplitude',
+        showlegend=True, hovermode='x unified')
     return configurar_linhas_interativas(fig), t_out, y
 
 
@@ -616,7 +595,6 @@ def plot_bode(sistema, tipo='both'):
         fig.update_layout(
             title='Bode - Fase', xaxis_title="Frequência (rad/s)",
             yaxis_title="Fase (deg)", xaxis_type='log')
-    fig.update_layout(template='plotly_white', **PLOTLY_LIGHT)
     return configurar_linhas_interativas(fig)
 
 
@@ -642,13 +620,8 @@ def plot_lgr(sistema):
     fig.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.7)
     fig.update_layout(
         title='Lugar Geométrico das Raízes (LGR)',
-        xaxis_title='Parte Real',
-        yaxis_title='Parte Imaginaria',
-        showlegend=True,
-        hovermode='closest',
-        template='plotly_white',
-        **PLOTLY_LIGHT
-    )
+        xaxis_title='Parte Real', yaxis_title='Parte Imaginaria',
+        showlegend=True, hovermode='closest')
     return configurar_linhas_interativas(fig)
 
 
@@ -670,20 +643,15 @@ def plot_nyquist(sistema):
     fig.add_hline(y=0, line_color="black", line_width=1)
     fig.add_vline(x=0, line_color="black", line_width=1)
     fig.update_layout(
-        title='Diagrama de Nyquist',
-        xaxis_title='Parte Real',
-        yaxis_title='Parte Imaginaria',
-        showlegend=True,
-        hovermode='closest',
-        template='plotly_white',
-        **PLOTLY_LIGHT
-    )
+        title='Diagrama de Nyquist', xaxis_title='Parte Real',
+        yaxis_title='Parte Imaginaria', showlegend=True, hovermode='closest')
     fig = configurar_linhas_interativas(fig)
     polos = ctrl.poles(sistema)
     polos_spd = sum(1 for p in polos if np.real(p) > 0)
     voltas = 0
     Z = polos_spd + voltas
     return fig, polos_spd, voltas, Z
+
 
 # ══════════════════════════════════════════════════
 # GERENCIAMENTO DE BLOCOS
@@ -1741,8 +1709,8 @@ function stepResp(tf,tMax,nP){var ln2=Math.LN2,ts=[],ys=[];for(var i=0;i<nP;i++)
 function forceResp(tf,sig,tMax,nP){var ln2=Math.LN2,ts=[],ys=[],us=[];var om=2*Math.PI;for(var i=0;i<nP;i++){var t=(i+1)*tMax/nP;ts.push(t);var s=0;for(var j=0;j<SN;j++){var sv=(j+1)*ln2/t,nv=pEv(tf.n,sv),dv=pEv(tf.d,sv);if(Math.abs(dv)<1e-30)continue;var uv;if(sig==='rampa')uv=1/(sv*sv);else if(sig==='impulso')uv=1;else if(sig==='parabolica')uv=2/(sv*sv*sv);else if(sig==='senoidal')uv=om/(sv*sv+om*om);else uv=1/sv;var contrib=SV[j]*nv*uv/dv;if(isFinite(contrib))s+=contrib}var yv=s*ln2/t;ys.push(isFinite(yv)?yv:0);if(sig==='rampa')us.push(t);else if(sig==='senoidal')us.push(Math.sin(om*t));else if(sig==='impulso')us.push(i===0?nP/tMax:0);else if(sig==='parabolica')us.push(t*t);else us.push(1)}return{t:ts,y:ys,u:us}}
 function nyq(tf,wMin,wMax,nP){var re=[],im=[];var lm=Math.log10(wMin),lx=Math.log10(wMax);for(var i=0;i<nP;i++){var w=Math.pow(10,lm+i*(lx-lm)/(nP-1));var jw={r:0,i:w},nc=cEvP(tf.n,jw),dc=cEvP(tf.d,jw),T=cDiv(nc,dc);re.push(T.r);im.push(T.i)}return{re:re,im:im}}
 function lgr(tf,nK){var kMax=200,branches=[];var nt=pTrim(tf.n),dt=pTrim(tf.d);var np=dt.length-1;if(np<=0)return branches;for(var i=0;i<np;i++)branches.push({re:[],im:[]});var prev=null;for(var ki=0;ki<nK;ki++){var k=ki*kMax/(nK-1);var cp=pAdd(dt,pScl(nt,k));var rs=roots(cp);if(prev&&prev.length===rs.length){var used=[],matched=[];for(var i=0;i<prev.length;i++){var best=-1,bd=Infinity;for(var j=0;j<rs.length;j++){if(used.indexOf(j)>=0)continue;var d=Math.sqrt(Math.pow(rs[j].r-prev[i].r,2)+Math.pow(rs[j].i-prev[i].i,2));if(d<bd){bd=d;best=j}}used.push(best);matched.push(rs[best])}rs=matched}for(var i=0;i<Math.min(rs.length,np);i++){branches[i].re.push(rs[i].r);branches[i].im.push(rs[i].i)}prev=rs.slice(0,np)}return branches}
-var _PT={paper_bgcolor:'#ffffff',plot_bgcolor:'#ffffff',font:{color:'#111111',family:'system-ui,sans-serif',size:12},margin:{l:55,r:15,t:35,b:45},dragmode:'zoom',modebar:{add:['drawline','drawopenpath','eraseshape']},newshape:{line:{color:'#34d399',width:2,dash:'dash'}}};
-function _pAx(title,extra){var o={title:title,gridcolor:'#d9d9d9',zerolinecolor:'#cccccc',linecolor:'#000000'};if(extra)for(var k in extra)o[k]=extra[k];return o}
+var _PT={paper_bgcolor:'#0e1117',plot_bgcolor:'#0e1117',font:{color:'#8890b0',family:'system-ui,sans-serif',size:12},margin:{l:55,r:15,t:35,b:45},dragmode:'zoom',modebar:{add:['drawline','drawopenpath','eraseshape']},newshape:{line:{color:'#34d399',width:2,dash:'dash'}}};
+function _pAx(title,extra){var o={title:title,gridcolor:'#252840',zerolinecolor:'#555',linecolor:'#333654'};if(extra)for(var k in extra)o[k]=extra[k];return o}
 function chartLGR(id,branches,tf){var el=document.getElementById(id);if(!el)return;var traces=[],cols=['#5b6be0','#60a5fa','#a78bfa','#f472b6','#fbbf24'];branches.forEach(function(br,bi){traces.push({x:br.re,y:br.im,mode:'lines',line:{color:cols[bi%cols.length],width:1.5},name:'Ramo '+(bi+1),showlegend:false,hovertemplate:'Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'})});var ps2=roots(tf.d);if(ps2.length)traces.push({x:ps2.map(function(p){return p.r}),y:ps2.map(function(p){return p.i}),mode:'markers',marker:{color:'#ff4444',size:12,symbol:'x'},name:'Polos',hovertemplate:'Polo<br>Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'});var zs2=roots(tf.n);if(zs2.length)traces.push({x:zs2.map(function(z){return z.r}),y:zs2.map(function(z){return z.i}),mode:'markers',marker:{color:'#44ff44',size:10,symbol:'circle-open',line:{width:2,color:'#44ff44'}},name:'Zeros',hovertemplate:'Zero<br>Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'});var lay=Object.assign({},_PT,{xaxis:_pAx('Parte Real'),yaxis:_pAx('Parte Imaginaria'),height:380,showlegend:true,legend:{x:0.01,y:0.99,bgcolor:'rgba(0,0,0,0.3)',font:{color:'#e0e4f0'}},hovermode:'closest',shapes:[{type:'line',x0:0,x1:0,y0:-1e6,y1:1e6,line:{color:'#555',width:1,dash:'dash'}},{type:'line',x0:-1e6,x1:1e6,y0:0,y1:0,line:{color:'#555',width:1,dash:'dash'}}]});Plotly.newPlot(el,traces,lay,{responsive:true})}
 function chartPZ(id,ps,zs){var el=document.getElementById(id);if(!el)return;var traces=[];if(zs.length)traces.push({x:zs.map(function(z){return z.r}),y:zs.map(function(z){return z.i}),mode:'markers',marker:{color:'#60a5fa',size:12,symbol:'circle-open',line:{width:2,color:'#60a5fa'}},name:'Zeros',hovertemplate:'Zero<br>Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'});if(ps.length)traces.push({x:ps.map(function(p){return p.r}),y:ps.map(function(p){return p.i}),mode:'markers',marker:{color:'#ff4444',size:12,symbol:'x'},name:'Polos',hovertemplate:'Polo<br>Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'});var lay=Object.assign({},_PT,{xaxis:_pAx('Parte Real'),yaxis:_pAx('Parte Imaginaria'),height:350,showlegend:true,legend:{x:0.01,y:0.99,bgcolor:'rgba(0,0,0,0.3)',font:{color:'#e0e4f0'}},hovermode:'closest',shapes:[{type:'line',x0:0,x1:0,y0:-1e6,y1:1e6,line:{color:'#555',width:1,dash:'dash'}},{type:'line',x0:-1e6,x1:1e6,y0:0,y1:0,line:{color:'#555',width:1,dash:'dash'}}]});Plotly.newPlot(el,traces,lay,{responsive:true})}
 function bode(tf,wMin,wMax,nP){var fs=[],ms=[],ps=[],lm=Math.log10(wMin),lx=Math.log10(wMax);for(var i=0;i<nP;i++){var w=Math.pow(10,lm+i*(lx-lm)/(nP-1));fs.push(w);var jw={r:0,i:w},nc=cEvP(tf.n,jw),dc=cEvP(tf.d,jw),T=cDiv(nc,dc),mg=cAbs(T);ms.push(mg>1e-30?20*Math.log10(mg):-600);ps.push(Math.atan2(T.i,T.r)*180/Math.PI)}for(var i=1;i<ps.length;i++){while(ps[i]-ps[i-1]>180)ps[i]-=360;while(ps[i]-ps[i-1]<-180)ps[i]+=360}return{w:fs,m:ms,p:ps}}
@@ -1777,8 +1745,8 @@ function showRes(tf){
   ['degrau','rampa','senoidal','impulso','parabolica'].forEach(function(s){h+='<option value="'+s+'"'+(curSig===s?' selected':'')+'>'+sigNomes[s]+'</option>'});
   h+='</select></div></div>';
   var chks;
-  if(curMalha==='aberta'){chks=[['tempo','Resposta no tempo'],['desemp','Desempenho'],['pz','Polos e Zeros'],['bm','Bode Magnitude'],['bp','Bode Fase']];}
-  else{chks=[['tempo','Resposta no tempo'],['desemp','Desempenho'],['pz','Polos e Zeros'],['bm','Bode Magnitude'],['bp','Bode Fase'],['nyqst','Nyquist'],['lgr','LGR']];}
+  if(curMalha==='aberta'){chks=[['tempo','Resposta no tempo'],['desemp','Desempenho'],['pz','Polos e Zeros'],['bm','Bode Magnitude'],['bp','Bode Fase'],['nyqst','Nyquist']];}
+  else{chks=[['tempo','Resposta no tempo'],['desemp','Desempenho'],['pz','Polos e Zeros'],['bm','Bode Magnitude'],['bp','Bode Fase'],['lgr','LGR']];}
   h+='<div style="display:flex;flex-wrap:wrap;gap:8px 16px">';
   chks.forEach(function(c){h+='<label style="font-size:12px;cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" '+(selAn[c[0]]?'checked':'')+' onchange="selAn.'+c[0]+'=this.checked;reRender()"> '+c[1]+'</label>'});
   h+='</div></div>';
@@ -1791,7 +1759,7 @@ function showRes(tf){
   if(selAn.pz){h+='<div class="rcard"><h4>Diagrama de Polos e Zeros</h4><div id="cPZ" style="width:100%;height:360px"></div>';h+='<div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:8px"><div><b style="color:var(--red)">Polos:</b><div class="pzl">';ps.forEach(function(p){h+='<div style="color:var(--red)">'+fC(p)+'</div>'});if(!ps.length)h+="<div>-</div>";h+='</div></div><div><b style="color:var(--blu)">Zeros:</b><div class="pzl">';zs.forEach(function(z){h+='<div style="color:var(--blu)">'+fC(z)+'</div>'});if(!zs.length)h+="<div>-</div>";h+='</div></div></div>';h+='<div style="margin-top:8px;padding:6px 10px;border-radius:6px;font-weight:700;font-size:13px;'+(stb?'background:#16382a;color:#34d399">ESTAVEL':'background:#3a1520;color:#f87171">INSTAVEL')+'</div></div>';}
   if(selAn.bm){h+='<div class="rcard"><h4>Bode - Magnitude</h4><div id="cBM" style="width:100%;height:320px"></div></div>';}
   if(selAn.bp){h+='<div class="rcard"><h4>Bode - Fase</h4>';var bdMA=bode(tf,wr.a,wr.b,600);var gm=calcGM(bdMA),pm=calcPM(bdMA);h+='<div style="display:flex;gap:16px;margin-bottom:6px;flex-wrap:wrap"><span style="font-size:12px;color:var(--txm)">Margem de Ganho: <b style="color:'+(gm>0?'#34d399':'#f87171')+'">'+fN(gm)+' dB</b></span><span style="font-size:12px;color:var(--txm)">Margem de Fase: <b style="color:'+(pm>0?'#34d399':'#f87171')+'">'+fN(pm)+'°</b></span></div><div id="cBP" style="width:100%;height:320px"></div></div>';}
-  if(curMalha==='fechada'&&selAn.nyqst){h+='<div class="rcard"><h4>Nyquist</h4><div id="cNyq" style="width:100%;height:380px"></div>';var nps=roots(tf.d),npsd=0;nps.forEach(function(p){if(p.r>1e-6)npsd++});h+='<div style="margin-top:8px;font-size:12px"><b>Polos SPD (P):</b> '+npsd+' | <b>Z = P + N:</b> '+(npsd===0?'Estável':'Instável')+'</div></div>';}
+  if(curMalha==='aberta'&&selAn.nyqst){h+='<div class="rcard"><h4>Nyquist</h4><div id="cNyq" style="width:100%;height:380px"></div>';var nps=roots(tf.d),npsd=0;nps.forEach(function(p){if(p.r>1e-6)npsd++});h+='<div style="margin-top:8px;font-size:12px"><b>Polos SPD (P):</b> '+npsd+' | <b>Z = P + N:</b> '+(npsd===0?'Estável':'Instável')+'</div></div>';}
   if(curMalha==='fechada'&&selAn.lgr){h+='<div class="rcard"><h4>LGR</h4><div id="cLGR" style="width:100%;height:380px"></div></div>';}
   rb.innerHTML=h;
   setTimeout(function(){
@@ -1802,7 +1770,7 @@ function showRes(tf){
     try{if(selAn.pz)chartPZ("cPZ",ps,zs);}catch(e){}
     try{if(selAn.bm)chart("cBM",bd.w,bd.m,"w (rad/s)","dB","#60a5fa",true);}catch(e){}
     try{if(selAn.bp)chart("cBP",bd.w,bd.p,"w (rad/s)","graus","#f472b6",true);}catch(e){}
-    try{if(curMalha==='fechada'&&selAn.nyqst)chartXY("cNyq",nqd.re,nqd.im,"Parte Real","Parte Imaginaria");}catch(e){}
+    try{if(curMalha==='aberta'&&selAn.nyqst)chartXY("cNyq",nqd.re,nqd.im,"Parte Real","Parte Imaginaria");}catch(e){}
     try{if(curMalha==='fechada'&&selAn.lgr)chartLGR("cLGR",lgrData,tf);}catch(e){}
   },150);rd.scrollIntoView({behavior:"smooth"})}
 var curMode="diag",curSubMode="direct";
