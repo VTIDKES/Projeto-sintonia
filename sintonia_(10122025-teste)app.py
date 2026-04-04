@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 """
 Sistema de Modelagem e Análise de Sistemas de Controle v2.0
