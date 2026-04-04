@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 """
 Sistema de Modelagem e Análise de Sistemas de Controle v2.0
@@ -17,6 +16,10 @@ from scipy import signal
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit.components.v1 as components
+try:
+    from streamlit_drawable_canvas import st_canvas
+except Exception:
+    st_canvas = None
 import json
 import re
 
@@ -2105,6 +2108,224 @@ def modo_canvas():
 
     components.html(html_content, height=2800, scrolling=True)
 
+
+
+# ══════════════════════════════════════════════════
+# MODO CANVAS COM STREAMLIT DRAWABLE CANVAS
+# ══════════════════════════════════════════════════
+
+def _canvas_tipo_para_cor(tipo):
+    mapa = {
+        'Planta': '#4a90e2',
+        'Controlador': '#8b6df2',
+        'Sensor': '#db6aa8',
+        'Atuador': '#58b6c2',
+        'Pre-filtro': '#22aa66',
+        'Perturbação': '#d97706',
+    }
+    return mapa.get(tipo, '#64748b')
+
+
+def _canvas_bloco_label(row):
+    return f"{row['nome']} ({row['tipo']})"
+
+
+def _garantir_posicoes_canvas():
+    if 'canvas_positions' not in st.session_state:
+        st.session_state.canvas_positions = {}
+    x0, y0, dx = 80, 80, 190
+    for i, (_, row) in enumerate(st.session_state.blocos.iterrows()):
+        nome = row['nome']
+        if nome not in st.session_state.canvas_positions:
+            st.session_state.canvas_positions[nome] = {'x': x0 + i * dx, 'y': y0}
+
+
+def _montar_canvas_json():
+    _garantir_posicoes_canvas()
+    objects = []
+    for _, row in st.session_state.blocos.iterrows():
+        nome = row['nome']
+        pos = st.session_state.canvas_positions.get(nome, {'x': 80, 'y': 80})
+        cor = _canvas_tipo_para_cor(row['tipo'])
+        objects.append({
+            'type': 'rect', 'version': '4.4.0', 'originX': 'left', 'originY': 'top',
+            'left': pos['x'], 'top': pos['y'], 'width': 140, 'height': 70,
+            'fill': cor, 'stroke': '#e5e7eb', 'strokeWidth': 2, 'rx': 10, 'ry': 10,
+            'block_name': nome, 'selectable': True,
+        })
+        objects.append({
+            'type': 'textbox', 'version': '4.4.0', 'originX': 'left', 'originY': 'top',
+            'left': pos['x'] + 8, 'top': pos['y'] + 10, 'width': 124,
+            'fontSize': 14, 'fill': '#ffffff', 'text': _canvas_bloco_label(row),
+            'editable': False, 'evented': False, 'selectable': False,
+            'block_name_text': nome,
+        })
+    for con in st.session_state.conexoes:
+        nomes = con.get('blocos', [])
+        tipo = con.get('tipo', 'Série')
+        if len(nomes) >= 2:
+            for a, b in zip(nomes[:-1], nomes[1:]):
+                if a in st.session_state.canvas_positions and b in st.session_state.canvas_positions:
+                    pa = st.session_state.canvas_positions[a]
+                    pb = st.session_state.canvas_positions[b]
+                    cor = '#34d399' if 'Positiva' in tipo else ('#f472b6' if 'Negativa' in tipo else '#94a3b8')
+                    objects.append({
+                        'type': 'line', 'version': '4.4.0',
+                        'x1': pa['x'] + 140, 'y1': pa['y'] + 35,
+                        'x2': pb['x'], 'y2': pb['y'] + 35,
+                        'stroke': cor, 'strokeWidth': 3,
+                        'selectable': False, 'evented': False,
+                    })
+    return {'version': '4.4.0', 'objects': objects}
+
+
+def _atualizar_posicoes_pelo_canvas(canvas_result):
+    if not canvas_result or not canvas_result.json_data:
+        return
+    objs = canvas_result.json_data.get('objects', [])
+    novos = dict(st.session_state.get('canvas_positions', {}))
+    for obj in objs:
+        nome = obj.get('block_name')
+        if nome:
+            novos[nome] = {'x': float(obj.get('left', 80)), 'y': float(obj.get('top', 80))}
+    st.session_state.canvas_positions = novos
+
+
+def _calcular_canvas_equivalente(ordem_direta, sensor_nome, feedback_tipo):
+    if not ordem_direta:
+        raise ValueError('Selecione pelo menos um bloco na cadeia direta.')
+    G = TransferFunction([1], [1])
+    for nome in ordem_direta:
+        tf = obter_bloco_por_nome(nome)
+        if tf is None:
+            raise ValueError(f"Bloco '{nome}' não encontrado na cadeia direta.")
+        G *= tf
+    H = TransferFunction([1], [1])
+    if sensor_nome and sensor_nome != '(unitário)':
+        tf_sensor = obter_bloco_por_nome(sensor_nome)
+        if tf_sensor is None:
+            raise ValueError(f"Sensor '{sensor_nome}' não encontrado.")
+        H = tf_sensor
+    if feedback_tipo == 'Malha Aberta':
+        sistema = G
+    elif feedback_tipo == 'Realimentação Negativa':
+        sistema = ctrl.feedback(G, H, sign=-1)
+    else:
+        sistema = ctrl.feedback(G, H, sign=+1)
+    return ctrl.minreal(sistema, verbose=False)
+
+
+def modo_canvas():
+    st.title('Modo Diagrama de Blocos — st_canvas')
+    if st_canvas is None:
+        st.error('A biblioteca streamlit-drawable-canvas não está instalada. Instale com: pip install streamlit-drawable-canvas')
+        return
+    with st.sidebar:
+        st.header('Navegação')
+        if st.button('← Voltar à Tela Inicial'):
+            st.session_state.modo_selecionado = None
+            st.rerun()
+        st.markdown('---')
+        st.markdown('### Biblioteca usada')
+        st.code('from streamlit_drawable_canvas import st_canvas', language='python')
+        st.markdown('### Como usar')
+        st.markdown('''
+        1. Adicione os blocos pelo formulário abaixo.
+        2. Arraste visualmente os blocos no canvas.
+        3. Defina a cadeia direta e o sensor.
+        4. Escolha malha aberta, realimentação negativa ou positiva.
+        5. Clique em **Calcular sistema equivalente**.
+        ''')
+
+    st.subheader('Adicionar bloco')
+    c1, c2, c3, c4 = st.columns([1.2, 1.2, 1.5, 1.5])
+    with c1:
+        nome = st.text_input('Nome do bloco', value=f"B{len(st.session_state.blocos)+1}", key='cv_nome')
+    with c2:
+        tipo = st.selectbox('Tipo', ['Planta', 'Controlador', 'Sensor', 'Atuador', 'Pre-filtro', 'Perturbação'], key='cv_tipo')
+    with c3:
+        num = st.text_input('Numerador', value='1', key='cv_num')
+    with c4:
+        den = st.text_input('Denominador', value='1', key='cv_den')
+    if st.button('Adicionar bloco ao canvas', type='primary'):
+        ok, msg = adicionar_bloco(nome, tipo, 'Função de Transferência', num, den)
+        if ok:
+            _garantir_posicoes_canvas()
+            st.success(msg)
+            st.rerun()
+        else:
+            st.error(msg)
+
+    st.markdown('---')
+    col_canvas, col_cfg = st.columns([2.2, 1.2])
+    with col_canvas:
+        st.subheader('Área arrastável')
+        canvas_result = st_canvas(
+            fill_color='rgba(255,255,255,0.0)',
+            stroke_width=2,
+            stroke_color='#94a3b8',
+            background_color='#0e1117',
+            update_streamlit=True,
+            height=520,
+            width=1000,
+            drawing_mode='transform',
+            initial_drawing=_montar_canvas_json(),
+            display_toolbar=False,
+            key='diagram_canvas_transform_v1',
+        )
+        _atualizar_posicoes_pelo_canvas(canvas_result)
+        if st.session_state.blocos.empty:
+            st.info('Adicione blocos para começar.')
+        else:
+            pos_rows = []
+            for nome_bloco, pos in st.session_state.get('canvas_positions', {}).items():
+                pos_rows.append({'bloco': nome_bloco, 'x': round(pos['x'], 1), 'y': round(pos['y'], 1)})
+            st.caption('Posições atuais dos blocos')
+            st.dataframe(pd.DataFrame(pos_rows), use_container_width=True, hide_index=True)
+
+    with col_cfg:
+        st.subheader('Lógica do diagrama')
+        nomes_blocos = list(st.session_state.blocos['nome']) if not st.session_state.blocos.empty else []
+        ordem_direta = st.multiselect('Cadeia direta G(s) — selecione na ordem', nomes_blocos, default=nomes_blocos, key='cv_ordem_direta')
+        sensor_nome = st.selectbox('Sensor H(s)', ['(unitário)'] + nomes_blocos, key='cv_sensor_nome')
+        feedback_tipo = st.selectbox('Tipo de malha', ['Malha Aberta', 'Realimentação Negativa', 'Realimentação Positiva'], key='cv_feedback_tipo')
+
+        st.markdown('### Conexões visuais')
+        if nomes_blocos:
+            con_tipo = st.selectbox('Tipo de conexão visual', CONNECTION_TYPES, key='cv_con_tipo')
+            con_blocos = st.multiselect('Blocos envolvidos', nomes_blocos, key='cv_con_blocos')
+            if st.button('Salvar conexão visual'):
+                if len(con_blocos) >= 2:
+                    st.session_state.conexoes.append({'tipo': con_tipo, 'blocos': con_blocos})
+                    st.success('Conexão visual salva.')
+                    st.rerun()
+                else:
+                    st.warning('Selecione pelo menos 2 blocos.')
+            if st.session_state.conexoes:
+                for i, con in enumerate(st.session_state.conexoes):
+                    st.write(f"{i+1}. {con['tipo']}: {' → '.join(con['blocos'])}")
+                if st.button('Limpar conexões visuais'):
+                    st.session_state.conexoes = []
+                    st.rerun()
+        st.markdown('---')
+        entrada = st.selectbox('Sinal de entrada', INPUT_SIGNALS, key='cv_entrada')
+        analises = st.multiselect('Análises', ANALYSIS_OPTIONS['malha_fechada'], default=['Resposta no tempo'], key='cv_analises')
+        if st.button('Calcular sistema equivalente', type='primary', use_container_width=True):
+            try:
+                sistema = _calcular_canvas_equivalente(ordem_direta, sensor_nome, feedback_tipo)
+                st.session_state['canvas_sistema_equivalente'] = sistema
+                st.success('Sistema calculado com sucesso.')
+            except Exception as e:
+                st.error(f'Erro no cálculo: {e}')
+
+    if 'canvas_sistema_equivalente' in st.session_state:
+        sistema = st.session_state['canvas_sistema_equivalente']
+        st.markdown('---')
+        st.subheader('Sistema equivalente')
+        num_str = _tf_to_str(sistema.num[0][0])
+        den_str = _tf_to_str(sistema.den[0][0])
+        st.latex(f"T(s) = \frac{{{num_str}}}{{{den_str}}}")
+        executar_analises(sistema, analises, entrada, 'Malha Fechada' if feedback_tipo != 'Malha Aberta' else 'Malha Aberta')
 
 # ══════════════════════════════════════════════════
 # APLICAÇÃO PRINCIPAL
