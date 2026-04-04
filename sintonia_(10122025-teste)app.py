@@ -1822,7 +1822,64 @@ function applyConn(){if(connSel.length<2){alert('Selecione pelo menos 2 blocos.'
 function mkEid(){return 'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
 function buildSérie(ids){for(var i=0;i<ids.length-1;i++){var a=ids[i],b=ids[i+1];var already=model.edges.some(function(e){return e.src===a&&e.dst===b});if(!already)model.edges.push({id:mkEid(),src:a,srcPort:'out0',dst:b,dstPort:'in0'})}var baseX=80,baseY=180;ids.forEach(function(id,i){var nd=model.nodes.find(function(n){return n.id===id});if(nd){nd.x=baseX+i*200;nd.y=baseY}})}
 function buildParalelo(ids){var nb=ids.length;var baseX=60,baseY=80;var brIds=[];for(var i=0;i<nb-1;i++){var br={id:nxtId(),type:'branch',x:baseX,y:baseY+50+i*50,params:{}};model.nodes.push(br);brIds.push(br.id);if(i>0)model.edges.push({id:mkEid(),src:brIds[i-1],srcPort:'out0',dst:br.id,dstPort:'in0'})}var signs='';for(var i=0;i<nb;i++)signs+=(i>0?' ':'')+'+';var smX=baseX+420,smY=baseY+(nb-1)*55;var sm={id:nxtId(),type:'sum',x:smX,y:smY,params:{signs:signs}};model.nodes.push(sm);ids.forEach(function(id,i){var nd=model.nodes.find(function(n){return n.id===id});if(nd){nd.x=baseX+200;nd.y=baseY+i*120}if(i===0){model.edges.push({id:mkEid(),src:brIds[0],srcPort:'out1',dst:id,dstPort:'in0'})}else if(i<nb-1){model.edges.push({id:mkEid(),src:brIds[i],srcPort:'out1',dst:id,dstPort:'in0'})}else{model.edges.push({id:mkEid(),src:brIds[nb-2],srcPort:'out0',dst:id,dstPort:'in0'})}model.edges.push({id:mkEid(),src:id,srcPort:'out0',dst:sm.id,dstPort:'in'+i})})}
-function buildFeedback(ids,positive){if(ids.length<2)return;var gId=ids[0],hId=ids[1];var gNd=model.nodes.find(function(n){return n.id===gId});var baseX=gNd?Math.max(60,gNd.x-120):80,baseY=gNd?gNd.y:160;var signStr=positive?'+ +':'+ -';var sm={id:nxtId(),type:'sum',x:baseX,y:baseY+15,params:{signs:signStr}};model.nodes.push(sm);var br={id:nxtId(),type:'branch',x:baseX+380,y:baseY+15,params:{}};model.nodes.push(br);var hNd=model.nodes.find(function(n){return n.id===hId});if(gNd){gNd.x=baseX+180;gNd.y=baseY}if(hNd){hNd.x=baseX+220;hNd.y=baseY+160}model.edges.push({id:mkEid(),src:sm.id,srcPort:'out0',dst:gId,dstPort:'in0'});model.edges.push({id:mkEid(),src:gId,srcPort:'out0',dst:br.id,dstPort:'in0'});model.edges.push({id:mkEid(),src:br.id,srcPort:'out1',dst:hId,dstPort:'in0'});model.edges.push({id:mkEid(),src:hId,srcPort:'out0',dst:sm.id,dstPort:'in1'})}
+function buildFeedback(ids,positive){
+  if(ids.length<2)return;
+  var gId=ids[0],hId=ids[1];
+  var gNd=model.nodes.find(function(n){return n.id===gId});
+  var hNd=model.nodes.find(function(n){return n.id===hId});
+  if(!gNd||!hNd)return;
+
+  var baseX=Math.max(60,(gNd.x||80)-140),baseY=(gNd.y||160);
+  var signStr=positive?'+ +':'+ -';
+  var sm={id:nxtId(),type:'sum',x:baseX,y:baseY+15,params:{signs:signStr}};
+  var br={id:nxtId(),type:'branch',x:baseX+380,y:baseY+15,params:{}};
+  model.nodes.push(sm);model.nodes.push(br);
+
+  var incomingMain=model.edges.filter(function(e){
+    return e.dst===gId && (e.dstPort||'in0')==='in0' && e.src!==hId;
+  });
+  var outgoingMain=model.edges.filter(function(e){
+    return e.src===gId && (e.srcPort||'out0')==='out0' && e.dst!==hId;
+  });
+
+  incomingMain.forEach(function(e){
+    e.dst=sm.id;
+    e.dstPort='in0';
+  });
+
+  outgoingMain.forEach(function(e){
+    e.src=br.id;
+    e.srcPort='out0';
+  });
+
+  model.edges = model.edges.filter(function(e){
+    var isOldFbToG = e.dst===gId && e.src===hId;
+    var isOldGToH = e.src===gId && e.dst===hId;
+    return !(isOldFbToG || isOldGToH);
+  });
+
+  if(!incomingMain.length){
+    var inp=model.nodes.find(function(n){return n.type==='input'});
+    if(inp){
+      model.edges.push({id:mkEid(),src:inp.id,srcPort:'out0',dst:sm.id,dstPort:'in0'});
+    }
+  }
+
+  model.edges.push({id:mkEid(),src:sm.id,srcPort:'out0',dst:gId,dstPort:'in0'});
+  model.edges.push({id:mkEid(),src:gId,srcPort:'out0',dst:br.id,dstPort:'in0'});
+  model.edges.push({id:mkEid(),src:br.id,srcPort:'out1',dst:hId,dstPort:'in0'});
+  model.edges.push({id:mkEid(),src:hId,srcPort:'out0',dst:sm.id,dstPort:'in1'});
+
+  if(!outgoingMain.length){
+    var out=model.nodes.find(function(n){return n.type==='output'});
+    if(out){
+      model.edges.push({id:mkEid(),src:br.id,srcPort:'out0',dst:out.id,dstPort:'in0'});
+    }
+  }
+
+  gNd.x=baseX+180; gNd.y=baseY;
+  hNd.x=baseX+220; hNd.y=baseY+160;
+}
 document.querySelectorAll(".tb[data-add]").forEach(function(b){b.addEventListener("click",function(){addB(b.dataset.add)})});
 document.getElementById("btnDel").addEventListener("click",delSel);document.getElementById("btnClear").addEventListener("click",clrAll);document.getElementById("btnAuto").addEventListener("click",autoLay);
 document.addEventListener("keydown",function(e){if(e.target.tagName==="INPUT")return;if(e.key==="Delete"||e.key==="Backspace")delSel();if(e.key==="Escape"){conSt=null;closeModal();closeConnModal();document.querySelectorAll(".port.active").forEach(function(p){p.classList.remove("active")})}});
