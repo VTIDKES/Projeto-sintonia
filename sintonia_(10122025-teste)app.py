@@ -480,8 +480,8 @@ def estimar_tempo_final_simulacao(tf_sys):
 # ══════════════════════════════════════════════════
 
 PLOTLY_DARK = dict(
-    paper_bgcolor='#0e1117',
-    plot_bgcolor='#1a1d2e',
+    paper_bgcolor='#fcfcfc',
+    plot_bgcolor='#fcfcfc',
     font=dict(color='#e0e4f0', family='system-ui, sans-serif'),
     xaxis=dict(gridcolor='#333654', zerolinecolor='#444870', linecolor='#333654'),
     yaxis=dict(gridcolor='#333654', zerolinecolor='#444870', linecolor='#333654'),
