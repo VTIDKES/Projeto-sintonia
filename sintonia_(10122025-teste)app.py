@@ -9,7 +9,12 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import sympy as sp
-from sympy.parsing.sympy_parser import parse_expr
+from sympy.parsing.sympy_parser import (
+    parse_expr,
+    standard_transformations,
+    implicit_multiplication_application,
+    convert_xor,
+)
 import control as ctrl
 from control import TransferFunction, margin, step_response, forced_response, root_locus
 from scipy import signal
@@ -18,6 +23,11 @@ from plotly.subplots import make_subplots
 import streamlit.components.v1 as components
 import json
 import re
+
+TRANSFORMATIONS = standard_transformations + (
+    implicit_multiplication_application,
+    convert_xor,
+)
 
 # ══════════════════════════════════════════════════
 # CONSTANTES
@@ -79,16 +89,41 @@ def formatar_numero(valor):
     return f"{valor:.3f}"
 
 
+def normalizar_expressao(expr: str) -> str:
+    return (
+        expr.strip()
+        .replace("²", "^2")
+        .replace("³", "^3")
+        .replace("−", "-")
+        .replace("–", "-")
+        .replace("·", "*")
+    )
+
+
 def _parse_value(v):
     """Parse a single value: numbers, math expressions, or expressions with 's'."""
-    v = v.strip()
+    v = normalizar_expressao(v)
     if not v:
         return sp.Integer(0)
     try:
         return sp.Rational(v) if '/' in v else sp.Float(float(v))
     except (ValueError, TypeError):
         s = sp.Symbol('s')
-        return parse_expr(v.replace('^', '**'), local_dict={'s': s})
+        return parse_expr(v, local_dict={'s': s}, transformations=TRANSFORMATIONS)
+
+
+def _grau_polinomio(coeffs):
+    coeffs = np.asarray(coeffs, dtype=float)
+    nz = np.flatnonzero(np.abs(coeffs) > 1e-12)
+    if len(nz) == 0:
+        return -np.inf
+    return len(coeffs) - nz[0] - 1
+
+
+def _tf_eh_propria(tf_sys):
+    num_grau = _grau_polinomio(tf_sys.num[0][0])
+    den_grau = _grau_polinomio(tf_sys.den[0][0])
+    return num_grau <= den_grau
 
 
 def parse_matrix(text):
@@ -130,8 +165,16 @@ def parse_matrix(text):
 
 def converter_para_tf(numerador_str, denominador_str):
     s = sp.Symbol('s')
-    num = parse_expr(numerador_str.replace('^', '**'), local_dict={'s': s})
-    den = parse_expr(denominador_str.replace('^', '**'), local_dict={'s': s})
+    num = parse_expr(
+        normalizar_expressao(numerador_str),
+        local_dict={'s': s},
+        transformations=TRANSFORMATIONS
+    )
+    den = parse_expr(
+        normalizar_expressao(denominador_str),
+        local_dict={'s': s},
+        transformations=TRANSFORMATIONS
+    )
     num, den = sp.fraction(sp.together(num / den))
     num_coeffs = [float(c) for c in sp.Poly(num, s).all_coeffs()]
     den_coeffs = [float(c) for c in sp.Poly(den, s).all_coeffs()]
@@ -547,6 +590,14 @@ def _gerar_sinal_entrada(entrada, t):
 
 def plot_resposta_temporal(sistema, entrada):
     sistema = ctrl.minreal(sistema, verbose=False)
+
+    if not _tf_eh_propria(sistema):
+        raise ValueError(
+            "A função de transferência é imprópria "
+            "(grau do numerador maior que o do denominador). "
+            "A resposta no tempo não pode ser calculada diretamente. "
+            "Use uma FT própria ou adicione a dinâmica física faltante."
+        )
 
     polos = ctrl.poles(sistema)
     tempo_final = estimar_tempo_final_simulacao(sistema)
