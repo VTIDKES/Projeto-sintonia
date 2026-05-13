@@ -23,7 +23,7 @@ from plotly.subplots import make_subplots
 import json
 import re
 from modo_diagrama_blocos import modo_canvas
-from modo_guia_estudos import render_guia_popup
+from modo_guia_estudos import render_guia_janela
 
 TRANSFORMATIONS = standard_transformations + (
     implicit_multiplication_application,
@@ -944,7 +944,7 @@ def tela_inicial():
     st.markdown('<div class="welcome-sub">Escolha o modo de trabalho para começar</div>',
                 unsafe_allow_html=True)
 
-    render_guia_popup("Consultar Guia de Estudos")
+    render_guia_janela("Guia de Estudos")
 
     col1, col2 = st.columns(2, gap="large")
 
@@ -1185,7 +1185,6 @@ def modo_classico():
         if st.button("← Voltar à Tela Inicial", use_container_width=True):
             st.session_state.modo_selecionado = None
             st.rerun()
-        render_guia_popup("Consultar Guia")
 
         st.markdown("---")
 
@@ -1283,6 +1282,8 @@ def modo_classico():
             st.session_state.calculo_erro_habilitado = (
                 not st.session_state.calculo_erro_habilitado)
             st.rerun()
+
+    render_guia_janela("Guia")
 
     if st.session_state.calculo_erro_habilitado:
         st.subheader("Cálculo de Erro Estacionário")

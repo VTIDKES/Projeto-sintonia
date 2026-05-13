@@ -15,9 +15,9 @@ sinais e sistemas, Transformada de Laplace, funcoes de transferencia,
 diagramas de blocos, realimentacao, estabilidade, Bode, Nyquist, LGR e
 espaco de estados.
 
-No Streamlit, o guia aparece como um popup **Consultar Guia**, para que o
-usuario selecione um assunto e consulte a teoria enquanto monta ou analisa
-um sistema.
+No Streamlit, o guia aparece como uma janela movel **Guia**, para que o
+usuario selecione um assunto, arraste a janela pela barra superior e consulte
+a teoria enquanto monta ou analisa um sistema.
 
 As notas originais usadas como base tambem ficam em `notas_controle/originais/`.
 

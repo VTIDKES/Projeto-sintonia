@@ -6,7 +6,7 @@ import json
 
 import streamlit as st
 import streamlit.components.v1 as components
-from modo_guia_estudos import render_guia_popup
+from modo_guia_estudos import render_guia_janela
 
 
 def _load_visual_editor_html():
@@ -209,7 +209,6 @@ def modo_canvas():
         if st.button("← Voltar à Tela Inicial"):
             st.session_state.modo_selecionado = None
             st.rerun()
-        render_guia_popup("Consultar Guia")
 
         st.markdown("---")
         st.markdown("### Como usar")
@@ -227,6 +226,8 @@ def modo_canvas():
         3. Preencha os campos
         4. Clique **CALCULAR T(s)**
         """)
+
+    render_guia_janela("Guia")
 
     html_content = _load_visual_editor_html()
 
