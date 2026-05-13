@@ -6,4 +6,3 @@ control
 matplotlib
 scipy
 plotly
-streamlit-drawable-canvas
