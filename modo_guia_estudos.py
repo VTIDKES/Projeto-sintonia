@@ -269,22 +269,26 @@ def render_guia_janela(label="Guia"):
             #sintonia-guide-root * {{ box-sizing: border-box; }}
             #sintonia-guide-tab {{
               position: fixed;
-              right: 22px;
-              bottom: 24px;
+              right: 0;
+              top: 50%;
+              transform: translateY(-50%);
               z-index: 2147483000;
               border: 1px solid #333654;
+              border-right: 0;
               background: #171a2b;
               color: #fbbf24;
-              border-radius: 12px;
-              padding: 11px 16px;
+              border-radius: 12px 0 0 12px;
+              padding: 14px 10px;
               font: 800 15px system-ui, sans-serif;
               cursor: pointer;
               box-shadow: 0 12px 28px rgba(0,0,0,.28);
+              writing-mode: vertical-rl;
+              letter-spacing: .5px;
             }}
             #sintonia-guide-window {{
               position: fixed;
-              right: 22px;
-              bottom: 82px;
+              right: 18px;
+              top: 80px;
               width: min(760px, calc(100vw - 34px));
               height: min(620px, calc(100vh - 120px));
               display: none;
