@@ -203,8 +203,6 @@ def _build_canvas_model(blocos_df, conexoes):
 
 
 def modo_canvas():
-    st.title("Modo Diagrama de Blocos")
-
     with st.sidebar:
         st.header("Navegação")
         if st.button("← Voltar à Tela Inicial"):
