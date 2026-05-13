@@ -23,7 +23,7 @@ from plotly.subplots import make_subplots
 import json
 import re
 from modo_diagrama_blocos import modo_canvas
-from modo_guia_estudos import modo_guia_estudos
+from modo_guia_estudos import render_guia_popup
 
 TRANSFORMATIONS = standard_transformations + (
     implicit_multiplication_application,
@@ -901,7 +901,6 @@ def tela_inicial():
     }
     .mode-card-classic  { border-top: 4px solid #5b6be0; }
     .mode-card-diagram  { border-top: 4px solid #34d399; }
-    .mode-card-guide    { border-top: 4px solid #fbbf24; }
     .mode-card-classic:hover {
         border-color: #5b6be0;
         transform: translateY(-3px);
@@ -913,12 +912,6 @@ def tela_inicial():
         transform: translateY(-3px);
         box-shadow: 0 14px 40px rgba(52,211,153,0.2);
         background: linear-gradient(135deg, #1a2230, #1e2e2a);
-    }
-    .mode-card-guide:hover {
-        border-color: #fbbf24;
-        transform: translateY(-3px);
-        box-shadow: 0 14px 40px rgba(251,191,36,0.2);
-        background: linear-gradient(135deg, #252238, #332a18);
     }
     .mode-icon {
         width: 100%;
@@ -933,7 +926,6 @@ def tela_inicial():
     .mode-hint  { margin-top: 14px; font-size: 12px; font-weight: 600; letter-spacing: .4px; }
     .mode-hint-classic { color: #5b6be0; }
     .mode-hint-diagram { color: #34d399; }
-    .mode-hint-guide { color: #fbbf24; }
     .welcome-title {
         text-align: center; font-size: 32px; font-weight: 700;
         margin-bottom: 8px; color: #e0e4f0;
@@ -952,7 +944,9 @@ def tela_inicial():
     st.markdown('<div class="welcome-sub">Escolha o modo de trabalho para começar</div>',
                 unsafe_allow_html=True)
 
-    col1, col2, col3 = st.columns(3, gap="large")
+    render_guia_popup("Consultar Guia de Estudos")
+
+    col1, col2 = st.columns(2, gap="large")
 
     with col1:
         st.markdown("""
@@ -1019,36 +1013,6 @@ def tela_inicial():
         if st.button("Entrar no Modo Diagrama de Blocos", key="btn_canvas", type="primary", use_container_width=True):
             st.session_state.modo_selecionado = 'canvas'
             st.rerun()
-
-    with col3:
-        st.markdown("""
-        <div class="mode-card mode-card-guide">
-            <div class="mode-card-body">
-                <div class="mode-icon">
-                    <svg viewBox="0 0 240 80" xmlns="http://www.w3.org/2000/svg" width="100%">
-                      <rect x="42" y="12" width="156" height="56" rx="8" fill="#211c13" stroke="#fbbf24" stroke-width="1.6"/>
-                      <line x1="66" y1="28" x2="174" y2="28" stroke="#fbbf24" stroke-width="2" stroke-linecap="round"/>
-                      <line x1="66" y1="40" x2="156" y2="40" stroke="#e0e4f0" stroke-width="1.5" opacity=".75" stroke-linecap="round"/>
-                      <line x1="66" y1="52" x2="132" y2="52" stroke="#8890b0" stroke-width="1.5" opacity=".75" stroke-linecap="round"/>
-                      <circle cx="50" cy="22" r="3" fill="#fbbf24"/>
-                      <circle cx="190" cy="58" r="3" fill="#fbbf24"/>
-                      <path d="M54 18 C82 4, 122 4, 186 18" fill="none" stroke="#5b6be0" stroke-width="1.8" opacity=".8"/>
-                      <path d="M54 62 C88 76, 132 76, 186 62" fill="none" stroke="#34d399" stroke-width="1.8" opacity=".8"/>
-                    </svg>
-                </div>
-                <div class="mode-title">Guia de Estudos</div>
-                <div class="mode-desc">
-                    Notas didaticas sobre sinais, Laplace, polos e zeros,
-                    realimentacao, estabilidade, Bode, Nyquist e espaco
-                    de estados para consultar durante as simulacoes.
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("Abrir Guia de Estudos", key="btn_guia", type="primary", use_container_width=True):
-            st.session_state.modo_selecionado = 'guia'
-            st.rerun()
-
 
 # ══════════════════════════════════════════════════
 # WIDGET DE ESPAÇO DE ESTADOS (BONITO)
@@ -1221,9 +1185,7 @@ def modo_classico():
         if st.button("← Voltar à Tela Inicial", use_container_width=True):
             st.session_state.modo_selecionado = None
             st.rerun()
-        if st.button("Abrir Guia de Estudos", key="abrir_guia_classico", use_container_width=True):
-            st.session_state.modo_selecionado = 'guia'
-            st.rerun()
+        render_guia_popup("Consultar Guia")
 
         st.markdown("---")
 
@@ -1486,8 +1448,6 @@ def main():
         modo_classico()
     elif st.session_state.modo_selecionado == 'canvas':
         modo_canvas()
-    elif st.session_state.modo_selecionado == 'guia':
-        modo_guia_estudos()
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ import json
 
 import streamlit as st
 import streamlit.components.v1 as components
+from modo_guia_estudos import render_guia_popup
 
 
 def _load_visual_editor_html():
@@ -208,9 +209,7 @@ def modo_canvas():
         if st.button("← Voltar à Tela Inicial"):
             st.session_state.modo_selecionado = None
             st.rerun()
-        if st.button("Abrir Guia de Estudos", key="abrir_guia_diagrama", use_container_width=True):
-            st.session_state.modo_selecionado = 'guia'
-            st.rerun()
+        render_guia_popup("Consultar Guia")
 
         st.markdown("---")
         st.markdown("### Como usar")

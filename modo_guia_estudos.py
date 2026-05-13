@@ -98,6 +98,21 @@ def _render_topic_cards():
     )
 
 
+def render_guia_popup(label="Consultar Guia de Estudos"):
+    """Render a compact guide popover with topic selection."""
+    with st.popover(label, use_container_width=True):
+        markdown = _load_guide_markdown()
+        topic = st.selectbox(
+            "Assunto",
+            list(TOPICS.keys()),
+            key=f"guia_popup_topic_{label}",
+        )
+        st.markdown(_extract_section(markdown, TOPICS[topic]))
+
+        with st.expander("Guia completo"):
+            st.markdown(markdown)
+
+
 def modo_guia_estudos():
     with st.sidebar:
         st.header("Navegacao")
