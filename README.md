@@ -7,6 +7,19 @@ O Projeto Sintonia tem como objetivo utilizar o Streamlit em conjunto com o Goog
 
 Aqui, queremos criar uma cultura sólida e um ecossistema totalmente colaborativo, no qual estudantes e interessados possam aprender, compartilhar e evoluir juntos.
 
+## Guia de estudos
+
+O projeto tambem inclui um guia de consulta em `notas_controle/guia_sintonia.md`.
+Esse material resume os principais topicos de Sistemas de Controle usados no app:
+sinais e sistemas, Transformada de Laplace, funcoes de transferencia,
+diagramas de blocos, realimentacao, estabilidade, Bode, Nyquist, LGR e
+espaco de estados.
+
+No Streamlit, o guia aparece como o modo **Guia de Estudos**, para que o
+usuario consulte a teoria enquanto monta ou analisa um sistema.
+
+As notas originais usadas como base tambem ficam em `notas_controle/originais/`.
+
 EN
 
 Hello, my name is Vitor.
