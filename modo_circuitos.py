@@ -24,6 +24,102 @@ FRONTEND_CANDIDATES = (
     BASE_DIR / "Circuitos_Frontend" / "index.html",
 )
 
+FALLBACK_EDITOR_HTML = r"""
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:Segoe UI,Arial,sans-serif}
+body{background:#f8f8f6;color:#2c2c2a}
+#app{display:grid;grid-template-columns:150px minmax(0,1fr)230px;height:600px;border:1px solid #c8c6be;border-radius:10px;overflow:hidden}
+#palette,#props{background:#f1efe8;padding:10px;overflow:auto}
+#palette{border-right:1px solid #c8c6be}
+#props{border-left:1px solid #c8c6be}
+h4{font-size:12px;margin:10px 0 8px;color:#5f5e5a;text-transform:uppercase;letter-spacing:.04em}
+.item{width:100%;border:1px solid #c8c6be;border-left:4px solid #185fa5;border-radius:7px;background:#fff;margin:0 0 7px;padding:8px 6px;cursor:pointer;font-size:12px;font-weight:650;color:#444441}
+.item.mec{border-left-color:#0f6e56}.item.src{border-left-color:#854f0b}
+#stage{position:relative;background:#fafaf8;overflow:hidden}
+#cv{width:100%;height:100%;display:block}
+#hint{position:absolute;left:10px;bottom:8px;color:#888780;font-size:11px;pointer-events:none}
+#toolbar{position:absolute;right:10px;top:10px;display:flex;gap:6px;z-index:2}
+button{border:1px solid #c8c6be;border-radius:6px;background:#fff;color:#444441;padding:6px 9px;font-size:12px;cursor:pointer}
+button:hover{border-color:#185fa5;color:#185fa5;background:#e6f1fb}
+label{display:block;margin-top:8px;color:#5f5e5a;font-size:11px;font-weight:650}
+input,textarea{width:100%;border:1px solid #c8c6be;border-radius:6px;background:#fff;color:#2c2c2a;padding:6px 7px;font-size:12px}
+textarea{height:250px;font-family:Consolas,monospace;font-size:10px;line-height:1.35;resize:none}
+.empty{margin-top:16px;color:#888780;font-size:12px;line-height:1.45;text-align:center}
+.selected-title{font-size:13px;font-weight:750;margin:8px 0;color:#2c2c2a}
+@media(max-width:780px){#app{grid-template-columns:120px minmax(0,1fr);height:720px}#props{grid-column:1/-1;border-left:0;border-top:1px solid #c8c6be;max-height:240px}}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="palette">
+    <h4>Eletricos</h4>
+    <button class="item" data-type="resistor">Resistor</button>
+    <button class="item" data-type="capacitor">Capacitor</button>
+    <button class="item" data-type="indutor">Indutor</button>
+    <h4>Fontes</h4>
+    <button class="item src" data-type="fonte_v">Fonte V</button>
+    <button class="item src" data-type="forca">Forca</button>
+    <h4>Mecanicos</h4>
+    <button class="item mec" data-type="massa">Massa</button>
+    <button class="item mec" data-type="mola">Mola</button>
+    <button class="item mec" data-type="amortecedor">Amortecedor</button>
+  </aside>
+  <main id="stage">
+    <div id="toolbar">
+      <button id="arrange">Organizar</button>
+      <button id="clear">Limpar</button>
+      <button id="copy">Copiar JSON</button>
+    </div>
+    <canvas id="cv"></canvas>
+    <div id="hint">Clique para adicionar, arraste para mover e copie o JSON para simular.</div>
+  </main>
+  <aside id="props">
+    <h4>Propriedades</h4>
+    <div id="prop"></div>
+    <h4>JSON</h4>
+    <textarea id="json"></textarea>
+  </aside>
+</div>
+<script>
+const initialElements=__INITIAL_ELEMENTS__;
+const types={
+  resistor:{label:"Resistor",symbol:"R",unit:"ohm",value:1000,color:"#185fa5",bg:"#e6f1fb"},
+  capacitor:{label:"Capacitor",symbol:"C",unit:"uF",value:10,color:"#185fa5",bg:"#e6f1fb"},
+  indutor:{label:"Indutor",symbol:"L",unit:"mH",value:100,color:"#185fa5",bg:"#e6f1fb"},
+  fonte_v:{label:"Fonte V",symbol:"Vs",unit:"V",value:5,color:"#854f0b",bg:"#faeeda"},
+  forca:{label:"Forca",symbol:"F",unit:"N",value:1,color:"#854f0b",bg:"#faeeda"},
+  massa:{label:"Massa",symbol:"m",unit:"kg",value:1,color:"#0f6e56",bg:"#e1f5ee"},
+  mola:{label:"Mola",symbol:"k",unit:"N/m",value:10,color:"#0f6e56",bg:"#e1f5ee"},
+  amortecedor:{label:"Amortecedor",symbol:"b",unit:"N.s/m",value:2,color:"#0f6e56",bg:"#e1f5ee"}
+};
+const canvas=document.getElementById("cv"),ctx=canvas.getContext("2d"),stage=document.getElementById("stage"),prop=document.getElementById("prop"),jsonBox=document.getElementById("json");
+let elements=(Array.isArray(initialElements)?initialElements:[]).filter(e=>types[e.type]).map((e,i)=>({type:e.type,value:+e.value||types[e.type].value,x:+e.x||160+i*130,y:+e.y||300}));
+let selected=null,drag=null,dx=0,dy=0;
+function resize(){const r=stage.getBoundingClientRect();canvas.width=r.width;canvas.height=r.height;draw()} new ResizeObserver(resize).observe(stage); resize();
+function serial(){return elements.map(e=>({type:e.type,value:+e.value,x:Math.round(e.x),y:Math.round(e.y),rotation:0}))}
+function sync(){jsonBox.value=JSON.stringify(serial(),null,2)}
+function hit(x,y){for(let i=elements.length-1;i>=0;i--){const e=elements[i];if(x>=e.x-48&&x<=e.x+48&&y>=e.y-32&&y<=e.y+32)return e}return null}
+function symbol(e){const t=types[e.type];ctx.save();ctx.translate(e.x,e.y);ctx.fillStyle=t.bg;ctx.strokeStyle=t.color;ctx.lineWidth=e===selected?3:1.5;round(-48,-32,96,64,8);ctx.fill();ctx.stroke();ctx.fillStyle=t.color;ctx.font="bold 18px Arial";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(t.symbol,0,-5);ctx.fillStyle="#5f5e5a";ctx.font="11px Arial";ctx.fillText(`${Number(e.value).toPrecision(4)} ${t.unit}`,0,18);ctx.fillStyle=t.color;ctx.beginPath();ctx.arc(-48,0,4,0,Math.PI*2);ctx.arc(48,0,4,0,Math.PI*2);ctx.fill();ctx.restore()}
+function round(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);ctx.lineTo(x+w,y+h-r);ctx.arcTo(x+w,y+h,x+w-r,y+h,r);ctx.lineTo(x+r,y+h);ctx.arcTo(x,y+h,x,y+h-r,r);ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);ctx.closePath()}
+function draw(){ctx.clearRect(0,0,canvas.width,canvas.height);ctx.strokeStyle="rgba(0,0,0,.05)";for(let x=0;x<canvas.width;x+=24){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,canvas.height);ctx.stroke()}for(let y=0;y<canvas.height;y+=24){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke()}let sorted=[...elements].sort((a,b)=>a.x-b.x);ctx.strokeStyle="#444441";ctx.lineWidth=1.5;for(let i=0;i<sorted.length-1;i++){ctx.beginPath();ctx.moveTo(sorted[i].x+48,sorted[i].y);ctx.lineTo(sorted[i+1].x-48,sorted[i+1].y);ctx.stroke()}elements.forEach(symbol);sync()}
+function renderProp(){if(!selected){prop.innerHTML='<div class="empty">Selecione um elemento.</div>';return}const t=types[selected.type];prop.innerHTML=`<div class="selected-title">${t.label}</div><label>Valor</label><input id="val" type="number" step="any" value="${selected.value}"><label>X</label><input id="x" type="number" value="${Math.round(selected.x)}"><label>Y</label><input id="y" type="number" value="${Math.round(selected.y)}"><button id="del" style="margin-top:10px;width:100%">Remover</button>`;document.getElementById("val").oninput=e=>{selected.value=+e.target.value||selected.value;draw()};document.getElementById("x").oninput=e=>{selected.x=+e.target.value||selected.x;draw()};document.getElementById("y").oninput=e=>{selected.y=+e.target.value||selected.y;draw()};document.getElementById("del").onclick=()=>{elements=elements.filter(e=>e!==selected);selected=null;renderProp();draw()}}
+document.querySelectorAll(".item").forEach(b=>b.onclick=()=>{const n=elements.length;const e={type:b.dataset.type,value:types[b.dataset.type].value,x:150+n*100,y:canvas.height/2};elements.push(e);selected=e;renderProp();draw()});
+canvas.onmousedown=e=>{const r=canvas.getBoundingClientRect();selected=hit(e.clientX-r.left,e.clientY-r.top);if(selected){drag=selected;dx=e.clientX-r.left-selected.x;dy=e.clientY-r.top-selected.y}renderProp();draw()};
+canvas.onmousemove=e=>{if(!drag)return;const r=canvas.getBoundingClientRect();drag.x=Math.round((e.clientX-r.left-dx)/10)*10;drag.y=Math.round((e.clientY-r.top-dy)/10)*10;draw()};
+window.onmouseup=()=>drag=null;
+document.getElementById("arrange").onclick=()=>{elements.forEach((e,i)=>{e.x=130+i*125;e.y=canvas.height/2});draw()};
+document.getElementById("clear").onclick=()=>{elements=[];selected=null;renderProp();draw()};
+document.getElementById("copy").onclick=()=>navigator.clipboard&&navigator.clipboard.writeText(jsonBox.value);
+renderProp();draw();
+</script>
+</body>
+</html>
+"""
+
 PRESETS = {
     "RC - 1 ordem": [
         {"type": "fonte_v", "value": 5, "x": 150, "y": 300, "rotation": 0},
@@ -54,7 +150,7 @@ def _load_circuit_editor_html():
     for path in FRONTEND_CANDIDATES:
         if path.exists():
             return path.read_text(encoding="utf-8")
-    return None
+    return FALLBACK_EDITOR_HTML
 
 
 def _parse_elements(json_text):
@@ -359,13 +455,6 @@ def modo_circuitos():
 
     initial_elements = _safe_elements_for_canvas(st.session_state.circuitos_json)
     html_template = _load_circuit_editor_html()
-    if html_template is None:
-        st.error("Arquivo do editor visual nao encontrado no projeto publicado.")
-        st.markdown("No Streamlit Cloud, envie este arquivo para o GitHub exatamente neste caminho:")
-        st.code("circuitos_frontend/index.html", language="text")
-        st.caption("Se voce subiu manualmente, confirme tambem maiusculas/minusculas do nome da pasta e do arquivo.")
-        return
-
     html_content = html_template.replace(
         "__INITIAL_ELEMENTS__",
         json.dumps(initial_elements, ensure_ascii=False),
