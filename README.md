@@ -13,13 +13,20 @@ O projeto tambem inclui um guia de consulta em `notas_controle/guia_sintonia.md`
 Esse material resume os principais topicos de Sistemas de Controle usados no app:
 sinais e sistemas, Transformada de Laplace, funcoes de transferencia,
 diagramas de blocos, realimentacao, estabilidade, Bode, Nyquist, LGR e
-espaco de estados.
+espaco de estados, sistemas eletricos e sistemas mecanicos.
 
 No Streamlit, o guia aparece como uma janela movel **Guia**, para que o
 usuario selecione um assunto, arraste a janela pela barra superior e consulte
 a teoria enquanto monta ou analisa um sistema.
 
 As notas originais usadas como base tambem ficam em `notas_controle/originais/`.
+
+## Modo Circuitos
+
+O projeto inclui um terceiro modo, `Modo Circuitos`, com editor visual separado em
+`circuitos_frontend/index.html` e orquestracao em `modo_circuitos.py`.
+Esse modo permite manipular elementos graficos de circuitos eletricos e analogias
+mecanicas, com presets para RC, RLC e massa-mola-amortecedor.
 
 EN
 
@@ -29,4 +36,3 @@ This project was born from the need to present, in a visual, didactic, and acces
 The Sintonia Project aims to use Streamlit together with Google Colab as tools to support learning, making the concepts more interactive and easier to understand. In addition, the project seeks to place the student as the protagonist of their own learning process, aligning with active learning methodologies such as PBL (Problem-Based Learning), PjBL (Project-Based Learning), and Peer Instruction.
 
 Here, we intend to build a solid culture and a fully collaborative ecosystem, where students and enthusiasts can learn, share, and grow together.
-

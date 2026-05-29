@@ -24,6 +24,8 @@ NOTE_FILES = {
     "7. Bode e frequencia": ORIGINALS_DIR / "07_frequencia_bode.md",
     "8. Nyquist": ORIGINALS_DIR / "08_nyquist.md",
     "9. Espaco de estados": ORIGINALS_DIR / "09_espaco_de_estados.md",
+    "10. Sistemas eletricos": ORIGINALS_DIR / "teoria_sistemas_eletricos.md",
+    "11. Sistemas mecanicos": ORIGINALS_DIR / "teoria_sistemas_mecanicos.md",
 }
 
 
@@ -114,6 +116,19 @@ def _markdown_to_html(markdown):
         if not stripped or stripped == "---":
             close_lists()
             i += 1
+            continue
+
+        if stripped.startswith("<svg"):
+            close_lists()
+            raw_html = [raw]
+            i += 1
+            while i < len(lines):
+                raw_html.append(lines[i])
+                if "</svg>" in lines[i]:
+                    i += 1
+                    break
+                i += 1
+            out.append("\n".join(raw_html))
             continue
 
         if stripped.startswith("|"):
@@ -398,6 +413,12 @@ def render_guia_janela(label="Guia"):
               border: 0;
               padding: 0;
               color: inherit;
+            }}
+            .sg-body svg {{
+              display: block;
+              max-width: 100%;
+              height: auto;
+              margin: 10px 0 18px;
             }}
             .sg-body ul, .sg-body ol {{
               margin: 0 0 14px 22px;

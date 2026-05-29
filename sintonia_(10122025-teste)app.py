@@ -23,6 +23,7 @@ from plotly.subplots import make_subplots
 import json
 import re
 from modo_diagrama_blocos import modo_canvas
+from modo_circuitos import modo_circuitos
 from modo_guia_estudos import render_guia_janela
 
 TRANSFORMATIONS = standard_transformations + (
@@ -901,6 +902,7 @@ def tela_inicial():
     }
     .mode-card-classic  { border-top: 4px solid #5b6be0; }
     .mode-card-diagram  { border-top: 4px solid #34d399; }
+    .mode-card-circuits { border-top: 4px solid #f59e0b; }
     .mode-card-classic:hover {
         border-color: #5b6be0;
         transform: translateY(-3px);
@@ -912,6 +914,12 @@ def tela_inicial():
         transform: translateY(-3px);
         box-shadow: 0 14px 40px rgba(52,211,153,0.2);
         background: linear-gradient(135deg, #1a2230, #1e2e2a);
+    }
+    .mode-card-circuits:hover {
+        border-color: #f59e0b;
+        transform: translateY(-3px);
+        box-shadow: 0 14px 40px rgba(245,158,11,0.22);
+        background: linear-gradient(135deg, #241e18, #302516);
     }
     .mode-icon {
         width: 100%;
@@ -946,7 +954,7 @@ def tela_inicial():
 
     render_guia_janela("Guia de Estudos")
 
-    col1, col2 = st.columns(2, gap="large")
+    col1, col2, col3 = st.columns(3, gap="large")
 
     with col1:
         st.markdown("""
@@ -1012,6 +1020,44 @@ def tela_inicial():
         """, unsafe_allow_html=True)
         if st.button("Entrar no Modo Diagrama de Blocos", key="btn_canvas", type="primary", use_container_width=True):
             st.session_state.modo_selecionado = 'canvas'
+            st.rerun()
+
+    with col3:
+        st.markdown("""
+        <div class="mode-card mode-card-circuits">
+            <div class="mode-card-body">
+                <div class="mode-icon">
+                    <svg viewBox="0 0 240 80" xmlns="http://www.w3.org/2000/svg" width="100%">
+                      <line x1="14" y1="40" x2="34" y2="40" stroke="#8890b0" stroke-width="2"/>
+                      <circle cx="48" cy="40" r="13" fill="#2d2315" stroke="#f59e0b" stroke-width="1.8"/>
+                      <text x="48" y="38" fill="#fbbf24" font-size="9" text-anchor="middle" font-family="monospace">AC</text>
+                      <text x="48" y="48" fill="#fbbf24" font-size="8" text-anchor="middle" font-family="monospace">Vs</text>
+                      <line x1="62" y1="40" x2="82" y2="40" stroke="#8890b0" stroke-width="2"/>
+                      <polyline points="82,40 88,24 96,56 104,24 112,56 120,24 128,40"
+                                fill="none" stroke="#60a5fa" stroke-width="2.2"
+                                stroke-linecap="round" stroke-linejoin="round"/>
+                      <line x1="128" y1="40" x2="152" y2="40" stroke="#8890b0" stroke-width="2"/>
+                      <line x1="152" y1="22" x2="152" y2="58" stroke="#60a5fa" stroke-width="3"/>
+                      <line x1="164" y1="22" x2="164" y2="58" stroke="#60a5fa" stroke-width="3"/>
+                      <line x1="164" y1="40" x2="212" y2="40" stroke="#8890b0" stroke-width="2"/>
+                      <line x1="212" y1="40" x2="212" y2="68" stroke="#8890b0" stroke-width="2"/>
+                      <line x1="14" y1="68" x2="212" y2="68" stroke="#8890b0" stroke-width="2"/>
+                      <line x1="14" y1="40" x2="14" y2="68" stroke="#8890b0" stroke-width="2"/>
+                      <text x="105" y="18" fill="#e0e4f0" font-size="11" font-family="monospace" text-anchor="middle">R</text>
+                      <text x="158" y="18" fill="#e0e4f0" font-size="11" font-family="monospace" text-anchor="middle">C</text>
+                    </svg>
+                </div>
+                <div class="mode-title">Modo Circuitos</div>
+                <div class="mode-desc">
+                    Desenhe circuitos elétricos e analogias mecânicas com
+                    elementos gráficos editáveis. Simule modelos RC, RLC e
+                    massa-mola-amortecedor.
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("Entrar no Modo Circuitos", key="btn_circuitos", type="primary", use_container_width=True):
+            st.session_state.modo_selecionado = 'circuitos'
             st.rerun()
 
 # ══════════════════════════════════════════════════
@@ -1449,6 +1495,8 @@ def main():
         modo_classico()
     elif st.session_state.modo_selecionado == 'canvas':
         modo_canvas()
+    elif st.session_state.modo_selecionado == 'circuitos':
+        modo_circuitos()
 
 
 if __name__ == "__main__":
