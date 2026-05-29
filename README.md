@@ -21,12 +21,12 @@ a teoria enquanto monta ou analisa um sistema.
 
 As notas originais usadas como base tambem ficam em `notas_controle/originais/`.
 
-## Modo Circuitos
+## Modo Simulação com Elementos
 
-O projeto inclui um terceiro modo, `Modo Circuitos`, com editor visual separado em
+O projeto inclui um terceiro modo, `Modo Simulação com Elementos`, com editor visual separado em
 `circuitos_frontend/index.html` e orquestracao em `modo_circuitos.py`.
-Esse modo permite manipular elementos graficos de circuitos eletricos e analogias
-mecanicas, com presets para RC, RLC e massa-mola-amortecedor.
+Esse modo permite manipular elementos graficos eletricos e mecanicos, com presets
+para RC, RLC e massa-mola-amortecedor.
 
 EN
 

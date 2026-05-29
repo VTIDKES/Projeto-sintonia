@@ -17,6 +17,12 @@ from modo_guia_estudos import render_guia_janela
 
 BASE_DIR = Path(__file__).parent
 FRONTEND_PATH = BASE_DIR / "circuitos_frontend" / "index.html"
+FRONTEND_CANDIDATES = (
+    FRONTEND_PATH,
+    BASE_DIR / "circuitos_frontend" / "Index.html",
+    BASE_DIR / "Circuitos_frontend" / "index.html",
+    BASE_DIR / "Circuitos_Frontend" / "index.html",
+)
 
 PRESETS = {
     "RC - 1 ordem": [
@@ -45,7 +51,10 @@ VALID_TYPES = {
 
 
 def _load_circuit_editor_html():
-    return FRONTEND_PATH.read_text(encoding="utf-8")
+    for path in FRONTEND_CANDIDATES:
+        if path.exists():
+            return path.read_text(encoding="utf-8")
+    return None
 
 
 def _parse_elements(json_text):
@@ -345,11 +354,19 @@ def modo_circuitos():
 
     render_guia_janela("Guia")
 
-    st.title("Modo Circuitos e Elementos Gráficos")
-    st.caption("Editor visual para montar circuitos eletricos e analogias mecanicas.")
+    st.title("Modo Simulação com Elementos")
+    st.caption("Editor visual para manipular elementos graficos eletricos e mecanicos.")
 
     initial_elements = _safe_elements_for_canvas(st.session_state.circuitos_json)
-    html_content = _load_circuit_editor_html().replace(
+    html_template = _load_circuit_editor_html()
+    if html_template is None:
+        st.error("Arquivo do editor visual nao encontrado no projeto publicado.")
+        st.markdown("No Streamlit Cloud, envie este arquivo para o GitHub exatamente neste caminho:")
+        st.code("circuitos_frontend/index.html", language="text")
+        st.caption("Se voce subiu manualmente, confirme tambem maiusculas/minusculas do nome da pasta e do arquivo.")
+        return
+
+    html_content = html_template.replace(
         "__INITIAL_ELEMENTS__",
         json.dumps(initial_elements, ensure_ascii=False),
     )

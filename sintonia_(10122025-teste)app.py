@@ -1047,16 +1047,16 @@ def tela_inicial():
                       <text x="158" y="18" fill="#e0e4f0" font-size="11" font-family="monospace" text-anchor="middle">C</text>
                     </svg>
                 </div>
-                <div class="mode-title">Modo Circuitos</div>
+                <div class="mode-title">Modo Simulação com Elementos</div>
                 <div class="mode-desc">
-                    Desenhe circuitos elétricos e analogias mecânicas com
-                    elementos gráficos editáveis. Simule modelos RC, RLC e
+                    Manipule elementos gráficos elétricos e mecânicos.
+                    Simule modelos RC, RLC e
                     massa-mola-amortecedor.
                 </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("Entrar no Modo Circuitos", key="btn_circuitos", type="primary", use_container_width=True):
+        if st.button("Entrar no Modo Simulação com Elementos", key="btn_circuitos", type="primary", use_container_width=True):
             st.session_state.modo_selecionado = 'circuitos'
             st.rerun()
 
