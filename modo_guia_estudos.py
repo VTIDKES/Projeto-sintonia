@@ -29,8 +29,28 @@ NOTE_FILES = {
 }
 
 
+def _relative_display_path(path):
+    try:
+        return path.relative_to(BASE_DIR).as_posix()
+    except ValueError:
+        return path.name
+
+
+def _missing_note_markdown(path):
+    rel_path = _relative_display_path(path)
+    return f"""# Nota nao encontrada
+
+O arquivo `{rel_path}` nao foi encontrado no ambiente do app.
+
+No Streamlit Cloud, confira se esse arquivo foi enviado para o GitHub com exatamente esse nome, incluindo maiusculas, minusculas, acentos e a pasta correta.
+"""
+
+
 def _read_text(path):
-    return path.read_text(encoding="utf-8")
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return _missing_note_markdown(path)
 
 
 def _load_guide_markdown():
