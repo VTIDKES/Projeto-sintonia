@@ -72,16 +72,14 @@ textarea{height:250px;font-family:Consolas,monospace;font-size:10px;line-height:
     <div id="toolbar">
       <button id="arrange">Organizar</button>
       <button id="clear">Limpar</button>
-      <button id="copy">Copiar JSON</button>
     </div>
     <canvas id="cv"></canvas>
-    <div id="hint">Clique para adicionar, arraste para mover e copie o JSON para simular.</div>
+    <div id="hint">Clique para adicionar e arraste para organizar o desenho.</div>
   </main>
   <aside id="props">
     <h4>Propriedades</h4>
     <div id="prop"></div>
-    <h4>JSON</h4>
-    <textarea id="json"></textarea>
+    <textarea id="json" style="display:none"></textarea>
   </aside>
 </div>
 <script>
@@ -103,17 +101,27 @@ function resize(){const r=stage.getBoundingClientRect();canvas.width=r.width;can
 function serial(){return elements.map(e=>({type:e.type,value:+e.value,x:Math.round(e.x),y:Math.round(e.y),rotation:0}))}
 function sync(){jsonBox.value=JSON.stringify(serial(),null,2)}
 function hit(x,y){for(let i=elements.length-1;i>=0;i--){const e=elements[i];if(x>=e.x-48&&x<=e.x+48&&y>=e.y-32&&y<=e.y+32)return e}return null}
-function symbol(e){const t=types[e.type];ctx.save();ctx.translate(e.x,e.y);ctx.fillStyle=t.bg;ctx.strokeStyle=t.color;ctx.lineWidth=e===selected?3:1.5;round(-48,-32,96,64,8);ctx.fill();ctx.stroke();ctx.fillStyle=t.color;ctx.font="bold 18px Arial";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(t.symbol,0,-5);ctx.fillStyle="#5f5e5a";ctx.font="11px Arial";ctx.fillText(`${Number(e.value).toPrecision(4)} ${t.unit}`,0,18);ctx.fillStyle=t.color;ctx.beginPath();ctx.arc(-48,0,4,0,Math.PI*2);ctx.arc(48,0,4,0,Math.PI*2);ctx.fill();ctx.restore()}
+function drawShape(e){
+const t=types[e.type];ctx.strokeStyle=t.color;ctx.fillStyle=t.color;ctx.lineWidth=2;ctx.lineCap="round";ctx.lineJoin="round";
+if(e.type==="resistor"){ctx.beginPath();ctx.moveTo(-38,0);[[-28,0],[-23,-11],[-15,11],[-7,-11],[1,11],[9,-11],[17,11],[25,0],[38,0]].forEach(([x,y])=>ctx.lineTo(x,y));ctx.stroke()}
+else if(e.type==="capacitor"){ctx.beginPath();ctx.moveTo(-38,0);ctx.lineTo(-8,0);ctx.stroke();ctx.beginPath();ctx.moveTo(-8,-16);ctx.lineTo(-8,16);ctx.lineWidth=3;ctx.stroke();ctx.beginPath();ctx.moveTo(8,-16);ctx.lineTo(8,16);ctx.stroke();ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(8,0);ctx.lineTo(38,0);ctx.stroke()}
+else if(e.type==="indutor"){ctx.beginPath();ctx.moveTo(-38,0);ctx.lineTo(-28,0);ctx.stroke();ctx.beginPath();ctx.moveTo(-28,0);for(let i=0;i<5;i++)ctx.arc(-23+i*10,0,5,Math.PI,0);ctx.lineTo(38,0);ctx.stroke()}
+else if(e.type==="fonte_v"){ctx.beginPath();ctx.moveTo(-42,0);ctx.lineTo(-18,0);ctx.stroke();ctx.beginPath();ctx.arc(0,0,18,0,Math.PI*2);ctx.fillStyle="#faeeda";ctx.fill();ctx.stroke();ctx.beginPath();ctx.moveTo(18,0);ctx.lineTo(42,0);ctx.stroke();ctx.fillStyle="#633806";ctx.font="10px Arial";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("AC",0,-4);ctx.fillText("Vs",0,8)}
+else if(e.type==="forca"){ctx.beginPath();ctx.moveTo(-42,0);ctx.lineTo(24,0);ctx.lineWidth=3;ctx.stroke();ctx.beginPath();ctx.moveTo(24,-10);ctx.lineTo(42,0);ctx.lineTo(24,10);ctx.closePath();ctx.fill()}
+else if(e.type==="massa"){ctx.fillStyle="#e1f5ee";ctx.strokeStyle=t.color;ctx.lineWidth=2;round(-28,-18,56,36,4);ctx.fill();ctx.stroke();ctx.fillStyle="#085041";ctx.font="bold 17px Arial";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("m",0,1)}
+else if(e.type==="mola"){ctx.beginPath();[[-42,0],[-30,0],[-24,-12],[-16,12],[-8,-12],[0,12],[8,-12],[16,12],[24,-12],[30,0],[42,0]].forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.stroke()}
+else if(e.type==="amortecedor"){ctx.beginPath();ctx.moveTo(-42,0);ctx.lineTo(-22,0);ctx.stroke();ctx.strokeRect(-22,-15,34,30);ctx.beginPath();ctx.moveTo(-4,0);ctx.lineTo(42,0);ctx.lineWidth=3;ctx.stroke();ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(12,-15);ctx.lineTo(12,15);ctx.stroke()}
+}
+function symbol(e){const t=types[e.type];ctx.save();ctx.translate(e.x,e.y);if(e===selected){ctx.save();ctx.strokeStyle="rgba(17,24,39,.45)";ctx.setLineDash([5,4]);ctx.lineWidth=1.4;round(-52,-38,104,76,8);ctx.stroke();ctx.restore()}drawShape(e);ctx.strokeStyle=t.color;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-48,0);ctx.lineTo(-42,0);ctx.moveTo(42,0);ctx.lineTo(48,0);ctx.stroke();ctx.fillStyle=t.color;ctx.beginPath();ctx.arc(-48,0,4,0,Math.PI*2);ctx.arc(48,0,4,0,Math.PI*2);ctx.fill();ctx.fillStyle=t.color;ctx.font="bold 12px Arial";ctx.textAlign="center";ctx.textBaseline="top";ctx.fillText(t.symbol,0,34);ctx.fillStyle="#5f5e5a";ctx.font="11px Arial";ctx.fillText(`${Number(e.value).toPrecision(4)} ${t.unit}`,0,49);ctx.restore()}
 function round(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);ctx.lineTo(x+w,y+h-r);ctx.arcTo(x+w,y+h,x+w-r,y+h,r);ctx.lineTo(x+r,y+h);ctx.arcTo(x,y+h,x,y+h-r,r);ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);ctx.closePath()}
 function draw(){ctx.clearRect(0,0,canvas.width,canvas.height);ctx.strokeStyle="rgba(0,0,0,.05)";for(let x=0;x<canvas.width;x+=24){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,canvas.height);ctx.stroke()}for(let y=0;y<canvas.height;y+=24){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke()}let sorted=[...elements].sort((a,b)=>a.x-b.x);ctx.strokeStyle="#444441";ctx.lineWidth=1.5;for(let i=0;i<sorted.length-1;i++){ctx.beginPath();ctx.moveTo(sorted[i].x+48,sorted[i].y);ctx.lineTo(sorted[i+1].x-48,sorted[i+1].y);ctx.stroke()}elements.forEach(symbol);sync()}
-function renderProp(){if(!selected){prop.innerHTML='<div class="empty">Selecione um elemento.</div>';return}const t=types[selected.type];prop.innerHTML=`<div class="selected-title">${t.label}</div><label>Valor</label><input id="val" type="number" step="any" value="${selected.value}"><label>X</label><input id="x" type="number" value="${Math.round(selected.x)}"><label>Y</label><input id="y" type="number" value="${Math.round(selected.y)}"><button id="del" style="margin-top:10px;width:100%">Remover</button>`;document.getElementById("val").oninput=e=>{selected.value=+e.target.value||selected.value;draw()};document.getElementById("x").oninput=e=>{selected.x=+e.target.value||selected.x;draw()};document.getElementById("y").oninput=e=>{selected.y=+e.target.value||selected.y;draw()};document.getElementById("del").onclick=()=>{elements=elements.filter(e=>e!==selected);selected=null;renderProp();draw()}}
+function renderProp(){if(!selected){prop.innerHTML='<div class="empty">Selecione um elemento.</div>';return}const t=types[selected.type];prop.innerHTML=`<div class="selected-title">${t.label}</div><div class="empty" style="margin-top:6px;text-align:left">Os valores da simulação ficam na barra lateral do Streamlit.</div><label>X</label><input id="x" type="number" value="${Math.round(selected.x)}"><label>Y</label><input id="y" type="number" value="${Math.round(selected.y)}"><button id="del" style="margin-top:10px;width:100%">Remover</button>`;document.getElementById("x").oninput=e=>{selected.x=+e.target.value||selected.x;draw()};document.getElementById("y").oninput=e=>{selected.y=+e.target.value||selected.y;draw()};document.getElementById("del").onclick=()=>{elements=elements.filter(e=>e!==selected);selected=null;renderProp();draw()}}
 document.querySelectorAll(".item").forEach(b=>b.onclick=()=>{const n=elements.length;const e={type:b.dataset.type,value:types[b.dataset.type].value,x:150+n*100,y:canvas.height/2};elements.push(e);selected=e;renderProp();draw()});
 canvas.onmousedown=e=>{const r=canvas.getBoundingClientRect();selected=hit(e.clientX-r.left,e.clientY-r.top);if(selected){drag=selected;dx=e.clientX-r.left-selected.x;dy=e.clientY-r.top-selected.y}renderProp();draw()};
 canvas.onmousemove=e=>{if(!drag)return;const r=canvas.getBoundingClientRect();drag.x=Math.round((e.clientX-r.left-dx)/10)*10;drag.y=Math.round((e.clientY-r.top-dy)/10)*10;draw()};
 window.onmouseup=()=>drag=null;
 document.getElementById("arrange").onclick=()=>{elements.forEach((e,i)=>{e.x=130+i*125;e.y=canvas.height/2});draw()};
 document.getElementById("clear").onclick=()=>{elements=[];selected=null;renderProp();draw()};
-document.getElementById("copy").onclick=()=>navigator.clipboard&&navigator.clipboard.writeText(jsonBox.value);
 renderProp();draw();
 </script>
 </body>
@@ -144,6 +152,64 @@ VALID_TYPES = {
     "resistor", "capacitor", "indutor", "fonte_v",
     "forca", "massa", "mola", "amortecedor",
 }
+
+
+def _format_latex_number(value):
+    value = float(value)
+    if abs(value) < 1e-12:
+        return "0"
+    if abs(value - round(value)) < 1e-9 and abs(value) < 1e6:
+        return str(int(round(value)))
+    return f"{value:.4g}"
+
+
+def _poly_to_latex(coeffs):
+    coeffs = [float(c) for c in coeffs]
+    degree = len(coeffs) - 1
+    terms = []
+    for index, coeff in enumerate(coeffs):
+        if abs(coeff) < 1e-12:
+            continue
+
+        power = degree - index
+        sign = "-" if coeff < 0 else "+"
+        abs_coeff = abs(coeff)
+        coeff_text = _format_latex_number(abs_coeff)
+
+        if power == 0:
+            body = coeff_text
+        elif power == 1:
+            body = "s" if abs(abs_coeff - 1) < 1e-12 else f"{coeff_text}s"
+        else:
+            body = f"s^{{{power}}}" if abs(abs_coeff - 1) < 1e-12 else f"{coeff_text}s^{{{power}}}"
+
+        terms.append((sign, body))
+
+    if not terms:
+        return "0"
+
+    first_sign, first_body = terms[0]
+    result = f"-{first_body}" if first_sign == "-" else first_body
+    for sign, body in terms[1:]:
+        result += f" {sign} {body}"
+    return result
+
+
+def _tf_to_latex(tf_obj):
+    num = _poly_to_latex(tf_obj.num[0][0])
+    den = _poly_to_latex(tf_obj.den[0][0])
+    return rf"G(s)=\frac{{{num}}}{{{den}}}"
+
+
+def _build_elements(system, values):
+    templates = PRESETS[system]
+    result = []
+    for item in templates:
+        element = dict(item)
+        if element["type"] in values:
+            element["value"] = values[element["type"]]
+        result.append(element)
+    return result
 
 
 def _load_circuit_editor_html():
@@ -423,9 +489,6 @@ def _render_metric_grid(params):
 
 
 def modo_circuitos():
-    if "circuitos_json" not in st.session_state:
-        st.session_state.circuitos_json = json.dumps(PRESETS["RC - 1 ordem"], indent=2)
-
     with st.sidebar:
         st.header("Navegação")
         if st.button("← Voltar à Tela Inicial", use_container_width=True):
@@ -433,27 +496,38 @@ def modo_circuitos():
             st.rerun()
 
         st.markdown("---")
-        st.header("Presets")
-        preset = st.selectbox("Sistema", list(PRESETS.keys()))
-        if st.button("Carregar preset", use_container_width=True):
-            st.session_state.circuitos_json = json.dumps(PRESETS[preset], indent=2)
-            st.rerun()
+        st.header("Sistema")
+        system = st.selectbox(
+            "Escolha o modelo",
+            list(PRESETS.keys()),
+            key="sim_elementos_sistema",
+        )
 
         st.markdown("---")
-        st.header("Definição manual")
-        manual_json = st.text_area(
-            "JSON dos elementos",
-            key="circuitos_json",
-            height=210,
-        )
-        st.caption("Tipos: resistor, capacitor, indutor, fonte_v, massa, mola, amortecedor, forca.")
+        st.header("Parâmetros")
+        values = {}
+        if system == "RC - 1 ordem":
+            values["fonte_v"] = st.number_input("Vs (V)", min_value=0.000001, value=5.0, step=0.5)
+            values["resistor"] = st.number_input("R (ohm)", min_value=0.000001, value=1000.0, step=100.0)
+            values["capacitor"] = st.number_input("C (uF)", min_value=0.000001, value=10.0, step=1.0)
+        elif system == "RLC - 2 ordem":
+            values["fonte_v"] = st.number_input("Vs (V)", min_value=0.000001, value=5.0, step=0.5)
+            values["resistor"] = st.number_input("R (ohm)", min_value=0.000001, value=100.0, step=10.0)
+            values["indutor"] = st.number_input("L (mH)", min_value=0.000001, value=100.0, step=10.0)
+            values["capacitor"] = st.number_input("C (uF)", min_value=0.000001, value=10.0, step=1.0)
+        else:
+            values["forca"] = st.number_input("F (N)", min_value=0.000001, value=1.0, step=0.5)
+            values["massa"] = st.number_input("m (kg)", min_value=0.000001, value=1.0, step=0.5)
+            values["mola"] = st.number_input("k (N/m)", min_value=0.000001, value=10.0, step=1.0)
+            values["amortecedor"] = st.number_input("b (N.s/m)", min_value=0.0, value=2.0, step=0.5)
 
     render_guia_janela("Guia")
 
     st.title("Modo Simulação com Elementos")
-    st.caption("Editor visual para manipular elementos graficos eletricos e mecanicos.")
+    st.caption("Manipule os desenhos dos elementos e ajuste os parâmetros pela barra lateral.")
 
-    initial_elements = _safe_elements_for_canvas(st.session_state.circuitos_json)
+    elements = _build_elements(system, values)
+    initial_elements = _safe_elements_for_canvas(elements)
     html_template = _load_circuit_editor_html()
     html_content = html_template.replace(
         "__INITIAL_ELEMENTS__",
@@ -461,24 +535,26 @@ def modo_circuitos():
     )
     components.html(html_content, height=632, scrolling=False)
 
+    tf_obj, params = calcular_sistema(elements)
+    if tf_obj is not None:
+        st.subheader("Função de Transferência")
+        st.latex(_tf_to_latex(tf_obj))
+        _render_metric_grid(params)
+    else:
+        st.warning(params["Sistema"])
+        return
+
     col_run, col_note = st.columns([1, 3])
     with col_run:
         simular = st.button("Simular", type="primary", use_container_width=True)
     with col_note:
-        st.info("Para simular alteracoes feitas no canvas, copie o JSON do painel do editor e cole na definicao manual.")
+        st.info("Os gráficos usam os parâmetros da barra lateral e mostram o modelo físico selecionado.")
 
     if not simular:
         return
 
     try:
-        elements = _parse_elements(manual_json)
-        tf_obj, params = calcular_sistema(elements)
-        if tf_obj is None:
-            st.warning(params["Sistema"])
-            return
-
         st.subheader(params["Sistema"])
-        _render_metric_grid(params)
         fig_step, fig_bode, fig_s, y_final, poles, zeros = gerar_plots(tf_obj)
 
         tab_step, tab_bode, tab_s = st.tabs([
