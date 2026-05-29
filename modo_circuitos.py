@@ -25,107 +25,25 @@ FRONTEND_CANDIDATES = (
 )
 
 FALLBACK_EDITOR_HTML = r"""
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8">
-<style>
-*{box-sizing:border-box;margin:0;padding:0;font-family:Segoe UI,Arial,sans-serif}
-body{background:#f8f8f6;color:#2c2c2a}
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:Segoe UI,Arial,sans-serif}body{background:#f8f8f6;color:#2c2c2a}
 #app{display:grid;grid-template-columns:150px minmax(0,1fr)230px;height:600px;border:1px solid #c8c6be;border-radius:10px;overflow:hidden}
-#palette,#props{background:#f1efe8;padding:10px;overflow:auto}
-#palette{border-right:1px solid #c8c6be}
-#props{border-left:1px solid #c8c6be}
-h4{font-size:12px;margin:10px 0 8px;color:#5f5e5a;text-transform:uppercase;letter-spacing:.04em}
-.item{width:100%;border:1px solid #c8c6be;border-left:4px solid #185fa5;border-radius:7px;background:#fff;margin:0 0 7px;padding:8px 6px;cursor:pointer;font-size:12px;font-weight:650;color:#444441}
-.item.mec{border-left-color:#0f6e56}.item.src{border-left-color:#854f0b}
-#stage{position:relative;background:#fafaf8;overflow:hidden}
-#cv{width:100%;height:100%;display:block}
-#hint{position:absolute;left:10px;bottom:8px;color:#888780;font-size:11px;pointer-events:none}
-#toolbar{position:absolute;right:10px;top:10px;display:flex;gap:6px;z-index:2}
-button{border:1px solid #c8c6be;border-radius:6px;background:#fff;color:#444441;padding:6px 9px;font-size:12px;cursor:pointer}
-button:hover{border-color:#185fa5;color:#185fa5;background:#e6f1fb}
-label{display:block;margin-top:8px;color:#5f5e5a;font-size:11px;font-weight:650}
-input,textarea{width:100%;border:1px solid #c8c6be;border-radius:6px;background:#fff;color:#2c2c2a;padding:6px 7px;font-size:12px}
-textarea{height:250px;font-family:Consolas,monospace;font-size:10px;line-height:1.35;resize:none}
-.empty{margin-top:16px;color:#888780;font-size:12px;line-height:1.45;text-align:center}
-.selected-title{font-size:13px;font-weight:750;margin:8px 0;color:#2c2c2a}
-@media(max-width:780px){#app{grid-template-columns:120px minmax(0,1fr);height:720px}#props{grid-column:1/-1;border-left:0;border-top:1px solid #c8c6be;max-height:240px}}
-</style>
-</head>
-<body>
-<div id="app">
-  <aside id="palette">
-    <h4>Eletricos</h4>
-    <button class="item" data-type="resistor">Resistor</button>
-    <button class="item" data-type="capacitor">Capacitor</button>
-    <button class="item" data-type="indutor">Indutor</button>
-    <h4>Fontes</h4>
-    <button class="item src" data-type="fonte_v">Fonte V</button>
-    <button class="item src" data-type="forca">Forca</button>
-    <h4>Mecanicos</h4>
-    <button class="item mec" data-type="massa">Massa</button>
-    <button class="item mec" data-type="mola">Mola</button>
-    <button class="item mec" data-type="amortecedor">Amortecedor</button>
-  </aside>
-  <main id="stage">
-    <div id="toolbar">
-      <button id="arrange">Organizar</button>
-      <button id="clear">Limpar</button>
-    </div>
-    <canvas id="cv"></canvas>
-    <div id="hint">Clique para adicionar e arraste para organizar o desenho.</div>
-  </main>
-  <aside id="props">
-    <h4>Propriedades</h4>
-    <div id="prop"></div>
-    <textarea id="json" style="display:none"></textarea>
-  </aside>
-</div>
+#palette,#props{background:#f1efe8;padding:10px;overflow:auto}#palette{border-right:1px solid #c8c6be}#props{border-left:1px solid #c8c6be}
+h4{font-size:12px;margin:10px 0 8px;color:#5f5e5a;text-transform:uppercase;letter-spacing:.04em}.item{width:100%;border:1px solid #c8c6be;border-left:4px solid #185fa5;border-radius:7px;background:#fff;margin:0 0 7px;padding:8px 6px;cursor:pointer;font-size:12px;font-weight:650;color:#444441}.item.mec{border-left-color:#0f6e56}.item.src{border-left-color:#854f0b}.item.node{border-left-color:#444441}
+#stage{position:relative;background:#fafaf8;overflow:hidden}#cv{width:100%;height:100%;display:block}#hint{position:absolute;left:10px;bottom:8px;color:#888780;font-size:11px;pointer-events:none}#toolbar{position:absolute;right:10px;top:10px;display:flex;gap:6px;z-index:2;flex-wrap:wrap}button{border:1px solid #c8c6be;border-radius:6px;background:#fff;color:#444441;padding:6px 9px;font-size:12px;cursor:pointer}button:hover{border-color:#185fa5;color:#185fa5;background:#e6f1fb}
+label{display:block;margin-top:8px;color:#5f5e5a;font-size:11px;font-weight:650}input{width:100%;border:1px solid #c8c6be;border-radius:6px;background:#fff;color:#2c2c2a;padding:6px 7px;font-size:12px}.empty{margin-top:16px;color:#888780;font-size:12px;line-height:1.45;text-align:center}.selected-title{font-size:13px;font-weight:750;margin:8px 0;color:#2c2c2a}
+</style></head><body><div id="app"><aside id="palette"><h4>Eletricos</h4><button class="item" data-type="resistor">Resistor</button><button class="item" data-type="capacitor">Capacitor</button><button class="item" data-type="indutor">Indutor</button><h4>Fontes</h4><button class="item src" data-type="fonte_v">Fonte V</button><button class="item src" data-type="forca">Forca</button><h4>Conexoes</h4><button class="item node" data-type="junction">No</button><h4>Mecanicos</h4><button class="item mec" data-type="massa">Massa</button><button class="item mec" data-type="mola">Mola</button><button class="item mec" data-type="amortecedor">Amortecedor</button></aside><main id="stage"><div id="toolbar"><button id="arrange">Organizar</button><button id="undo">Desfazer fio</button><button id="clearWires">Limpar fios</button><button id="clear">Limpar</button></div><canvas id="cv"></canvas><div id="hint">Clique em um terminal e depois em outro para criar fios. Use nos para paralelo e malhas fechadas.</div></main><aside id="props"><h4>Propriedades</h4><div id="prop"></div></aside></div>
 <script>
-const initialElements=__INITIAL_ELEMENTS__;
-const types={
-  resistor:{label:"Resistor",symbol:"R",unit:"ohm",value:1000,color:"#185fa5",bg:"#e6f1fb"},
-  capacitor:{label:"Capacitor",symbol:"C",unit:"uF",value:10,color:"#185fa5",bg:"#e6f1fb"},
-  indutor:{label:"Indutor",symbol:"L",unit:"mH",value:100,color:"#185fa5",bg:"#e6f1fb"},
-  fonte_v:{label:"Fonte V",symbol:"Vs",unit:"V",value:5,color:"#854f0b",bg:"#faeeda"},
-  forca:{label:"Forca",symbol:"F",unit:"N",value:1,color:"#854f0b",bg:"#faeeda"},
-  massa:{label:"Massa",symbol:"m",unit:"kg",value:1,color:"#0f6e56",bg:"#e1f5ee"},
-  mola:{label:"Mola",symbol:"k",unit:"N/m",value:10,color:"#0f6e56",bg:"#e1f5ee"},
-  amortecedor:{label:"Amortecedor",symbol:"b",unit:"N.s/m",value:2,color:"#0f6e56",bg:"#e1f5ee"}
-};
-const canvas=document.getElementById("cv"),ctx=canvas.getContext("2d"),stage=document.getElementById("stage"),prop=document.getElementById("prop"),jsonBox=document.getElementById("json");
-let elements=(Array.isArray(initialElements)?initialElements:[]).filter(e=>types[e.type]).map((e,i)=>({type:e.type,value:+e.value||types[e.type].value,x:+e.x||160+i*130,y:+e.y||300}));
-let selected=null,drag=null,dx=0,dy=0;
-function resize(){const r=stage.getBoundingClientRect();canvas.width=r.width;canvas.height=r.height;draw()} new ResizeObserver(resize).observe(stage); resize();
-function serial(){return elements.map(e=>({type:e.type,value:+e.value,x:Math.round(e.x),y:Math.round(e.y),rotation:0}))}
-function sync(){jsonBox.value=JSON.stringify(serial(),null,2)}
-function hit(x,y){for(let i=elements.length-1;i>=0;i--){const e=elements[i];if(x>=e.x-48&&x<=e.x+48&&y>=e.y-32&&y<=e.y+32)return e}return null}
-function drawShape(e){
-const t=types[e.type];ctx.strokeStyle=t.color;ctx.fillStyle=t.color;ctx.lineWidth=2;ctx.lineCap="round";ctx.lineJoin="round";
-if(e.type==="resistor"){ctx.beginPath();ctx.moveTo(-38,0);[[-28,0],[-23,-11],[-15,11],[-7,-11],[1,11],[9,-11],[17,11],[25,0],[38,0]].forEach(([x,y])=>ctx.lineTo(x,y));ctx.stroke()}
-else if(e.type==="capacitor"){ctx.beginPath();ctx.moveTo(-38,0);ctx.lineTo(-8,0);ctx.stroke();ctx.beginPath();ctx.moveTo(-8,-16);ctx.lineTo(-8,16);ctx.lineWidth=3;ctx.stroke();ctx.beginPath();ctx.moveTo(8,-16);ctx.lineTo(8,16);ctx.stroke();ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(8,0);ctx.lineTo(38,0);ctx.stroke()}
-else if(e.type==="indutor"){ctx.beginPath();ctx.moveTo(-38,0);ctx.lineTo(-28,0);ctx.stroke();ctx.beginPath();ctx.moveTo(-28,0);for(let i=0;i<5;i++)ctx.arc(-23+i*10,0,5,Math.PI,0);ctx.lineTo(38,0);ctx.stroke()}
-else if(e.type==="fonte_v"){ctx.beginPath();ctx.moveTo(-42,0);ctx.lineTo(-18,0);ctx.stroke();ctx.beginPath();ctx.arc(0,0,18,0,Math.PI*2);ctx.fillStyle="#faeeda";ctx.fill();ctx.stroke();ctx.beginPath();ctx.moveTo(18,0);ctx.lineTo(42,0);ctx.stroke();ctx.fillStyle="#633806";ctx.font="10px Arial";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("AC",0,-4);ctx.fillText("Vs",0,8)}
-else if(e.type==="forca"){ctx.beginPath();ctx.moveTo(-42,0);ctx.lineTo(24,0);ctx.lineWidth=3;ctx.stroke();ctx.beginPath();ctx.moveTo(24,-10);ctx.lineTo(42,0);ctx.lineTo(24,10);ctx.closePath();ctx.fill()}
-else if(e.type==="massa"){ctx.fillStyle="#e1f5ee";ctx.strokeStyle=t.color;ctx.lineWidth=2;round(-28,-18,56,36,4);ctx.fill();ctx.stroke();ctx.fillStyle="#085041";ctx.font="bold 17px Arial";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("m",0,1)}
-else if(e.type==="mola"){ctx.beginPath();[[-42,0],[-30,0],[-24,-12],[-16,12],[-8,-12],[0,12],[8,-12],[16,12],[24,-12],[30,0],[42,0]].forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.stroke()}
-else if(e.type==="amortecedor"){ctx.beginPath();ctx.moveTo(-42,0);ctx.lineTo(-22,0);ctx.stroke();ctx.strokeRect(-22,-15,34,30);ctx.beginPath();ctx.moveTo(-4,0);ctx.lineTo(42,0);ctx.lineWidth=3;ctx.stroke();ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(12,-15);ctx.lineTo(12,15);ctx.stroke()}
-}
-function symbol(e){const t=types[e.type];ctx.save();ctx.translate(e.x,e.y);if(e===selected){ctx.save();ctx.strokeStyle="rgba(17,24,39,.45)";ctx.setLineDash([5,4]);ctx.lineWidth=1.4;round(-52,-38,104,76,8);ctx.stroke();ctx.restore()}drawShape(e);ctx.strokeStyle=t.color;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-48,0);ctx.lineTo(-42,0);ctx.moveTo(42,0);ctx.lineTo(48,0);ctx.stroke();ctx.fillStyle=t.color;ctx.beginPath();ctx.arc(-48,0,4,0,Math.PI*2);ctx.arc(48,0,4,0,Math.PI*2);ctx.fill();ctx.fillStyle=t.color;ctx.font="bold 12px Arial";ctx.textAlign="center";ctx.textBaseline="top";ctx.fillText(t.symbol,0,34);ctx.fillStyle="#5f5e5a";ctx.font="11px Arial";ctx.fillText(`${Number(e.value).toPrecision(4)} ${t.unit}`,0,49);ctx.restore()}
-function round(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);ctx.lineTo(x+w,y+h-r);ctx.arcTo(x+w,y+h,x+w-r,y+h,r);ctx.lineTo(x+r,y+h);ctx.arcTo(x,y+h,x,y+h-r,r);ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);ctx.closePath()}
-function draw(){ctx.clearRect(0,0,canvas.width,canvas.height);ctx.strokeStyle="rgba(0,0,0,.05)";for(let x=0;x<canvas.width;x+=24){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,canvas.height);ctx.stroke()}for(let y=0;y<canvas.height;y+=24){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke()}let sorted=[...elements].sort((a,b)=>a.x-b.x);ctx.strokeStyle="#444441";ctx.lineWidth=1.5;for(let i=0;i<sorted.length-1;i++){ctx.beginPath();ctx.moveTo(sorted[i].x+48,sorted[i].y);ctx.lineTo(sorted[i+1].x-48,sorted[i+1].y);ctx.stroke()}elements.forEach(symbol);sync()}
-function renderProp(){if(!selected){prop.innerHTML='<div class="empty">Selecione um elemento.</div>';return}const t=types[selected.type];prop.innerHTML=`<div class="selected-title">${t.label}</div><div class="empty" style="margin-top:6px;text-align:left">Os valores da simulação ficam na barra lateral do Streamlit.</div><label>X</label><input id="x" type="number" value="${Math.round(selected.x)}"><label>Y</label><input id="y" type="number" value="${Math.round(selected.y)}"><button id="del" style="margin-top:10px;width:100%">Remover</button>`;document.getElementById("x").oninput=e=>{selected.x=+e.target.value||selected.x;draw()};document.getElementById("y").oninput=e=>{selected.y=+e.target.value||selected.y;draw()};document.getElementById("del").onclick=()=>{elements=elements.filter(e=>e!==selected);selected=null;renderProp();draw()}}
-document.querySelectorAll(".item").forEach(b=>b.onclick=()=>{const n=elements.length;const e={type:b.dataset.type,value:types[b.dataset.type].value,x:150+n*100,y:canvas.height/2};elements.push(e);selected=e;renderProp();draw()});
-canvas.onmousedown=e=>{const r=canvas.getBoundingClientRect();selected=hit(e.clientX-r.left,e.clientY-r.top);if(selected){drag=selected;dx=e.clientX-r.left-selected.x;dy=e.clientY-r.top-selected.y}renderProp();draw()};
-canvas.onmousemove=e=>{if(!drag)return;const r=canvas.getBoundingClientRect();drag.x=Math.round((e.clientX-r.left-dx)/10)*10;drag.y=Math.round((e.clientY-r.top-dy)/10)*10;draw()};
-window.onmouseup=()=>drag=null;
-document.getElementById("arrange").onclick=()=>{elements.forEach((e,i)=>{e.x=130+i*125;e.y=canvas.height/2});draw()};
-document.getElementById("clear").onclick=()=>{elements=[];selected=null;renderProp();draw()};
-renderProp();draw();
-</script>
-</body>
-</html>
+const initialElements=__INITIAL_ELEMENTS__;const types={resistor:{label:"Resistor",symbol:"R",unit:"ohm",value:1000,color:"#185fa5"},capacitor:{label:"Capacitor",symbol:"C",unit:"uF",value:10,color:"#185fa5"},indutor:{label:"Indutor",symbol:"L",unit:"mH",value:100,color:"#185fa5"},fonte_v:{label:"Fonte V",symbol:"Vs",unit:"V",value:5,color:"#854f0b"},forca:{label:"Forca",symbol:"F",unit:"N",value:1,color:"#854f0b"},massa:{label:"Massa",symbol:"m",unit:"kg",value:1,color:"#0f6e56"},mola:{label:"Mola",symbol:"k",unit:"N/m",value:10,color:"#0f6e56"},amortecedor:{label:"Amortecedor",symbol:"b",unit:"N.s/m",value:2,color:"#0f6e56"},junction:{label:"No de conexao",symbol:"No",unit:"",value:0,color:"#444441"}};
+const canvas=document.getElementById("cv"),ctx=canvas.getContext("2d"),stage=document.getElementById("stage"),prop=document.getElementById("prop");const W=94,H=64;let nextId=1,nextEdge=1,selected=null,drag=null,dx=0,dy=0,pending=null,edges=[];let elements=(Array.isArray(initialElements)?initialElements:[]).filter(e=>types[e.type]).map((e,i)=>({id:nextId++,type:e.type,value:+e.value||types[e.type].value,x:+e.x||160+i*130,y:+e.y||300,rotation:+e.rotation||0}));
+function resize(){const r=stage.getBoundingClientRect();canvas.width=r.width;canvas.height=r.height;draw()}new ResizeObserver(resize).observe(stage);resize();function round(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);ctx.lineTo(x+w,y+h-r);ctx.arcTo(x+w,y+h,x+w-r,y+h,r);ctx.lineTo(x+r,y+h);ctx.arcTo(x,y+h,x,y+h-r,r);ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);ctx.closePath()}function find(id){return elements.find(e=>e.id===id)}function ports(e){return e.type==="junction"?["node"]:["left","right","top","bottom"]}function rot(x,y,d){const a=(d||0)*Math.PI/180;return{x:x*Math.cos(a)-y*Math.sin(a),y:x*Math.sin(a)+y*Math.cos(a)}}function point(e,p){if(e.type==="junction"||p==="node")return{x:e.x,y:e.y,vx:0,vy:0};const l={left:{x:-W/2,y:0,vx:-1,vy:0},right:{x:W/2,y:0,vx:1,vy:0},top:{x:0,y:-H/2,vx:0,vy:-1},bottom:{x:0,y:H/2,vx:0,vy:1}}[p],pos=rot(l.x,l.y,e.rotation),v=rot(l.vx,l.vy,e.rotation);return{x:e.x+pos.x,y:e.y+pos.y,vx:v.x,vy:v.y}}
+function drawShape(e){const t=types[e.type];ctx.strokeStyle=t.color;ctx.fillStyle=t.color;ctx.lineWidth=2;ctx.lineCap="round";ctx.lineJoin="round";if(e.type==="resistor"){ctx.beginPath();ctx.moveTo(-38,0);[[-28,0],[-23,-11],[-15,11],[-7,-11],[1,11],[9,-11],[17,11],[25,0],[38,0]].forEach(([x,y])=>ctx.lineTo(x,y));ctx.stroke()}else if(e.type==="capacitor"){ctx.beginPath();ctx.moveTo(-38,0);ctx.lineTo(-8,0);ctx.stroke();ctx.beginPath();ctx.moveTo(-8,-16);ctx.lineTo(-8,16);ctx.lineWidth=3;ctx.stroke();ctx.beginPath();ctx.moveTo(8,-16);ctx.lineTo(8,16);ctx.stroke();ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(8,0);ctx.lineTo(38,0);ctx.stroke()}else if(e.type==="indutor"){ctx.beginPath();ctx.moveTo(-38,0);ctx.lineTo(-28,0);ctx.stroke();ctx.beginPath();ctx.moveTo(-28,0);for(let i=0;i<5;i++)ctx.arc(-23+i*10,0,5,Math.PI,0);ctx.lineTo(38,0);ctx.stroke()}else if(e.type==="fonte_v"){ctx.beginPath();ctx.moveTo(-42,0);ctx.lineTo(-18,0);ctx.stroke();ctx.beginPath();ctx.arc(0,0,18,0,Math.PI*2);ctx.fillStyle="#faeeda";ctx.fill();ctx.stroke();ctx.beginPath();ctx.moveTo(18,0);ctx.lineTo(42,0);ctx.stroke();ctx.fillStyle="#633806";ctx.font="10px Arial";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("AC",0,-4);ctx.fillText("Vs",0,8)}else if(e.type==="forca"){ctx.beginPath();ctx.moveTo(-42,0);ctx.lineTo(24,0);ctx.lineWidth=3;ctx.stroke();ctx.beginPath();ctx.moveTo(24,-10);ctx.lineTo(42,0);ctx.lineTo(24,10);ctx.closePath();ctx.fill()}else if(e.type==="massa"){ctx.fillStyle="#e1f5ee";ctx.strokeStyle=t.color;ctx.lineWidth=2;round(-28,-18,56,36,4);ctx.fill();ctx.stroke();ctx.fillStyle="#085041";ctx.font="bold 17px Arial";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("m",0,1)}else if(e.type==="mola"){ctx.beginPath();ctx.moveTo(-42,0);ctx.lineTo(-30,0);ctx.stroke();ctx.beginPath();ctx.moveTo(-30,0);for(let i=0;i<7;i++){const x=-25+i*8;ctx.bezierCurveTo(x-4,-13,x+4,-13,x+4,0);ctx.bezierCurveTo(x+4,13,x+12,13,x+8,0)}ctx.stroke();ctx.beginPath();ctx.moveTo(30,0);ctx.lineTo(42,0);ctx.stroke()}else if(e.type==="amortecedor"){ctx.beginPath();ctx.moveTo(-42,0);ctx.lineTo(-22,0);ctx.stroke();ctx.strokeRect(-22,-15,34,30);ctx.beginPath();ctx.moveTo(-4,0);ctx.lineTo(42,0);ctx.lineWidth=3;ctx.stroke();ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(12,-15);ctx.lineTo(12,15);ctx.stroke()}else if(e.type==="junction"){ctx.beginPath();ctx.arc(0,0,7,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.moveTo(-20,0);ctx.lineTo(20,0);ctx.moveTo(0,-20);ctx.lineTo(0,20);ctx.stroke()}}
+function symbol(e){const t=types[e.type];ctx.save();ctx.translate(e.x,e.y);if(e===selected){ctx.save();ctx.strokeStyle="rgba(17,24,39,.45)";ctx.setLineDash([5,4]);ctx.lineWidth=1.4;round(-52,-38,104,76,8);ctx.stroke();ctx.restore()}drawShape(e);if(e.type!=="junction"){ctx.strokeStyle=t.color;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-48,0);ctx.lineTo(-42,0);ctx.moveTo(42,0);ctx.lineTo(48,0);ctx.stroke()}ctx.restore();ctx.save();ports(e).forEach(p=>{const q=point(e,p);ctx.fillStyle=pending&&pending.id===e.id&&pending.port===p?"#d85a30":t.color;ctx.beginPath();ctx.arc(q.x,q.y,e.type==="junction"?6:4,0,Math.PI*2);ctx.fill()});ctx.restore();if(e.type!=="junction"){ctx.save();ctx.fillStyle=t.color;ctx.font="bold 12px Arial";ctx.textAlign="center";ctx.textBaseline="top";ctx.fillText(t.symbol,e.x,e.y+H/2+5);ctx.fillStyle="#5f5e5a";ctx.font="11px Arial";ctx.fillText(`${Number(e.value).toPrecision(4)} ${t.unit}`,e.x,e.y+H/2+20);ctx.restore()}}
+function drawWire(a,b){const as={x:a.x+(a.vx||0)*20,y:a.y+(a.vy||0)*20},bs={x:b.x+(b.vx||0)*20,y:b.y+(b.vy||0)*20},mx=(a.x+b.x)/2;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(as.x,as.y);ctx.lineTo(mx,as.y);ctx.lineTo(mx,bs.y);ctx.lineTo(bs.x,bs.y);ctx.lineTo(b.x,b.y);ctx.stroke()}function draw(){ctx.clearRect(0,0,canvas.width,canvas.height);ctx.strokeStyle="rgba(0,0,0,.05)";for(let x=0;x<canvas.width;x+=24){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,canvas.height);ctx.stroke()}for(let y=0;y<canvas.height;y+=24){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke()}ctx.strokeStyle="#444441";ctx.lineWidth=2;edges.forEach(e=>{const a=find(e.from.id),b=find(e.to.id);if(a&&b)drawWire(point(a,e.from.port),point(b,e.to.port))});elements.forEach(symbol);if(pending){const e=find(pending.id);if(e){const p=point(e,pending.port);ctx.strokeStyle="#d85a30";ctx.fillStyle="#fff8ed";ctx.lineWidth=2;ctx.beginPath();ctx.arc(p.x,p.y,9,0,Math.PI*2);ctx.fill();ctx.stroke()}}}
+function hitPort(x,y){for(let i=elements.length-1;i>=0;i--){const e=elements[i];for(const p of ports(e)){const q=point(e,p);if(Math.hypot(x-q.x,y-q.y)<=11)return{id:e.id,port:p}}}return null}function hit(x,y){for(let i=elements.length-1;i>=0;i--){const e=elements[i];if(e.type==="junction"){if(Math.hypot(x-e.x,y-e.y)<=18)return e}else if(x>=e.x-W/2&&x<=e.x+W/2&&y>=e.y-H/2&&y<=e.y+H/2)return e}return null}
+function renderProp(){if(!selected){prop.innerHTML='<div class="empty">Selecione um elemento.</div>';return}const t=types[selected.type];prop.innerHTML=`<div class="selected-title">${t.label}</div><div class="empty" style="margin-top:6px;text-align:left">Clique em um terminal e depois em outro para criar conexao.</div><label>X</label><input id="x" type="number" value="${Math.round(selected.x)}"><label>Y</label><input id="y" type="number" value="${Math.round(selected.y)}"><button id="del" style="margin-top:10px;width:100%">Remover</button>`;document.getElementById("x").oninput=e=>{selected.x=+e.target.value||selected.x;draw()};document.getElementById("y").oninput=e=>{selected.y=+e.target.value||selected.y;draw()};document.getElementById("del").onclick=()=>{elements=elements.filter(e=>e!==selected);edges=edges.filter(e=>e.from.id!==selected.id&&e.to.id!==selected.id);selected=null;pending=null;renderProp();draw()}}
+document.querySelectorAll(".item").forEach(b=>b.onclick=()=>{const n=elements.length,e={id:nextId++,type:b.dataset.type,value:types[b.dataset.type].value,x:150+n*100,y:canvas.height/2,rotation:0};elements.push(e);selected=e;renderProp();draw()});canvas.onmousedown=e=>{const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,p=hitPort(x,y);if(p){if(pending){if(!(pending.id===p.id&&pending.port===p.port))edges.push({id:nextEdge++,from:pending,to:p});pending=null}else pending=p;selected=find(p.id);drag=null;renderProp();draw();return}selected=hit(x,y);if(selected){drag=selected;dx=x-selected.x;dy=y-selected.y}else drag=null;renderProp();draw()};canvas.onmousemove=e=>{const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;if(drag){drag.x=Math.round((x-dx)/10)*10;drag.y=Math.round((y-dy)/10)*10;draw()}else canvas.style.cursor=hitPort(x,y)?"crosshair":hit(x,y)?"grab":"default"};window.onmouseup=()=>drag=null;document.getElementById("arrange").onclick=()=>{elements.forEach((e,i)=>{e.x=130+i*125;e.y=canvas.height/2});draw()};document.getElementById("undo").onclick=()=>{edges.pop();pending=null;draw()};document.getElementById("clearWires").onclick=()=>{edges=[];pending=null;draw()};document.getElementById("clear").onclick=()=>{elements=[];edges=[];pending=null;selected=null;renderProp();draw()};renderProp();draw();
+</script></body></html>
 """
 
 PRESETS = {
