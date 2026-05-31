@@ -1,0 +1,169 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="560" viewBox="0 0 1120 560" role="img" aria-labelledby="title desc">
+  <title id="title">Diagrama radiometrico vetorizado</title>
+  <desc id="desc">Diagrama vetorial com objeto, atmosfera, radiacao refletida e camera termica.</desc>
+  <defs>
+    <linearGradient id="plateFront" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#d2ee8e"/>
+      <stop offset="0.52" stop-color="#bfe37a"/>
+      <stop offset="1" stop-color="#9ec566"/>
+    </linearGradient>
+
+    <linearGradient id="plateSide" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#edf7bd"/>
+      <stop offset="1" stop-color="#bfdc77"/>
+    </linearGradient>
+
+    <linearGradient id="atm" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7ac5cb" stop-opacity="0"/>
+      <stop offset="0.16" stop-color="#7ac5cb" stop-opacity="0.52"/>
+      <stop offset="0.5" stop-color="#d9f5f4" stop-opacity="0.94"/>
+      <stop offset="0.84" stop-color="#7ac5cb" stop-opacity="0.52"/>
+      <stop offset="1" stop-color="#7ac5cb" stop-opacity="0"/>
+    </linearGradient>
+
+    <linearGradient id="cameraMain" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#718889"/>
+      <stop offset="0.16" stop-color="#2b4647"/>
+      <stop offset="0.3" stop-color="#738889"/>
+      <stop offset="0.78" stop-color="#f4f6f4"/>
+      <stop offset="1" stop-color="#516869"/>
+    </linearGradient>
+
+    <linearGradient id="lens" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#142d2e"/>
+      <stop offset="0.43" stop-color="#5e7778"/>
+      <stop offset="1" stop-color="#142d2e"/>
+    </linearGradient>
+
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="8.8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#16acd1"/>
+    </marker>
+
+    <style>
+      .label {
+        font-family: Arial, Helvetica, sans-serif;
+        fill: #172526;
+      }
+
+      .formula {
+        font-family: "Times New Roman", Times, serif;
+        fill: #172526;
+        font-size: 21px;
+      }
+
+      .formula-small {
+        font-family: "Times New Roman", Times, serif;
+        fill: #172526;
+        font-size: 18px;
+      }
+
+      .component-label {
+        font-family: Arial, Helvetica, sans-serif;
+        fill: #172526;
+        font-size: 20px;
+      }
+
+      .sub {
+        font-size: 65%;
+        baseline-shift: sub;
+      }
+
+      .blue-ray {
+        fill: none;
+        stroke: #16acd1;
+        stroke-width: 4;
+        stroke-linecap: round;
+        marker-end: url(#arrowBlue);
+      }
+
+      .guide {
+        fill: none;
+        stroke: #526565;
+        stroke-width: 2;
+        stroke-linecap: round;
+      }
+
+      .number-box {
+        fill: #ffffff;
+        stroke: #2f7680;
+        stroke-width: 2.5;
+      }
+
+      .number-text {
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 22px;
+        font-weight: 700;
+        fill: #2f6e77;
+      }
+    </style>
+  </defs>
+
+  <rect width="1120" height="560" fill="#ffffff"/>
+
+  <!-- Numbered markers kept outside the physical elements -->
+  <g transform="translate(188 54)">
+    <rect class="number-box" width="42" height="36"/>
+    <text class="number-text" x="15" y="26">2</text>
+  </g>
+  <g transform="translate(548 54)">
+    <rect class="number-box" width="42" height="36"/>
+    <text class="number-text" x="15" y="26">3</text>
+  </g>
+  <g transform="translate(930 66)">
+    <rect class="number-box" width="42" height="36"/>
+    <text class="number-text" x="15" y="26">4</text>
+  </g>
+  <g transform="translate(334 474)">
+    <rect class="number-box" width="42" height="36"/>
+    <text class="number-text" x="15" y="26">1</text>
+  </g>
+
+  <!-- Object plate -->
+  <polygon points="126,157 242,86 242,386 126,457" fill="url(#plateFront)" stroke="#263232" stroke-width="3"/>
+  <polygon points="108,176 126,157 126,457 108,427" fill="url(#plateSide)" stroke="#263232" stroke-width="2.5"/>
+  <line x1="140" y1="166" x2="140" y2="420" stroke="#89ae56" stroke-width="2" opacity="0.35"/>
+  <text class="component-label" x="142" y="221">T<tspan class="sub">obj</tspan></text>
+  <text class="component-label" x="146" y="290">ε</text>
+
+  <!-- Atmosphere, lower than marker 3 so the marker never sits inside it -->
+  <rect x="410" y="116" width="260" height="258" fill="url(#atm)"/>
+
+  <!-- Camera -->
+  <g transform="translate(804 175)">
+    <rect x="78" y="0" width="206" height="112" fill="url(#cameraMain)" stroke="#1b2d2e" stroke-width="2.5"/>
+    <rect x="118" y="12" width="130" height="88" fill="#f7f8f7" stroke="#435656" stroke-width="2"/>
+    <rect x="118" y="18" width="130" height="76" fill="#ffffff" opacity="0.68"/>
+    <line x1="118" y1="18" x2="248" y2="18" stroke="#b8c1bf" stroke-width="2"/>
+    <line x1="118" y1="94" x2="248" y2="94" stroke="#b8c1bf" stroke-width="2"/>
+    <rect x="248" y="0" width="50" height="112" fill="#567071" stroke="#1b2d2e" stroke-width="2.5"/>
+    <rect x="70" y="6" width="22" height="100" fill="#2b4546" stroke="#172728" stroke-width="2"/>
+    <rect x="40" y="12" width="46" height="88" fill="#5b7374" stroke="#172728" stroke-width="2"/>
+    <rect x="10" y="30" width="36" height="52" fill="url(#lens)" stroke="#172728" stroke-width="2"/>
+    <rect x="0" y="38" width="12" height="36" rx="3" fill="#142829" stroke="#142829" stroke-width="2"/>
+  </g>
+
+  <!-- Rays -->
+  <path class="blue-ray" d="M 187 207 H 760"/>
+  <path class="blue-ray" d="M 187 255 H 770"/>
+  <path class="blue-ray" d="M 552 303 H 780"/>
+
+  <text class="formula" x="290" y="193">ε W<tspan class="sub">obj</tspan></text>
+  <text class="formula" x="706" y="191">ε τ W<tspan class="sub">obj</tspan></text>
+  <text class="formula" x="284" y="242">(1−ε) W<tspan class="sub">ref</tspan></text>
+  <text class="formula" x="646" y="241">(1−ε) τ W<tspan class="sub">ref</tspan></text>
+  <text class="formula" x="654" y="289">(1−τ) W<tspan class="sub">atm</tspan></text>
+
+  <!-- Reflection references: no arrow head on the object, only clean guide lines -->
+  <path class="guide" d="M 320 353 L 205 301"/>
+  <text class="formula-small" x="310" y="346">W<tspan class="sub">ref</tspan></text>
+
+  <path class="guide" d="M 262 392 L 207 303"/>
+  <text class="formula-small" x="320" y="404">T<tspan class="sub">ref</tspan></text>
+  <text class="formula-small" x="314" y="446">ε<tspan class="sub">refl</tspan> = 1</text>
+
+  <!-- Atmosphere parameters placed outside the atmospheric band -->
+  <text class="component-label" x="452" y="421">Tτ</text>
+  <line class="guide" x1="476" y1="410" x2="490" y2="374"/>
+  <text class="component-label" x="536" y="421">T<tspan class="sub">atm</tspan></text>
+  <line class="guide" x1="562" y1="410" x2="562" y2="374"/>
+</svg>
