@@ -9,9 +9,156 @@ import streamlit.components.v1 as components
 from modo_guia_estudos import render_guia_janela
 
 
+VISUAL_EDITOR_FIX_MARKER = "themeFixBadge"
+VISUAL_EDITOR_FIX_VERSION = "fix 20260531"
+
+
+def _patch_visual_editor_html(html: str) -> str:
+    """Aplica o patch de contraste mesmo se o HTML publicado estiver antigo."""
+    if VISUAL_EDITOR_FIX_MARKER in html:
+        return html
+
+    css_fix = """
+/* STREAMLIT_RUNTIME_WHITE_THEME_FIX_20260531 */
+:root[data-theme="light"] body,
+:root[data-theme="light"] .app,
+:root[data-theme="light"] .toolbar,
+:root[data-theme="light"] .panel,
+:root[data-theme="light"] .manual-sec,
+:root[data-theme="light"] .results,
+:root[data-theme="light"] .rcard,
+:root[data-theme="light"] .modal{color:#0f172a!important}
+:root[data-theme="light"] .toolbar .lbl,
+:root[data-theme="light"] .panel-section h4,
+:root[data-theme="light"] .pg label,
+:root[data-theme="light"] .hint,
+:root[data-theme="light"] .man-hint,
+:root[data-theme="light"] .mbox .ml{color:#0f172a!important;opacity:1!important}
+:root[data-theme="light"] .block,
+:root[data-theme="light"] .block *{opacity:1!important}
+:root[data-theme="light"] .block-header{
+  color:#ffffff!important;
+  font-weight:900!important;
+  opacity:1!important;
+  text-shadow:0 1px 2px #000,0 0 5px rgba(0,0,0,.95)!important;
+}
+:root[data-theme="light"] .block-body,
+:root[data-theme="light"] .block-body *,
+:root[data-theme="light"] .block-tf-disp,
+:root[data-theme="light"] .block-tf-disp *{
+  color:#ffffff!important;
+  opacity:1!important;
+  text-shadow:0 1px 2px #000,0 0 5px rgba(0,0,0,.85)!important;
+}
+:root[data-theme="light"] #themeSelect,
+:root[data-theme="light"] select,
+:root[data-theme="light"] input,
+:root[data-theme="light"] .tb,
+:root[data-theme="light"] .pg input,
+:root[data-theme="light"] .cfg-row input{
+  color:#0f172a!important;
+  background:#f8fafc!important;
+  border-color:#64748b!important;
+  opacity:1!important;
+}
+:root[data-theme="light"] .tf-disp,
+:root[data-theme="light"] .tf-disp *,
+:root[data-theme="light"] .mgrid,
+:root[data-theme="light"] .mbox,
+:root[data-theme="light"] .mv{
+  color:#0f172a!important;
+  opacity:1!important;
+  text-shadow:none!important;
+}
+"""
+
+    js_fix = f"""
+<script>
+(function(){{
+  function setImp(el,prop,val){{el.style.setProperty(prop,val,"important")}}
+  function clearImp(el,props){{props.forEach(function(prop){{el.style.removeProperty(prop)}})}}
+  window.forceThemeContrast=function(){{
+    var light=document.documentElement.getAttribute("data-theme")==="light";
+    var select=document.getElementById("themeSelect");
+    if(select){{
+      var opt=select.querySelector('option[value="light"]');
+      if(opt)opt.textContent="Branco alto contraste";
+      if(!document.getElementById("{VISUAL_EDITOR_FIX_MARKER}")){{
+        var badge=document.createElement("span");
+        badge.className="lbl";
+        badge.id="{VISUAL_EDITOR_FIX_MARKER}";
+        badge.textContent="{VISUAL_EDITOR_FIX_VERSION}";
+        badge.style.cssText="font-size:10px;font-weight:800;color:#0f172a;opacity:1";
+        select.insertAdjacentElement("afterend",badge);
+      }}
+    }}
+    var badge=document.getElementById("{VISUAL_EDITOR_FIX_MARKER}");
+    if(badge){{badge.textContent="{VISUAL_EDITOR_FIX_VERSION}";badge.style.opacity="1";badge.style.color=light?"#0f172a":"#c9d2e6"}}
+    document.querySelectorAll("#themeSelect,select,input,.tb:not(button),.pg input,.cfg-row input").forEach(function(el){{
+      if(light){{setImp(el,"color","#0f172a");setImp(el,"background","#f8fafc");setImp(el,"border-color","#64748b");setImp(el,"opacity","1")}}
+      else clearImp(el,["color","background","border-color","opacity"])
+    }});
+    document.querySelectorAll(".toolbar .lbl,.panel-section h4,.pg label,.hint,.man-hint,.mbox .ml,.rcard h4,.rcard label").forEach(function(el){{
+      if(light){{setImp(el,"color","#0f172a");setImp(el,"opacity","1");setImp(el,"text-shadow","none")}}
+      else clearImp(el,["color","opacity","text-shadow"])
+    }});
+    document.querySelectorAll(".block,.block *").forEach(function(el){{
+      if(light)setImp(el,"opacity","1");
+      else clearImp(el,["opacity"])
+    }});
+    document.querySelectorAll(".block-header").forEach(function(el){{
+      if(light){{setImp(el,"color","#ffffff");setImp(el,"font-weight","900");setImp(el,"opacity","1");setImp(el,"text-shadow","0 1px 2px #000,0 0 5px rgba(0,0,0,.95)")}}
+      else clearImp(el,["color","font-weight","opacity","text-shadow"])
+    }});
+    document.querySelectorAll(".block-body,.block-body *,.block-tf-disp,.block-tf-disp *").forEach(function(el){{
+      if(light){{setImp(el,"color","#ffffff");setImp(el,"opacity","1");setImp(el,"text-shadow","0 1px 2px #000,0 0 5px rgba(0,0,0,.85)")}}
+      else clearImp(el,["color","opacity","text-shadow"])
+    }});
+  }};
+  var oldApply=window.applyTheme;
+  if(typeof oldApply==="function"){{
+    window.applyTheme=function(theme){{oldApply(theme);window.forceThemeContrast();setTimeout(window.forceThemeContrast,80)}};
+  }}
+  var oldRender=window.render;
+  if(typeof oldRender==="function"){{
+    window.render=function(){{var r=oldRender.apply(this,arguments);window.forceThemeContrast();return r}};
+  }}
+  document.addEventListener("DOMContentLoaded",function(){{window.forceThemeContrast();setTimeout(window.forceThemeContrast,80)}});
+  setTimeout(window.forceThemeContrast,0);
+  setTimeout(window.forceThemeContrast,300);
+}})();
+</script>
+"""
+
+    html = html.replace(
+        '<option value="light">Branco</option>',
+        '<option value="light">Branco alto contraste</option>',
+        1,
+    )
+    html = html.replace(
+        "</select>\n</div>",
+        f'</select>\n<span class="lbl" id="{VISUAL_EDITOR_FIX_MARKER}" style="font-size:10px;font-weight:800">{VISUAL_EDITOR_FIX_VERSION}</span>\n</div>',
+        1,
+    )
+    html = html.replace("</style>", css_fix + "\n</style>", 1)
+    html = html.replace("</body>", js_fix + "\n</body>", 1)
+    return html
+
+
 def _load_visual_editor_html():
     html_path = Path(__file__).parent / "visual_blocks_frontend" / "index.html"
-    return html_path.read_text(encoding="utf-8")
+    return _patch_visual_editor_html(html_path.read_text(encoding="utf-8"))
+
+
+def _visual_editor_fix_status() -> str:
+    html_path = Path(__file__).parent / "visual_blocks_frontend" / "index.html"
+    try:
+        html = html_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return "HTML do editor visual nao encontrado."
+    if VISUAL_EDITOR_FIX_MARKER in html:
+        return f"{VISUAL_EDITOR_FIX_VERSION} no arquivo publicado"
+    return f"{VISUAL_EDITOR_FIX_VERSION} aplicado em tempo de execucao"
 
 
 # ══════════════════════════════════════════════════
@@ -228,6 +375,7 @@ def modo_canvas():
         """)
 
     render_guia_janela("Guia")
+    st.caption(f"Editor visual: {_visual_editor_fix_status()}")
 
     html_content = _load_visual_editor_html()
 
