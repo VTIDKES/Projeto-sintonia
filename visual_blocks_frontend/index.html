@@ -1,250 +1,100 @@
-:root[data-theme="light"] .app,
-:root[data-theme="light"] .toolbar,
-:root[data-theme="light"] .panel,
-:root[data-theme="light"] .manual-sec,
-:root[data-theme="light"] .results,
-:root[data-theme="light"] .rcard,
-:root[data-theme="light"] .modal{color:#0f172a!important}
-:root[data-theme="light"] .toolbar .lbl,
-:root[data-theme="light"] .panel-section h4,
-:root[data-theme="light"] .pg label,
-:root[data-theme="light"] .hint,
-:root[data-theme="light"] .man-hint,
-:root[data-theme="light"] .mbox .ml{color:#1e293b!important;opacity:1!important}
-:root[data-theme="light"] .block,
-:root[data-theme="light"] .block *{opacity:1!important}
-:root[data-theme="light"] .block-header{
-  color:#ffffff!important;
-  font-weight:900!important;
-  opacity:1!important;
-  text-shadow:0 1px 2px #000,0 0 4px rgba(0,0,0,.9)!important;
-}
-:root[data-theme="light"] .block-body,
-:root[data-theme="light"] .block-body *,
-:root[data-theme="light"] .block-tf-disp,
-:root[data-theme="light"] .block-tf-disp *{
-  color:#ffffff!important;
-  opacity:1!important;
-  text-shadow:0 1px 2px #000,0 0 4px rgba(0,0,0,.75)!important;
-}
-:root[data-theme="light"] .block-input,
-:root[data-theme="light"] .block-output,
-:root[data-theme="light"] .block-tf,
-:root[data-theme="light"] .block-gain,
-:root[data-theme="light"] .block-int,
-:root[data-theme="light"] .block-der,
-:root[data-theme="light"] .block-pid,
-:root[data-theme="light"] .block-pd,
-:root[data-theme="light"] .block-sensor,
-:root[data-theme="light"] .block-actuator,
-:root[data-theme="light"] .block-ss{
-  box-shadow:0 8px 18px rgba(15,23,42,.22)!important;
-}
-:root[data-theme="light"] select.tb,
-:root[data-theme="light"] #themeSelect,
-:root[data-theme="light"] .tb,
-:root[data-theme="light"] .pg input,
-:root[data-theme="light"] .cfg-row input,
-:root[data-theme="light"] select{
-  color:#0f172a!important;
-  background:#f8fafc!important;
-  border-color:#94a3b8!important;
-  opacity:1!important;
-}
-:root[data-theme="light"] .tb[disabled],
-:root[data-theme="light"] .tb:disabled{color:#475569!important;background:#e2e8f0!important;opacity:1!important}
-:root[data-theme="light"] .tf-disp{background:#e2e8f0!important;color:#0f172a!important}
-:root[data-theme="light"] .port-in{background:#ffffff!important;color:#047857!important;border-color:#047857!important}
-:root[data-theme="light"] .port-out{background:#ffffff!important;color:#1d4ed8!important;border-color:#1d4ed8!important}
-:root[data-theme="light"] .sign-label{color:#047857!important;text-shadow:0 1px 2px #fff!important}
-</style></head><body><div class="app">
-
-<div class="modal-overlay" id="addModal">
-<div class="modal">
-<div class="modal-hdr"><h3>Adicionar Bloco</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>
-<div class="modal-body">
-<div id="modalGrid">
-<div class="cat-label">Sinais</div>
-<div class="block-grid">
-<div class="block-option" onclick="pickBlock('input')"><div class="bo-icon" style="color:var(--grn)">R(s)</div><div class="bo-label">Entrada</div><div class="bo-desc">Sinal de referência</div></div>
-<div class="block-option" onclick="pickBlock('output')"><div class="bo-icon" style="color:var(--red)">Y(s)</div><div class="bo-label">Saída</div><div class="bo-desc">Sinal de saída</div></div>
-</div>
-<div class="cat-label">Blocos de Transferência</div>
-<div class="block-grid">
-<div class="block-option" onclick="pickBlock('tf')"><div class="bo-icon" style="color:var(--blu)">G(s)</div><div class="bo-label">Planta</div><div class="bo-desc">Função de transferência</div></div>
-<div class="block-option" onclick="pickBlock('ss')"><div class="bo-icon" style="color:var(--grn)">SS</div><div class="bo-label">Espaço de Estados</div><div class="bo-desc">Matrizes A,B,C,D livres</div></div>
-<div class="block-option" onclick="pickBlock('gain')"><div class="bo-icon" style="color:var(--pur)">K</div><div class="bo-label">Ganho</div><div class="bo-desc">Ganho constante</div></div>
-<div class="block-option" onclick="pickBlock('pid')"><div class="bo-icon" style="color:var(--pur)">PID</div><div class="bo-label">Controlador PID</div><div class="bo-desc">Kp + Ki/s + Kd*s</div></div>
-<div class="block-option" onclick="pickBlock('pd')"><div class="bo-icon" style="color:var(--pur)">PD</div><div class="bo-label">Controlador PD</div><div class="bo-desc">Kp + Kd*s</div></div>
-<div class="block-option" onclick="pickBlock('int')"><div class="bo-icon" style="color:var(--yel)">1/s</div><div class="bo-label">Integrador</div><div class="bo-desc">Integração pura</div></div>
-<div class="block-option" onclick="pickBlock('der')"><div class="bo-icon" style="color:#aaa">s</div><div class="bo-label">Derivador</div><div class="bo-desc">Derivação pura</div></div>
-<div class="block-option" onclick="pickBlock('actuator')"><div class="bo-icon" style="color:var(--blu)">A(s)</div><div class="bo-label">Atuador</div><div class="bo-desc">Dinâmica do atuador</div></div>
-</div>
-<div class="cat-label">Realimentação</div>
-<div class="block-grid">
-<div class="block-option" onclick="pickBlock('sensor')"><div class="bo-icon" style="color:var(--pnk)">H(s)</div><div class="bo-label">Sensor</div><div class="bo-desc">Malha de realimentação</div></div>
-<div class="block-option" onclick="pickBlock('sum')"><div class="bo-icon" style="color:var(--grn)">&Sigma;</div><div class="bo-label">Somador</div><div class="bo-desc">Soma/subtração de sinais</div></div>
-<div class="block-option" onclick="pickBlock('branch')"><div class="bo-icon" style="color:var(--blu)">&bull;</div><div class="bo-label">Ramificação</div><div class="bo-desc">Divide sinal em dois</div></div>
-</div>
-</div>
-<div class="cfg-panel" id="cfgPanel">
-<h4 id="cfgTitle">Configurar bloco</h4>
-<div id="cfgFields"></div>
-<button class="cfg-btn" onclick="confirmAdd()">Adicionar ao Diagrama</button>
-<button class="cfg-btn" style="background:var(--sf2);margin-top:4px;border:1px solid var(--bd)" onclick="backToGrid()">Voltar</button>
-</div>
-</div></div></div>
-
-<div class="modal-overlay" id="connModal">
-<div class="modal">
-<div class="modal-hdr"><h3 id="connModalTitle">Conectar Blocos</h3><button class="modal-close" onclick="closeConnModal()">&times;</button></div>
-<div class="modal-body">
-<p style="font-size:12px;color:var(--txm);margin-bottom:12px" id="connModalHint">Selecione os blocos na ordem desejada.</p>
-<div id="connBlockList" style="max-height:280px;overflow-y:auto;padding:4px"></div>
-<p id="connSelCount" style="font-size:11px;color:var(--txm);margin:8px 0 4px;text-align:center">0 blocos selecionados</p>
-<div style="margin-top:8px;display:flex;gap:8px">
-<button class="cfg-btn" style="padding:12px 28px;font-size:14px" onclick="applyConn()">&#10003; Aplicar Conexão</button>
-<button class="cfg-btn" style="background:var(--sf2);border:1px solid var(--bd);padding:12px 20px" onclick="closeConnModal()">Cancelar</button>
-</div>
-</div></div></div>
-
-<div class="toolbar" id="diag-toolbar">
-<button class="tb tb-add" onclick="openModal()">+ Adicionar Bloco</button>
-<div class="sep"></div>
-<span class="lbl">Rápido:</span>
-<button class="tb" style="background:#162038;border-color:#2d558a;color:var(--blu)" data-add="tf">G(s)</button>
-<button class="tb" style="background:#1a3d2a;border-color:#2d8a50;color:var(--grn)" onclick="pickBlock('ss')">SS</button>
-<button class="tb" style="background:#201638;border-color:#5a2d8a;color:var(--pur)" data-add="gain">K</button>
-<button class="tb" data-add="sum">&Sigma;</button>
-<button class="tb" style="background:#381628;border-color:#8a2d5a;color:var(--pnk)" data-add="sensor">H(s)</button>
-<div class="sep"></div>
-<span class="lbl">Conexão:</span>
-<button class="tb" style="background:#0e2a1a;border-color:#2d8a55;color:#34d399" id="btnSérie" onclick="openConnModal('serie')">Série</button>
-<button class="tb" style="background:#1a1040;border-color:#6d5acd;color:#a78bfa" id="btnParalelo" onclick="openConnModal('paralelo')">Paralelo</button>
-<button class="tb" style="background:#2a1020;border-color:#8a2d50;color:#f472b6" id="btnFbNeg" onclick="openConnModal('fb_neg')">FB -</button>
-<button class="tb" style="background:#2a2010;border-color:#8a7a2d;color:#fbbf24" id="btnFbPos" onclick="openConnModal('fb_pos')">FB +</button>
-<div class="sep"></div>
-<button class="tb" style="background:#3a1520;border-color:#8a3050;color:#ff8fa3" id="btnDel">Del</button>
-<button class="tb" style="background:#3a1520;border-color:#8a3050;color:#ff8fa3" id="btnClear">Limpar</button>
-<button class="tb" id="btnAuto">Auto</button>
-<div class="sep"></div>
-<span class="lbl">Tema:</span>
-<select class="tb" id="themeSelect" onchange="applyTheme(this.value)">
-<option value="dark">Preto</option>
-<option value="light">Branco alto contraste</option>
-</select>
-<span class="lbl" id="themeFixBadge" style="font-size:10px;font-weight:800">fix 20260531</span>
-</div>
-<div class="workspace" id="diag-workspace">
-<div class="canvas-wrap" id="cw"><div class="canvas" id="cv"></div>
-<svg class="wires" id="wires"><defs>
-<marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#5b6be0"/></marker>
-<marker id="ar2" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#e8a035"/></marker>
-</defs></svg></div>
-<div class="panel" id="panel">
-<div class="panel-section"><h4>Sistema</h4>
-<div style="display:grid;grid-template-columns:1fr auto;gap:4px 8px;font-size:12px">
-<span style="color:var(--txm)">Blocos:</span><span id="pB" style="font-weight:600">0</span>
-<span style="color:var(--txm)">Conexões:</span><span id="pE" style="font-weight:600">0</span>
-</div></div>
-<div class="panel-section"><h4>Parâmetros</h4><div id="pA"><span class="hint">Selecione um bloco.</span></div></div>
-<div class="panel-section"><h4>Dicas</h4><div class="hint">
-<b>Conectar:</b> porta <span style="color:var(--blu)">azul</span> &rarr; porta <span style="color:var(--grn)">verde</span><br>
-<b>Calcular:</b> botão verde abaixo<br><b>Mobile:</b> toque e arraste!
-</div></div></div></div>
-
-<div class="mode-bar">
-<button class="mode-btn active" id="modeDiag" onclick="setMode('diag')">&#9638; Diagrama de Blocos</button>
-<button class="mode-btn" id="modeMan" onclick="setMode('manual')">&#9998; Entrada Manual</button>
-</div>
-
-<div class="manual-sec" id="manualSec">
-<div class="man-tabs">
-<button class="man-tab active" id="subDirect" onclick="setSubMode('direct')">T(s) Direta</button>
-<button class="man-tab" id="subClosed" onclick="setSubMode('closed')">Malha Fechada</button>
-<button class="man-tab" id="subOpen" onclick="setSubMode('open')">Malha Aberta G*H</button>
-<button class="man-tab" id="subSS" onclick="setSubMode('ss')">Espaço de Estados</button>
-</div>
-<div id="manDirect">
-<h4>Função de Transferência T(s) = Num / Den</h4>
-<div class="man-row">
-<div class="pg"><label>Numerador</label><input id="manNum" value="1" placeholder="ex: s+1"></div>
-<div class="pg"><label>Denominador</label><input id="manDen" value="s^2+2s+1" placeholder="ex: s^2+2s+1"></div>
-</div>
-<div class="man-hint">Formato: <code>s^2+3s+1</code> ou <code>2s^3+s+5</code>. Use <code>^</code> para potências.</div>
-</div>
-<div id="manClosed" style="display:none">
-<div class="man-row" style="margin-bottom:8px">
-<div class="pg"><label>Tipo de Realimentação</label>
-<select id="manFbType" style="width:100%;padding:8px;background:var(--sf2);border:1px solid var(--bd);border-radius:6px;color:var(--tx);font-size:13px" onchange="updateFbLabel()">
-<option value="neg">Negativa: T(s) = G / (1 + G&middot;H)</option>
-<option value="pos">Positiva: T(s) = G / (1 - G&middot;H)</option>
-</select></div>
-</div>
-<h4 id="manClosedLabel">Malha Fechada: T(s) = G(s) / (1 + G(s)&middot;H(s))</h4>
-<div class="man-row">
-<div class="pg"><label>G(s) Numerador</label><input id="manGN" value="10" placeholder="ex: 10"></div>
-<div class="pg"><label>G(s) Denominador</label><input id="manGD" value="s^2+3s+1" placeholder="ex: s^2+3s+1"></div>
-</div>
-<div class="man-row">
-<div class="pg"><label>H(s) Numerador</label><input id="manHN" value="1" placeholder="ex: 1"></div>
-<div class="pg"><label>H(s) Denominador</label><input id="manHD" value="1" placeholder="ex: s+1"></div>
-</div>
-</div>
-<div id="manOpen" style="display:none">
-<h4>Malha Aberta: L(s) = G(s) &middot; H(s)</h4>
-<div class="man-row">
-<div class="pg"><label>G(s) Numerador</label><input id="manOGN" value="10" placeholder="ex: 10"></div>
-<div class="pg"><label>G(s) Denominador</label><input id="manOGD" value="s^2+3s+1" placeholder="ex: s^2+3s+1"></div>
-</div>
-<div class="man-row">
-<div class="pg"><label>H(s) Numerador</label><input id="manOHN" value="1" placeholder="ex: 1"></div>
-<div class="pg"><label>H(s) Denominador</label><input id="manOHD" value="1" placeholder="ex: 1"></div>
-</div>
-</div>
-<div id="manSS" style="display:none">
-<h4>Espaço de Estados: dx/dt = Ax + Bu, y = Cx + Du</h4>
-<div class="man-row">
-<div class="pg"><label>Matriz A (nxn)</label><input id="manA" value="0 1; -2 -3" placeholder="0 1; -2 -3"></div>
-<div class="pg"><label>Matriz B (nx1)</label><input id="manB" value="0; 1" placeholder="0; 1"></div>
-</div>
-<div class="man-row">
-<div class="pg"><label>Matriz C (1xn)</label><input id="manC" value="1 0" placeholder="1 0"></div>
-<div class="pg"><label>Matriz D (1x1)</label><input id="manD" value="0" placeholder="0"></div>
-</div>
-<div class="man-hint">Use <code>;</code> para separar linhas. Ex: <code>0 1; -2 -3</code> = matriz 2x2.</div>
-</div>
-</div>
-
-<div class="calc-bar"><button id="btnCalcMain" onclick="onCalc()">&#9654; CALCULAR DIAGRAMA</button></div>
-
-<div class="results" id="res"><div class="results-hdr"><h3>Resultados</h3>
-<button onclick="document.getElementById('res').classList.remove('vis')" style="background:none;border:1px solid var(--bd);color:var(--txm);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px">Fechar</button>
-</div><div class="rbody" id="rb"></div></div></div>
-
-<script>
-var pendingType=null;
-function openModal(){document.getElementById("addModal").classList.add("vis");document.getElementById("modalGrid").style.display="block";document.getElementById("cfgPanel").classList.remove("vis");pendingType=null}
-function closeModal(){document.getElementById("addModal").classList.remove("vis")}
-function backToGrid(){document.getElementById("modalGrid").style.display="block";document.getElementById("cfgPanel").classList.remove("vis")}
-function pickBlock(t){
-  var simple=["input","output","int","der","branch"];
-  if(simple.indexOf(t)>=0){addB(t);closeModal();return}
-  pendingType=t;
-  document.getElementById("modalGrid").style.display="none";
-  var cp=document.getElementById("cfgPanel");cp.classList.add("vis");
-  var cf=document.getElementById("cfgFields");var h="";
-  var titles={tf:"Planta G(s)",ss:"Espaço de Estados",gain:"Ganho K",pid:"Controlador PID",pd:"Controlador PD",sensor:"Sensor H(s)",sum:"Somador",actuator:"Atuador A(s)"};
-  document.getElementById("cfgTitle").textContent="Configurar: "+(titles[t]||t);
-  if(t==="tf"||t==="sensor"||t==="actuator"){
-    h+='<div class="cfg-row"><div><label>Numerador</label><input id="cfgNum" value="1" placeholder="ex: s+1"></div>';
-    h+='<div><label>Denominador</label><input id="cfgDen" value="s+1" placeholder="ex: s^2+2s+1"></div></div>'}
-  else if(t==="ss"){
-    h+='<div class="cfg-row"><div><label>Matriz A (nxn)</label><input id="cfgSSA" value="0 1; -2 -3" placeholder="0 1; -2 -3"></div>';
-    h+='<div><label>Matriz B (nx1)</label><input id="cfgSSB" value="0; 1" placeholder="0; 1"></div></div>';
-    h+='<div class="cfg-row"><div><label>Matriz C (1xn)</label><input id="cfgSSC" value="1 0" placeholder="1 0"></div>';
-    h+='<div><label>Matriz D (1x1)</label><input id="cfgSSD" value="0" placeholder="0"></div></div>'}
-  else if(t==="gain"){h+='<div class="cfg-row"><div><label>Ganho K</label><input id="cfgK" value="1" placeholder="ex: 10"></div><div></div></div>'}
-  else if(t==="pid"){
-    h+='<div class="cfg-row"><div><label>Kp</label><input id="cfgKp" value="1"></div><div><label>Ki</label><input id="cfgKi" value="0"></div></div>';
-    h+='<div class="cfg-row"><div><label>Kd</label><input id="cfgKd" value="0"></div><div></div></div>'}
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+:root{--bg:#0e1117;--sf:#1a1d2e;--sf2:#252840;--bd:#333654;--tx:#e0e4f0;--txm:#8890b0;
+--acc:#5b6be0;--grn:#34d399;--red:#f87171;--yel:#fbbf24;--blu:#60a5fa;--pur:#a78bfa;--pnk:#f472b6;
+--grid:#252840;--zero:#555;--axis:#333654;--plot-bg:#0e1117;--legend-bg:rgba(0,0,0,.3);--canvas-a:#141722;
+--canvas-b:#0e1117;--canvas-dot:#1e2235;--block-text:#fff;--block-head:#cbd5e1;--tf-bg:rgba(0,0,0,.3);--tf-text:#a0b8d8}
+:root[data-theme="light"]{--bg:#f8fafc;--sf:#ffffff;--sf2:#eef3f8;--bd:#aebbd0;--tx:#0f172a;--txm:#334155;
+--acc:#1d4ed8;--grn:#047857;--red:#b91c1c;--yel:#a16207;--blu:#1d4ed8;--pur:#6d28d9;--pnk:#be185d;
+--grid:#d8e1ef;--zero:#64748b;--axis:#94a3b8;--plot-bg:#ffffff;--legend-bg:rgba(255,255,255,.96);--canvas-a:#ffffff;
+--canvas-b:#e8eef7;--canvas-dot:#b8c7dc;--block-text:#ffffff;--block-head:#eaf2ff;--tf-bg:rgba(15,23,42,.28);--tf-text:#f8fafc}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:auto;min-height:100%;font-family:system-ui,sans-serif;background:var(--bg);color:var(--tx);overflow-y:auto}
+.app{display:flex;flex-direction:column;min-height:100%}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center}
+.modal-overlay.vis{display:flex}
+.modal{background:var(--sf);border:1px solid var(--bd);border-radius:16px;width:90%;max-width:520px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.modal-hdr{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--bd)}
+.modal-hdr h3{font-size:16px;color:var(--grn)}
+.modal-close{background:none;border:none;color:var(--txm);font-size:22px;cursor:pointer;padding:4px 8px}
+.modal-close:hover{color:var(--red)}
+.modal-body{padding:16px 20px}
+.block-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.block-option{background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:14px;cursor:pointer;transition:all .15s;text-align:center}
+.block-option:hover{border-color:var(--acc);background:#2f3349;transform:scale(1.03)}
+:root[data-theme="light"] .block-option:hover{background:#e2e8f0;color:var(--tx)}
+.block-option .bo-icon{font-size:22px;font-weight:700;margin-bottom:4px}
+.block-option .bo-label{font-size:12px;font-weight:600;color:var(--tx)}
+.block-option .bo-desc{font-size:10px;color:var(--txm);margin-top:2px}
+.cat-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--acc);margin:12px 0 6px;font-weight:700}
+.cat-label:first-child{margin-top:0}
+.cfg-panel{display:none;padding:12px 0 0}
+.cfg-panel.vis{display:block}
+.cfg-panel h4{font-size:12px;color:var(--txm);margin-bottom:8px}
+.cfg-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.cfg-row label{font-size:10px;text-transform:uppercase;color:var(--txm);display:block;margin-bottom:3px}
+.cfg-row input{width:100%;padding:8px;background:var(--sf2);border:1px solid var(--bd);border-radius:6px;color:var(--tx);font-size:13px;outline:none}
+.cfg-row input:focus{border-color:var(--acc)}
+.cfg-btn{background:var(--acc);border:none;color:#fff;font-weight:700;font-size:13px;padding:10px 24px;border-radius:8px;cursor:pointer;width:100%;margin-top:8px}
+.cfg-btn:hover{background:#6e7df0}
+:root[data-theme="light"] .cfg-btn[style*="var(--sf2)"]{color:var(--tx)!important}
+.toolbar{background:var(--sf);border-bottom:1px solid var(--bd);padding:6px 10px;display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-height:44px;z-index:50;position:sticky;top:0}
+.toolbar .sep{width:1px;height:26px;background:var(--bd);margin:0 3px}
+.toolbar .lbl{font-size:10px;color:var(--txm);text-transform:uppercase;letter-spacing:.5px;margin-right:2px;white-space:nowrap}
+.tb{display:inline-flex;align-items:center;gap:4px;background:var(--sf2);color:var(--tx);border:1px solid var(--bd);
+border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:nowrap;transition:all .15s;min-height:34px;touch-action:manipulation}
+.tb:hover,.tb:active{background:#2f3349;border-color:var(--acc);color:#fff}
+:root[data-theme="light"] .tb:hover,:root[data-theme="light"] .tb:active{background:#dbeafe;border-color:var(--acc);color:var(--tx)}
+.tb-add{background:#16382a;border-color:#2d8a55;color:var(--grn);font-weight:700;font-size:13px;padding:8px 16px}
+.tb-add:hover{background:#1e4a36}
+:root[data-theme="light"] .tb-add{background:#dcfce7;border-color:#16a34a;color:#047857}
+:root[data-theme="light"] .tb-add:hover{background:#bbf7d0;color:#064e3b}
+.workspace{display:flex;height:460px;min-height:320px;flex-shrink:0}
+.canvas-wrap{flex:1;position:relative;overflow:hidden;background:radial-gradient(circle,var(--canvas-a),var(--canvas-b));touch-action:none}
+.canvas-wrap::before{content:"";position:absolute;inset:0;background-image:radial-gradient(circle,var(--canvas-dot) 1px,transparent 1px);background-size:24px 24px;opacity:.45;pointer-events:none}
+.canvas{position:absolute;inset:0}
+.wires{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
+.wires path{pointer-events:visibleStroke;cursor:pointer}
+.block{position:absolute;z-index:10;border-radius:10px;cursor:grab;user-select:none;min-width:120px;box-shadow:0 4px 16px rgba(0,0,0,.35)}
+.block:active{cursor:grabbing}
+.block.sel{box-shadow:0 0 0 2px var(--yel),0 0 20px rgba(251,191,36,.2)!important}
+.block-header{font-size:9px;text-transform:uppercase;letter-spacing:.7px;padding:6px 10px 2px;color:var(--block-head);opacity:.95;text-shadow:0 1px 2px rgba(0,0,0,.4)}
+.block-body{padding:4px 10px 8px;font-weight:700;font-size:13px;color:var(--block-text);text-shadow:0 1px 2px rgba(0,0,0,.35)}
+.block-tf-disp{font-family:monospace;font-size:10px;margin-top:3px;padding:3px 6px;background:var(--tf-bg);border-radius:4px;color:var(--tf-text);text-align:center}
+.block-tf-disp .tf-num{border-bottom:1px solid rgba(255,255,255,.38);padding-bottom:2px;margin-bottom:2px}
+.block-tf{background:linear-gradient(135deg,#1e3a5f,#152844);border:1px solid #2a5a8f}
+.block-gain{background:linear-gradient(135deg,#2d1f4e,#1f1635);border:1px solid #5a3d8f}
+.block-int{background:linear-gradient(135deg,#3d3a1a,#2a2812);border:1px solid #8a7a2d}
+.block-der{background:linear-gradient(135deg,#2a2a2a,#1e1e1e);border:1px solid #555}
+.block-pid{background:linear-gradient(135deg,#2a1f4e,#1a1535);border:1px solid #5548a0}
+.block-pd{background:linear-gradient(135deg,#3a2358,#24153a);border:1px solid #7c5ac7}
+.block-sensor{background:linear-gradient(135deg,#4a1a2d,#351020);border:1px solid #8a2d50}
+.block-actuator{background:linear-gradient(135deg,#1a3a4a,#102535);border:1px solid #2d708a}
+.block-ss{background:linear-gradient(135deg,#1a3d2a,#0f2518);border:1px solid #2d8a50}
+.block-input{background:linear-gradient(135deg,#1a3d1a,#0f250f);border:1px solid #2d8a2d;border-radius:20px}
+.block-output{background:linear-gradient(135deg,#3d1a1a,#250f0f);border:1px solid #8a2d2d;border-radius:20px}
+.block-sum{background:linear-gradient(135deg,#1a3d3a,#122a28);border:2px solid #2d8a70;border-radius:50%;min-width:56px;width:56px;height:56px;display:flex;align-items:center;justify-content:center}
+.block-sum .block-header{display:none}.block-sum .block-body{padding:0;font-size:20px;text-align:center}
+.block-branch{background:#3b82f6;border:2px solid #2563eb;border-radius:50%;min-width:56px;width:56px;height:56px}
+.block-branch .block-header,.block-branch .block-body{display:none}
+.port{position:absolute;width:14px;height:14px;border-radius:50%;cursor:crosshair;z-index:20;transition:transform .12s}
+.port::after{content:"";position:absolute;inset:3px;border-radius:50%;background:currentColor}
+.port-in{border:2px solid var(--grn);color:var(--grn);background:var(--bg)}
+.port-out{border:2px solid var(--blu);color:var(--blu);background:var(--bg)}
+.port:hover,.port:active{transform:scale(1.5)!important;box-shadow:0 0 10px currentColor}
+.port.active{border-color:var(--yel);color:var(--yel);transform:scale(1.4)!important}
+.sign-label{position:absolute;font-size:11px;font-weight:700;color:var(--grn);pointer-events:none}
+.panel{width:240px;background:var(--sf);border-left:1px solid var(--bd);display:flex;flex-direction:column;overflow-y:auto;z-index:30;font-size:12px}
+.panel-section{padding:10px 12px;border-bottom:1px solid var(--bd)}
+.panel-section h4{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--txm);margin-bottom:8px}
+.pg{margin-bottom:8px}
+.pg label{display:block;font-size:10px;text-transform:uppercase;color:var(--txm);margin-bottom:3px}
+.pg input{width:100%;padding:6px 8px;background:var(--sf2);border:1px solid var(--bd);border-radius:5px;color:var(--tx);font-size:12px;outline:none}
+.pg input:focus{border-color:var(--acc)}
+.hint{font-size:11px;color:var(--txm);line-height:1.5}
+.hint b{color:var(--tx)}
+.mode-bar{display:flex;gap:0;background:var(--sf);border-top:1px solid var(--bd)}
+.mode-btn{flex:1;padding:12px;background:none;border:none;border-bottom:3px solid transparent;color:var(--txm);font-size:14px;font-weight:700;cursor:pointer;transition:all .15s;touch-action:manipulation;letter-spacing:.3px}
