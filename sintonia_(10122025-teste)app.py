@@ -1432,7 +1432,7 @@ def modo_classico():
     render_guia_janela("Guia")
 
     tem_planta = not st.session_state.blocos.empty
-    with st.expander("⚙ Configurar sistema", expanded=not tem_planta):
+    with st.expander("⚙ Configurar sistema", expanded=not tem_planta or avancado):
         _form_configurar_sistema(tem_planta, avancado)
         if tem_planta:
             st.markdown("---")
@@ -1470,7 +1470,7 @@ def modo_classico():
         chave = "malha_fechada" if tipo_malha == "Malha Fechada" else "malha_aberta"
         if avancado:
             analise_opcoes = ANALYSIS_OPTIONS[chave]
-            padrao = [analise_opcoes[0]]
+            padrao = analise_opcoes
         else:
             analise_opcoes = padrao = ANALISES_BASICO
         analises = st.multiselect("Escolha:", analise_opcoes, default=padrao)
