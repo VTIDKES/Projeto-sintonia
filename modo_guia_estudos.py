@@ -24,8 +24,11 @@ NOTE_FILES = {
     "7. Bode e frequencia": ORIGINALS_DIR / "07_frequencia_bode.md",
     "8. Nyquist": ORIGINALS_DIR / "08_nyquist.md",
     "9. Espaco de estados": ORIGINALS_DIR / "09_espaco_de_estados.md",
-    "10. Sistemas eletricos": ORIGINALS_DIR / "teoria_sistemas_eletricos.md",
-    "11. Sistemas mecanicos": ORIGINALS_DIR / "teoria_sistemas_mecanicos.md",
+    "10. Lugar das raizes": ORIGINALS_DIR / "10_lugar_das_raizes.md",
+    "11. PID e sintonia": ORIGINALS_DIR / "11_pid_e_sintonia.md",
+    "12. Compensadores": ORIGINALS_DIR / "12_compensadores.md",
+    "13. Sistemas eletricos": ORIGINALS_DIR / "teoria_sistemas_eletricos.md",
+    "14. Sistemas mecanicos": ORIGINALS_DIR / "teoria_sistemas_mecanicos.md",
 }
 
 
@@ -267,8 +270,10 @@ def _render_topic_cards():
         }
         </style>
         <div class="guide-hero">
-            <h1>Guia de Estudos</h1>
-            <p>Notas de consulta para usar junto com o Sintonia.</p>
+            <h1>Teoria</h1>
+            <p>Notas de Controle Clássico para usar junto com o Sintonia:
+            estabilidade, margens de ganho e fase, lugar geométrico das
+            raízes, PID e compensadores.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -596,12 +601,6 @@ def render_guia_janela(label="Guia"):
 
 def modo_guia_estudos():
     with st.sidebar:
-        st.header("Navegação")
-        if st.button("Voltar à Tela Inicial", use_container_width=True):
-            st.session_state.modo_selecionado = None
-            st.rerun()
-
-        st.markdown("---")
         st.header("Tópicos")
         topic = st.radio(
             "Escolha uma nota",

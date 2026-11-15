@@ -207,11 +207,16 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 :root[data-theme="light"] .port-in{background:#ffffff!important;color:#047857!important;border-color:#047857!important}
 :root[data-theme="light"] .port-out{background:#ffffff!important;color:#1d4ed8!important;border-color:#1d4ed8!important}
 :root[data-theme="light"] .sign-label{color:#047857!important;text-shadow:0 1px 2px #fff!important}
+.block:focus{outline:3px solid var(--acc);outline-offset:3px}
+.block.chg{outline:3px solid #ca8a04;outline-offset:3px}
+.block.solto{outline:3px dashed #dc2626;outline-offset:3px}
+.conn-item:focus,.block-option:focus{outline:3px solid var(--acc)}
+#pend{display:none;margin-left:12px;padding:6px 12px;border-radius:8px;border:1px solid #ca8a04;color:#ca8a04;font-size:13px;font-weight:700}
 </style></head><body><div class="app">
 
 <div class="modal-overlay" id="addModal">
 <div class="modal">
-<div class="modal-hdr"><h3>Adicionar Bloco</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>
+<div class="modal-hdr"><h3>Adicionar Bloco</h3><button class="modal-close" aria-label="Fechar" onclick="closeModal()">&times;</button></div>
 <div class="modal-body">
 <div id="modalGrid">
 <div class="cat-label">Sinais</div>
@@ -247,7 +252,7 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 
 <div class="modal-overlay" id="connModal">
 <div class="modal">
-<div class="modal-hdr"><h3 id="connModalTitle">Conectar Blocos</h3><button class="modal-close" onclick="closeConnModal()">&times;</button></div>
+<div class="modal-hdr"><h3 id="connModalTitle">Conectar Blocos</h3><button class="modal-close" aria-label="Fechar" onclick="closeConnModal()">&times;</button></div>
 <div class="modal-body">
 <p style="font-size:12px;color:var(--txm);margin-bottom:12px" id="connModalHint">Selecione os blocos na ordem desejada.</p>
 <div id="connBlockList" style="max-height:280px;overflow-y:auto;padding:4px"></div>
@@ -258,7 +263,7 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 </div>
 </div></div></div>
 
-<div class="toolbar" id="diag-toolbar">
+<div class="toolbar" id="diag-toolbar" role="toolbar" aria-label="Ferramentas do diagrama de blocos">
 <button class="tb tb-add" onclick="openModal()">+ Adicionar Bloco</button>
 <div class="sep"></div>
 <span class="lbl">Rápido:</span>
@@ -275,18 +280,18 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 <button class="tb" style="background:#2a2010;border-color:#8a7a2d;color:#fbbf24" id="btnFbPos" onclick="openConnModal('fb_pos')">FB +</button>
 <div class="sep"></div>
 <button class="tb" style="background:#3a1520;border-color:#8a3050;color:#ff8fa3" id="btnDel">Del</button>
-<button class="tb" style="background:#3a1520;border-color:#8a3050;color:#ff8fa3" id="btnClear">Limpar</button>
+<button class="tb" style="background:#3a1520;border-color:#8a3050;color:#ff8fa3" id="btnClear">&#8634; Limpar Diagrama</button>
 <button class="tb" id="btnAuto">Auto</button>
 <div class="sep"></div>
 <span class="lbl">Tema:</span>
-<select class="tb" id="themeSelect" onchange="applyTheme(this.value)">
+<select class="tb" id="themeSelect" aria-label="Tema do editor" onchange="applyTheme(this.value)">
 <option value="dark">Preto</option>
 <option value="light">Branco alto contraste</option>
 </select>
 <span class="lbl" id="themeFixBadge" style="font-size:10px;font-weight:800">fix 20260531</span>
 </div>
 <div class="workspace" id="diag-workspace">
-<div class="canvas-wrap" id="cw"><div class="canvas" id="cv"></div>
+<div class="canvas-wrap" id="cw" role="application" aria-label="Área do diagrama. Tab percorre os blocos, setas movem o bloco selecionado, Delete remove, Esc cancela a conexão."><div class="canvas" id="cv"></div>
 <svg class="wires" id="wires"><defs>
 <marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#5b6be0"/></marker>
 <marker id="ar2" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#e8a035"/></marker>
@@ -366,9 +371,9 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 </div>
 </div>
 
-<div class="calc-bar"><button id="btnCalcMain" onclick="onCalc()">&#9654; CALCULAR DIAGRAMA</button></div>
+<div class="calc-bar"><button id="btnCalcMain" onclick="onCalc()">&#9654; CALCULAR DIAGRAMA</button><span id="pend" role="status">&#9888; Parâmetros alterados — recálculo pendente</span></div>
 
-<div class="results" id="res"><div class="results-hdr"><h3>Resultados</h3>
+<div class="results" id="res" role="region" aria-label="Resultados da análise"><div class="results-hdr"><h3>Resultados</h3>
 <button onclick="document.getElementById('res').classList.remove('vis')" style="background:none;border:1px solid var(--bd);color:var(--txm);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px">Fechar</button>
 </div><div class="rbody" id="rb"></div></div></div>
 
@@ -502,7 +507,7 @@ function perf(t,y){if(!y.length)return{};var l=y.slice(Math.floor(y.length*.9)),
 function fC(c){if(Math.abs(c.i)<1e-8)return fN(c.r);return fN(c.r)+(c.i>=0?" + ":" - ")+fN(Math.abs(c.i))+"j"}
 function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
 syncPlotTheme();
-var curSig='degrau',curMalha='aberta',curFbSign='neg',curTheme='dark';
+var curSig='degrau',curMalha='aberta',curFbSign='neg',curTheme=temaDoApp();
 var selAn={tempo:true,desemp:true,pz:true,bm:true,bp:true,nyqst:true,lgr:true};
 var _lastTF=null;
 function reRender(){if(_lastTF)showRes(_lastTF)}
@@ -571,6 +576,7 @@ function showRes(tf){
   if(ftmfErro)h+='<div style="color:#fbbf24;font-size:11px;margin-bottom:6px">⚠ '+esc(ftmfErro)+'</div>';
   if(curMalha==='fechada'&&diagramHasExplicitSum())h+='<div style="color:var(--txm);font-size:11px;margin-bottom:8px">A malha fechada foi calculada diretamente do diagrama, preservando o somador e os sinais configurados.</div>';
   h+='<div class="tf-disp"><div style="display:inline-block;text-align:center"><div style="padding:0 8px">'+esc(ns)+'</div><div style="border-top:2px solid var(--acc);padding:4px 8px 0">'+esc(ds)+'</div></div></div></div>';
+  h+=diagCard(tf,ps);
   if(selAn.tempo){h+='<div class="rcard"><h4>Resposta no Tempo - '+sigNomes[curSig]+'</h4><div id="cStep" style="width:100%;height:320px"></div></div>';}
   if(selAn.desemp){h+='<div class="rcard"><h4>Desempenho</h4><div class="mgrid">';Object.keys(pf).forEach(function(k){h+='<div class="mbox"><div class="ml">'+k+'</div><div class="mv">'+pf[k]+'</div></div>'});h+='</div></div>';}
   if(selAn.pz){h+='<div class="rcard"><h4>Diagrama de Polos e Zeros</h4><div id="cPZ" style="width:100%;height:360px"></div>';h+='<div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:8px"><div><b style="color:var(--red)">Polos:</b><div class="pzl">';ps.forEach(function(p){h+='<div style="color:var(--red)">'+fC(p)+'</div>'});if(!ps.length)h+="<div>-</div>";h+='</div></div><div><b style="color:var(--blu)">Zeros:</b><div class="pzl">';zs.forEach(function(z){h+='<div style="color:var(--blu)">'+fC(z)+'</div>'});if(!zs.length)h+="<div>-</div>";h+='</div></div></div>';h+='<div style="margin-top:8px;padding:6px 10px;border-radius:6px;font-weight:700;font-size:13px;'+(stb?'background:#16382a;color:#34d399">ESTAVEL':'background:#3a1520;color:#f87171">INSTAVEL')+'</div></div>';}
@@ -601,10 +607,13 @@ function onCalc(){
     if(curSubMode==="direct"){tf={n:parseP(document.getElementById("manNum").value),d:parseP(document.getElementById("manDen").value)};}
     else if(curSubMode==="closed"){var gn=parseP(document.getElementById("manGN").value),gd=parseP(document.getElementById("manGD").value),hn=parseP(document.getElementById("manHN").value),hd=parseP(document.getElementById("manHD").value);var fbType=(document.getElementById("manFbType")||{}).value||"neg";if(fbType==="pos"){tf={n:pMul(gn,hd),d:pSub(pMul(gd,hd),pMul(gn,hn))};}else{tf={n:pMul(gn,hd),d:pAdd(pMul(gd,hd),pMul(gn,hn))};}}
     else if(curSubMode==="open"){var gn=parseP(document.getElementById("manOGN").value),gd=parseP(document.getElementById("manOGD").value),hn=parseP(document.getElementById("manOHN").value),hd=parseP(document.getElementById("manOHD").value);tf={n:pMul(gn,hn),d:pMul(gd,hd)};}
-    else if(curSubMode==="ss"){try{tf=ssToTF(document.getElementById("manA").value,document.getElementById("manB").value,document.getElementById("manC").value,document.getElementById("manD").value);}catch(e){var rd=document.getElementById("res"),rb=document.getElementById("rb");rd.classList.add("vis");rb.innerHTML='<div class="ebox">Erro: '+esc(String(e))+'</div>';rd.scrollIntoView({behavior:"smooth"});return}}
+    else if(curSubMode==="ss"){try{tf=ssToTF(document.getElementById("manA").value,document.getElementById("manB").value,document.getElementById("manC").value,document.getElementById("manD").value);}catch(e){var rd=document.getElementById("res"),rb=document.getElementById("rb");rd.classList.add("vis");rb.innerHTML=errCard('Erro ao converter o espaço de estados: '+String(e));rd.scrollIntoView({behavior:"smooth"});return}}
     var lc=tf.d[tf.d.length-1];if(Math.abs(lc)>1e-14&&Math.abs(lc-1)>1e-10){tf.n=pScl(tf.n,1/lc);tf.d=pScl(tf.d,1/lc)}tf=pfReduce(tf);showRes(tf);return;}
-  var r=solve(model.nodes,model.edges);
-  if(r.e){var rd=document.getElementById("res"),rb=document.getElementById("rb");rd.classList.add("vis");rb.innerHTML='<div class="ebox">'+esc(r.e)+'</div>';rd.scrollIntoView({behavior:"smooth"});return}
+  var soltos=blocosSoltos();
+  document.querySelectorAll(".block").forEach(function(el){el.classList.toggle("solto",soltos.some(function(n){return n.id===el.dataset.id}))});
+  var r=soltos.length?{e:"Conexão incompleta: "+soltos.map(function(n){return(BL[n.type]||n.type)+" "+n.id}).join(", ")+" sem sinal de entrada ou de saída."}:solve(model.nodes,model.edges);
+  if(r.e){var rd=document.getElementById("res"),rb=document.getElementById("rb");rd.classList.add("vis");rb.innerHTML=errCard(r.e,"Há blocos fora do caminho entre R(s) e Y(s).","Complete as ligações (porta azul → porta verde) ou remova os blocos soltos antes de calcular.");rd.scrollIntoView({behavior:"smooth"});return}
+  _calcSig=mSig();_lastChg=null;updPend();
   showRes(r.tf)}
 var model={nodes:[],edges:[]},selId=null,dragSt=null,conSt=null;
 var cw=document.getElementById("cw"),cv=document.getElementById("cv"),wSvg=document.getElementById("wires");
@@ -617,7 +626,7 @@ function bTxt(n){var p=n.params||{};if(n.type==="tf"||n.type==="actuator")return
 function addB(t){var r=cw.getBoundingClientRect(),n={id:nxtId(),type:t,x:40+Math.random()*(r.width-200),y:40+Math.random()*(r.height-140),params:dPar(t)};if(t==="input"){n.x=30;n.y=r.height/2-30}if(t==="output"){n.x=r.width-160;n.y=r.height/2-30}model.nodes.push(n);render();setSel(n.id)}
 function addBP(t,p){var r=cw.getBoundingClientRect(),n={id:nxtId(),type:t,x:40+Math.random()*(r.width-200),y:40+Math.random()*(r.height-140),params:Object.assign(dPar(t),p)};if(t==="input"){n.x=30;n.y=r.height/2-30}if(t==="output"){n.x=r.width-160;n.y=r.height/2-30}model.nodes.push(n);render();setSel(n.id)}
 function delSel(){if(!selId)return;model.edges=model.edges.filter(function(e){return e.src!==selId&&e.dst!==selId});model.nodes=model.nodes.filter(function(n){return n.id!==selId});selId=null;conSt=null;render()}
-function clrAll(){model={nodes:[],edges:[]};selId=null;conSt=null;render();document.getElementById("res").classList.remove("vis")}
+function clrAll(){_calcSig=null;_lastChg=null;model={nodes:[],edges:[]};selId=null;conSt=null;render();document.getElementById("res").classList.remove("vis")}
 function autoLay(){if(!model.nodes.length)return;var lv={},aj={};model.edges.forEach(function(e){if(!aj[e.src])aj[e.src]=[];aj[e.src].push(e.dst)});var ins=model.nodes.filter(function(n){return n.type==="input"}).map(function(n){return n.id});if(!ins.length)ins=[model.nodes[0].id];var q=ins.map(function(id){return{id:id,l:0}}),vis={};ins.forEach(function(id){vis[id]=true});while(q.length){var c=q.shift();lv[c.id]=c.l;(aj[c.id]||[]).forEach(function(n){if(!vis[n]){vis[n]=true;q.push({id:n,l:c.l+1})}})}model.nodes.forEach(function(n){if(!(n.id in lv))lv[n.id]=3});var bl={};Object.keys(lv).forEach(function(id){var l=lv[id];if(!bl[l])bl[l]=[];bl[l].push(id)});Object.keys(bl).forEach(function(l){bl[l].forEach(function(id,i){var n=model.nodes.find(function(nd){return nd.id===id});if(n){n.x=50+parseInt(l)*170;n.y=50+i*100}})});render()}
 function setSel(id){selId=id;document.querySelectorAll(".block").forEach(function(el){el.classList.toggle("sel",el.dataset.id===id)});updP();forceThemeContrast()}
 function pSty(t,k,i){if(t==="sum"){if(k==="in"&&i===0)return"left:-7px;top:50%;transform:translateY(-50%)";if(k==="in"&&i===1)return"left:50%;bottom:-7px;transform:translateX(-50%)";if(k==="in"&&i>=2)return"left:-7px;top:"+(8+i*14)+"px";return"right:-7px;top:50%;transform:translateY(-50%)"}if(t==="branch"){if(k==="in")return"left:-7px;top:50%;transform:translateY(-50%)";if(k==="out"&&i===0)return"right:-7px;top:50%;transform:translateY(-50%)";return"left:50%;bottom:-7px;transform:translateX(-50%)"}if(t==="input"&&k==="out")return"right:-7px;top:50%;transform:translateY(-50%)";if(t==="output"&&k==="in")return"left:-7px;top:50%;transform:translateY(-50%)";return k==="in"?"left:-7px;top:50%;transform:translateY(-50%)":"right:-7px;top:50%;transform:translateY(-50%)"}
@@ -633,7 +642,7 @@ function onPC(e,pl){e.preventDefault();var nid=pl.dataset.nid,pid=pl.dataset.por
 function updP(){document.getElementById("pB").textContent=model.nodes.length;document.getElementById("pE").textContent=model.edges.length;var pa=document.getElementById("pA");if(!selId){pa.innerHTML='<span class="hint">Selecione um bloco.</span>';forceThemeContrast();return}var nd=model.nodes.find(function(n){return n.id===selId});if(!nd){pa.innerHTML="";forceThemeContrast();return}var p=nd.params||{};var h='<div style="font-size:11px;color:var(--txm);margin-bottom:6px">'+BL[nd.type]+' <b style="color:var(--tx)">'+nd.id+'</b></div>';if(nd.type==="tf"||nd.type==="sensor"||nd.type==="actuator"){h+=pI("Num","num",p.num||"1");h+=pI("Den","den",p.den||"1")}else if(nd.type==="ss"){h+=pI("Matriz A","ssA",p.ssA||"0 1; -2 -3");h+=pI("Matriz B","ssB",p.ssB||"0; 1");h+=pI("Matriz C","ssC",p.ssC||"1 0");h+=pI("Matriz D","ssD",p.ssD||"0")}else if(nd.type==="gain")h+=pI("K","k",p.k||"1");else if(nd.type==="sum")h+=pI("Sinais","signs",p.signs||"+ -");else if(nd.type==="pid"){h+=pI("Kp","kp",p.kp||"1");h+=pI("Ki","ki",p.ki||"0");h+=pI("Kd","kd",p.kd||"0")}else if(nd.type==="pd"){h+=pI("Kp","kp",p.kp||"1");h+=pI("Kd","kd",p.kd||"0")}else if(nd.type==="input"||nd.type==="output")h+=pI("Label","label",p.label||"");pa.innerHTML=h;pa.querySelectorAll("input[data-key]").forEach(function(inp){inp.addEventListener("input",function(){nd.params[inp.dataset.key]=inp.value;if(inp.dataset.key==="signs")render();else{var bl=document.querySelector('.block[data-id="'+nd.id+'"] .block-body');if(bl)bl.innerHTML=bTxt(nd);forceThemeContrast()}})});forceThemeContrast()}
 function pI(l,k,v){return'<div class="pg"><label>'+l+'</label><input data-key="'+k+'" value="'+esc(String(v))+'"></div>'}
 var connType=null,connSel=[];
-function openConnModal(tipo){connType=tipo;connSel=[];var titles={serie:'Série',paralelo:'Paralelo',fb_neg:'Realimentação Negativa',fb_pos:'Realimentação Positiva'};var hints={serie:'Selecione 2+ blocos na ordem da cadeia.',paralelo:'Selecione 2+ blocos para somar.',fb_neg:'Selecione 2 blocos: G(s) e H(s).',fb_pos:'Selecione 2 blocos: G(s) e H(s).'};document.getElementById('connModalTitle').textContent=titles[tipo]||'Conexão';document.getElementById('connModalHint').textContent=hints[tipo]||'';var avail=model.nodes.filter(function(n){return['tf','ss','gain','pid','pd','sensor','actuator','int','der'].indexOf(n.type)>=0});var cl=document.getElementById('connBlockList');var h='';if(!avail.length){h='<p style="color:#ef4444;font-size:13px;padding:12px">Nenhum bloco disponivel.</p>'}else{avail.forEach(function(n){var lbl=BL[n.type]+' ('+n.id+')';var det='';if(n.params){if(n.params.num)det=n.params.num+'/'+n.params.den;else if(n.params.k)det='K='+n.params.k;else if(n.params.ssA)det='SS'}h+='<div class="conn-item" data-connid="'+n.id+'" onclick="toggleConnSel(this,\''+n.id+'\')">';h+='<span class="conn-chk">&#9744;</span> ';h+='<span style="font-weight:600;color:var(--tx)">'+esc(lbl)+'</span>';if(det)h+='<span style="color:var(--txm);font-size:10px;margin-left:auto">'+esc(det)+'</span>';h+='</div>'})}cl.innerHTML=h;document.getElementById('connModal').classList.add('vis')}
+function openConnModal(tipo){connType=tipo;connSel=[];var titles={serie:'Série',paralelo:'Paralelo',fb_neg:'Realimentação Negativa',fb_pos:'Realimentação Positiva'};var hints={serie:'Selecione 2+ blocos na ordem da cadeia.',paralelo:'Selecione 2+ blocos para somar.',fb_neg:'Selecione 2 blocos: G(s) e H(s).',fb_pos:'Selecione 2 blocos: G(s) e H(s).'};document.getElementById('connModalTitle').textContent=titles[tipo]||'Conexão';document.getElementById('connModalHint').textContent=hints[tipo]||'';var avail=model.nodes.filter(function(n){return['tf','ss','gain','pid','pd','sensor','actuator','int','der'].indexOf(n.type)>=0});var cl=document.getElementById('connBlockList');var h='';if(!avail.length){h='<p style="color:#ef4444;font-size:13px;padding:12px">Nenhum bloco disponivel.</p>'}else{avail.forEach(function(n){var lbl=BL[n.type]+' ('+n.id+')';var det='';if(n.params){if(n.params.num)det=n.params.num+'/'+n.params.den;else if(n.params.k)det='K='+n.params.k;else if(n.params.ssA)det='SS'}h+='<div class="conn-item" tabindex="0" role="button" data-connid="'+n.id+'" onclick="toggleConnSel(this,\''+n.id+'\')">';h+='<span class="conn-chk">&#9744;</span> ';h+='<span style="font-weight:600;color:var(--tx)">'+esc(lbl)+'</span>';if(det)h+='<span style="color:var(--txm);font-size:10px;margin-left:auto">'+esc(det)+'</span>';h+='</div>'})}cl.innerHTML=h;document.getElementById('connModal').classList.add('vis')}
 function closeConnModal(){document.getElementById('connModal').classList.remove('vis');connType=null;connSel=[]}
 function toggleConnSel(el,nid){var idx=connSel.indexOf(nid);var chk=el.querySelector('.conn-chk');if(idx>=0){connSel.splice(idx,1);el.classList.remove('conn-sel');if(chk)chk.innerHTML='&#9744;'}else{if((connType==='fb_neg'||connType==='fb_pos')&&connSel.length>=2){alert('Feedback: maximo 2 blocos.');return}connSel.push(nid);el.classList.add('conn-sel');if(chk)chk.innerHTML='&#9745;'}var cnt=document.getElementById('connSelCount');if(cnt)cnt.textContent=connSel.length+' bloco'+(connSel.length!==1?'s':'')+' selecionado'+(connSel.length!==1?'s':'')}
 function applyConn(){if(connSel.length<2){alert('Selecione pelo menos 2 blocos.');return}if(connType==='serie')buildSérie(connSel.slice());else if(connType==='paralelo')buildParalelo(connSel.slice());else if(connType==='fb_neg')buildFeedback(connSel.slice(),false);else if(connType==='fb_pos')buildFeedback(connSel.slice(),true);closeConnModal();render()}
@@ -701,6 +710,52 @@ function buildFeedback(ids,positive){
 document.querySelectorAll(".tb[data-add]").forEach(function(b){b.addEventListener("click",function(){addB(b.dataset.add)})});
 document.getElementById("btnDel").addEventListener("click",delSel);document.getElementById("btnClear").addEventListener("click",clrAll);document.getElementById("btnAuto").addEventListener("click",autoLay);
 document.addEventListener("keydown",function(e){if(e.target.tagName==="INPUT")return;if(e.key==="Delete"||e.key==="Backspace")delSel();if(e.key==="Escape"){conSt=null;closeModal();closeConnModal();document.querySelectorAll(".port.active").forEach(function(p){p.classList.remove("active")})}});
+
+/* ===== RED-Eng: diagnóstico interpretativo, erros didáticos, recálculo pendente, teclado/ARIA ===== */
+function temaDoApp(){try{var d=window.parent.document,c=getComputedStyle(d.querySelector(".stApp")||d.body).backgroundColor.match(/[\d.]+/g);if(c&&c[3]!=="0"&&(+c[0]+ +c[1]+ +c[2])/3<128)return"dark"}catch(e){}return"light"}
+function diagCard(tf,ps){
+  var inst=ps.filter(function(p){return p.r>1e-6}),eixo=ps.filter(function(p){return Math.abs(p.r)<=1e-6});
+  var st=inst.length?"Instável":eixo.length?"Marginal":"Estável";
+  var ic={"Estável":"● ","Marginal":"▲ ","Instável":"■ "}[st],cor={"Estável":"#16a34a","Marginal":"#ca8a04","Instável":"#dc2626"}[st];
+  var lista=function(a){return a.length?a.map(fC).join(", "):"nenhum"},m=[],selo=ic+st;
+  if(st==="Instável")m.push("Sistema instável: polo(s) no semiplano direito (s = "+lista(inst)+"). Reduza o ganho K ou adicione um compensador em avanço de fase.");
+  else if(st==="Marginal")m.push("Marginalmente estável: polo(s) sobre o eixo imaginário (s = "+lista(eixo)+"). A resposta não converge. Use realimentação ou compensação para levar os polos ao semiplano esquerdo.");
+  else m.push("Sistema estável: todos os polos estão no semiplano esquerdo.");
+  if(diagramHasExplicitSum())m.push("Leitura da malha fechada: a T(s) acima já inclui o somador e a realimentação do diagrama; os polos avaliados são os de malha fechada.");
+  else{
+    var w=autoW(tf),b=bode(tf,w.a,w.b,600),gm=calcGM(b),pm=calcPM(b);
+    selo+=" · MG "+(isFinite(gm)?fN(gm)+" dB":"∞")+" · MF "+(isFinite(pm)?fN(pm)+"°":"∞");
+    if(pm<=0||gm<0)m.push("Margem negativa: ao fechar a malha com esse ganho, o sistema tende à instabilidade. Reduza o ganho ou adicione compensação.");
+    else if(pm<30)m.push("Estabilidade relativa baixa: margem de fase abaixo de 30° indica resposta oscilatória. Considere reduzir o ganho ou adicionar compensação.");
+    if(curMalha==="fechada")m.push("Efeito da realimentação: polos de malha aberta ("+lista(roots(tf.d))+") → malha fechada ("+lista(ps)+").");
+    else m.push("MG/MF: margens de ganho e de fase de G(s) em malha aberta; indicam o comportamento ao fechar a malha com realimentação unitária.");
+  }
+  return'<div class="rcard" id="diagCard" role="status" style="border-left:5px solid '+cor+'"><h4>Diagnóstico: <span style="color:'+cor+'">'+esc(selo)+'</span></h4>'+m.map(function(x){return'<div style="font-size:13px;line-height:1.6;margin-top:4px">'+esc(x)+'</div>'}).join("")+'</div>'}
+var ERR_DID={
+  "Adicione Entrada R(s).":["O diagrama não tem bloco de entrada R(s).","Adicione um bloco Entrada e conecte-o ao primeiro bloco da cadeia."],
+  "Adicione Saída Y(s).":["O diagrama não tem bloco de saída Y(s).","Adicione um bloco Saída e conecte nele o último bloco da cadeia."],
+  "Adicione blocos.":["O diagrama está vazio.","Clique em + Adicionar Bloco ou use os botões rápidos G(s), K e Σ."],
+  "Conecte os blocos.":["Os blocos não estão ligados entre si.","Conecte porta azul (saída) → porta verde (entrada), da Entrada até a Saída."],
+  "Sistema singular - verifique as conexões.":["As conexões formam uma malha sem solução (laço algébrico ou ganho de malha igual a 1).","Revise os sinais do somador e as ligações de realimentação."]};
+function errCard(msg,causa,acao){var d=ERR_DID[msg]||[causa||"Parâmetro ou conexão inválida.",acao||"Revise os valores informados (use s como variável, ex.: s^2+2s+4) e as conexões."];return'<div class="ebox" role="alert"><b>Situação:</b> '+esc(msg)+'<br><b>Causa provável:</b> '+esc(d[0])+'<br><b>Ação recomendada:</b> '+esc(d[1])+'</div>'}
+function blocosSoltos(){if(!model.edges.length)return[];return model.nodes.filter(function(n){return(n.type!=="input"&&!model.edges.some(function(e){return e.dst===n.id}))||(n.type!=="output"&&!model.edges.some(function(e){return e.src===n.id}))})}
+var _calcSig=null,_lastChg=null;
+function mSig(){return JSON.stringify([model.nodes.map(function(n){return[n.id,n.type,n.params]}),model.edges.map(function(e){return[e.src,e.srcPort,e.dst,e.dstPort]})])}
+function updPend(){document.getElementById("pend").style.display=(_calcSig!==null&&curMode==="diag"&&_calcSig!==mSig())?"inline-block":"none";document.querySelectorAll(".block").forEach(function(el){el.classList.toggle("chg",el.dataset.id===_lastChg)})}
+function a11y(){document.querySelectorAll(".block").forEach(function(el){var n=model.nodes.find(function(x){return x.id===el.dataset.id});if(!n)return;el.tabIndex=0;el.setAttribute("role","button");el.setAttribute("aria-label",(BL[n.type]||n.type)+" "+n.id);el.addEventListener("focus",function(){if(selId!==n.id)setSel(n.id)})})}
+var _render0=render;render=function(){_render0();a11y();updPend()};
+var _setMode0=setMode;setMode=function(m){_setMode0(m);updPend()};
+document.getElementById("pA").addEventListener("input",function(){_lastChg=selId;updPend()});
+document.addEventListener("keydown",function(e){
+  var t=e.target;
+  if((e.key==="Enter"||e.key===" ")&&t.classList&&(t.classList.contains("conn-item")||t.classList.contains("block-option"))){e.preventDefault();t.click();return}
+  if(/^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName))return;
+  var d={ArrowLeft:[-10,0],ArrowRight:[10,0],ArrowUp:[0,-10],ArrowDown:[0,10]}[e.key];if(!d||!selId)return;
+  var nd=model.nodes.find(function(n){return n.id===selId}),el=document.querySelector('.block[data-id="'+selId+'"]');if(!nd||!el)return;
+  e.preventDefault();nd.x=Math.max(0,nd.x+d[0]);nd.y=Math.max(0,nd.y+d[1]);el.style.left=nd.x+"px";el.style.top=nd.y+"px";rW()});
+document.querySelectorAll(".block-option").forEach(function(el){el.tabIndex=0;el.setAttribute("role","button")});
+(function(){var r={tf:"Adicionar bloco G(s)",gain:"Adicionar ganho K",sum:"Adicionar somador",sensor:"Adicionar sensor H(s)"};document.querySelectorAll(".tb[data-add]").forEach(function(b){b.setAttribute("aria-label",r[b.dataset.add]||"Adicionar bloco")});
+  [["btnDel","Remover bloco selecionado"],["btnClear","Limpar diagrama"],["btnAuto","Organizar blocos automaticamente"],["btnFbNeg","Realimentação negativa"],["btnFbPos","Realimentação positiva"]].forEach(function(p){var b=document.getElementById(p[0]);if(b){b.setAttribute("aria-label",p[1]);b.title=p[1]}})})();
 applyTheme(curTheme);new ResizeObserver(function(){rW()}).observe(cw);
 var _initData=__INITIAL_BLOCKS__;
 if(_initData){if(_initData.nodes&&_initData.edges){_initData.nodes.forEach(function(n){n.params=Object.assign(dPar(n.type),n.params||{});model.nodes.push(n)});_initData.edges.forEach(function(e){model.edges.push(e)});render();}else if(_initData.length>0){_initData.forEach(function(b){addBP(b.type,b.params)});setTimeout(autoLay,200);}}

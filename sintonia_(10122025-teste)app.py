@@ -24,7 +24,11 @@ import json
 import re
 from modo_diagrama_blocos import modo_canvas
 from modo_circuitos import modo_circuitos
-from modo_guia_estudos import render_guia_janela
+from modo_guia_estudos import render_guia_janela, modo_guia_estudos
+from ui_comum import (
+    sidebar_navegacao, breadcrumbs, rodape, onboarding,
+    cartao_erro, cartao_diagnostico,
+)
 
 TRANSFORMATIONS = standard_transformations + (
     implicit_multiplication_application,
@@ -46,6 +50,29 @@ ANALYSIS_OPTIONS = {
     ],
 }
 
+ANALISES_BASICO = ["Resposta no tempo", "Desempenho", "Diagrama de Polos e Zeros"]
+
+# Dica contextual exibida junto de cada análise (domínio e unidades).
+ANALISE_INFO = {
+    "Resposta no tempo": "Domínio do tempo — saída y(t) (adimensional) ao longo do tempo (s).",
+    "Desempenho": "Domínio do tempo — métricas da resposta ao degrau: tempos em s, frequências em rad/s.",
+    "Diagrama de Polos e Zeros": "Plano s (rad/s) — polos (×) à esquerda do eixo imaginário indicam estabilidade.",
+    "Diagrama De Bode Magnitude": "Domínio da frequência — ganho (dB) por frequência (rad/s).",
+    "Diagrama De Bode Fase": "Domínio da frequência — defasagem (graus) por frequência (rad/s); a margem de fase é lida onde o ganho cruza 0 dB.",
+    "Nyquist": "Domínio da frequência — G(jω) no plano complexo; envolver o ponto −1 indica instabilidade em malha fechada.",
+    "LGR": "Plano s (rad/s) — caminho dos polos de malha fechada quando o ganho K varia de 0 a ∞.",
+}
+
+# Biblioteca de cenários guiados: nome -> (numerador, denominador)
+CENARIOS = {
+    "1ª ordem — 1/(s+1)": ("1", "s+1"),
+    "2ª ordem subamortecida (ζ = 0,5)": ("4", "s^2+2s+4"),
+    "2ª ordem criticamente amortecida (ζ = 1)": ("4", "s^2+4s+4"),
+    "2ª ordem superamortecida (ζ = 1,25)": ("4", "s^2+5s+4"),
+    "1ª ordem com atraso de 1 s (aproximação de Padé)": ("-s+2", "s^2+3s+2"),
+    "Instável — polo em s = +1": ("1", "s^2+s-2"),
+}
+
 INPUT_SIGNALS = ['Degrau', 'Rampa', 'Senoidal', 'Impulso', 'Parabólica']
 
 BLOCK_TYPES = {
@@ -63,15 +90,23 @@ CONNECTION_TYPES = ['Série', 'Paralelo', 'Realimentação Negativa', 'Realiment
 # INICIALIZAÇÃO DO SESSION STATE
 # ══════════════════════════════════════════════════
 
+def _blocos_vazios():
+    return pd.DataFrame(columns=[
+        'nome', 'tipo', 'representacao', 'numerador', 'denominador',
+        'A', 'B', 'C', 'D', 'tf', 'tf_simbolico'
+    ])
+
+
+def resetar_sistema():
+    st.session_state.blocos = _blocos_vazios()
+    st.session_state.conexoes = []
+
+
 def inicializar_estado():
     defaults = {
         'modo_selecionado': None,
-        'blocos': pd.DataFrame(columns=[
-            'nome', 'tipo', 'representacao', 'numerador', 'denominador',
-            'A', 'B', 'C', 'D', 'tf', 'tf_simbolico'
-        ]),
+        'blocos': _blocos_vazios(),
         'conexoes': [],
-        'calculo_erro_habilitado': False,
         'representacao_classico': 'Função de Transferência',
     }
     for k, v in defaults.items():
@@ -574,8 +609,8 @@ def plot_polos_zeros(tf_sys, fig=None):
     fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.7)
     fig.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.7)
     fig.update_layout(
-        title='Diagrama de Polos e Zeros', xaxis_title='Parte Real',
-        yaxis_title='Parte Imaginaria', showlegend=True, hovermode='closest')
+        title='Diagrama de Polos e Zeros', xaxis_title='Re(s) (rad/s)',
+        yaxis_title='Im(s) (rad/s)', showlegend=True, hovermode='closest')
     return configurar_linhas_interativas(fig)
 
 
@@ -626,7 +661,7 @@ def plot_resposta_temporal(sistema, entrada):
         hovertemplate='Tempo: %{x:.5f}s<br>Saída: %{y:.6f}<extra></extra>'))
     fig.update_layout(
         title='Resposta ao Degrau' if entrada == 'Degrau' else f'Resposta Temporal - {entrada}',
-        xaxis_title='Tempo (s)', yaxis_title='Saída',
+        xaxis_title='Tempo (s)', yaxis_title='Saída y(t) (adimensional)',
         showlegend=True, hovermode='x unified')
     return configurar_linhas_interativas(fig), t_out, y
 
@@ -694,7 +729,7 @@ def plot_lgr(sistema):
     fig.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.7)
     fig.update_layout(
         title='Lugar Geométrico das Raízes (LGR)',
-        xaxis_title='Parte Real', yaxis_title='Parte Imaginaria',
+        xaxis_title='Re(s) (rad/s)', yaxis_title='Im(s) (rad/s)',
         showlegend=True, hovermode='closest')
     return configurar_linhas_interativas(fig)
 
@@ -717,8 +752,8 @@ def plot_nyquist(sistema):
     fig.add_hline(y=0, line_color="black", line_width=1)
     fig.add_vline(x=0, line_color="black", line_width=1)
     fig.update_layout(
-        title='Diagrama de Nyquist', xaxis_title='Parte Real',
-        yaxis_title='Parte Imaginaria', showlegend=True, hovermode='closest')
+        title='Diagrama de Nyquist', xaxis_title='Parte Real (adimensional)',
+        yaxis_title='Parte Imaginária (adimensional)', showlegend=True, hovermode='closest')
     fig = configurar_linhas_interativas(fig)
     polos = ctrl.poles(sistema)
     polos_spd = sum(1 for p in polos if np.real(p) > 0)
@@ -837,40 +872,45 @@ def calcular_operacao_entre_sistemas(nome_resultado, nome_g1, operacao, nome_g2,
 # ══════════════════════════════════════════════════
 
 def executar_analises(sistema, analises, entrada, tipo_malha):
-    for analise in analises:
+    for etapa, analise in enumerate(analises, start=1):
         st.markdown(f"### {analise}")
+        st.caption(ANALISE_INFO[analise])
         try:
-            if analise == 'Resposta no tempo':
-                fig, t_out, y = plot_resposta_temporal(sistema, entrada)
-                st.plotly_chart(fig, use_container_width=True)
-            elif analise == 'Desempenho':
-                desempenho = calcular_desempenho(sistema)
-                cols = st.columns(3)
-                items = list(desempenho.items())
-                for i, (chave, valor) in enumerate(items):
-                    with cols[i % 3]:
-                        st.metric(label=chave, value=valor)
-            elif analise == 'Diagrama De Bode Magnitude':
-                fig = plot_bode(sistema, 'magnitude')
-                st.plotly_chart(fig, use_container_width=True)
-            elif analise == 'Diagrama De Bode Fase':
-                fig = plot_bode(sistema, 'fase')
-                st.plotly_chart(fig, use_container_width=True)
-            elif analise == 'Diagrama de Polos e Zeros':
-                fig = plot_polos_zeros(sistema)
-                st.plotly_chart(fig, use_container_width=True)
-            elif analise == 'LGR':
-                fig = plot_lgr(sistema)
-                st.plotly_chart(fig, use_container_width=True)
-            elif analise == 'Nyquist':
-                fig, polos_spd, voltas, Z = plot_nyquist(sistema)
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Polos SPD (P)", polos_spd)
-                c2.metric("Voltas (N)", voltas)
-                c3.metric("Z = P + N", f"{Z} ({'Estável' if Z == 0 else 'Instável'})")
-                st.plotly_chart(fig, use_container_width=True)
+            with st.spinner(f"Calculando... etapa {etapa} de {len(analises)}"):
+                if analise == 'Resposta no tempo':
+                    fig, t_out, y = plot_resposta_temporal(sistema, entrada)
+                    st.plotly_chart(fig, use_container_width=True)
+                elif analise == 'Desempenho':
+                    desempenho = calcular_desempenho(sistema)
+                    cols = st.columns(3)
+                    items = list(desempenho.items())
+                    for i, (chave, valor) in enumerate(items):
+                        with cols[i % 3]:
+                            st.metric(label=chave, value=valor)
+                elif analise == 'Diagrama De Bode Magnitude':
+                    fig = plot_bode(sistema, 'magnitude')
+                    st.plotly_chart(fig, use_container_width=True)
+                elif analise == 'Diagrama De Bode Fase':
+                    fig = plot_bode(sistema, 'fase')
+                    st.plotly_chart(fig, use_container_width=True)
+                elif analise == 'Diagrama de Polos e Zeros':
+                    fig = plot_polos_zeros(sistema)
+                    st.plotly_chart(fig, use_container_width=True)
+                elif analise == 'LGR':
+                    fig = plot_lgr(sistema)
+                    st.plotly_chart(fig, use_container_width=True)
+                elif analise == 'Nyquist':
+                    fig, polos_spd, voltas, Z = plot_nyquist(sistema)
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("Polos SPD (P)", polos_spd)
+                    c2.metric("Voltas (N)", voltas)
+                    c3.metric("Z = P + N", f"{Z} ({'Estável' if Z == 0 else 'Instável'})")
+                    st.plotly_chart(fig, use_container_width=True)
         except Exception as e:
-            st.error(f"Erro em '{analise}': {e}")
+            cartao_erro(
+                f"A análise '{analise}' não foi calculada.", str(e),
+                "Confira se a função de transferência é própria (grau do "
+                "numerador ≤ grau do denominador) e tente outra análise.")
 
 
 # ══════════════════════════════════════════════════
@@ -936,10 +976,10 @@ def tela_inicial():
     .mode-hint-diagram { color: #34d399; }
     .welcome-title {
         text-align: center; font-size: 32px; font-weight: 700;
-        margin-bottom: 8px; color: #e0e4f0;
+        margin-bottom: 8px;
     }
     .welcome-sub {
-        text-align: center; font-size: 16px; color: #8890b0;
+        text-align: center; font-size: 16px; opacity: .7;
         margin-bottom: 40px;
     }
     </style>
@@ -980,6 +1020,7 @@ def tela_inicial():
                     Insira Planta, Controlador e Sensor por função de
                     transferência ou espaço de estados. Análise em
                     malha aberta ou fechada com ganho K ajustável.
+                    <br><b>Competência:</b> análise algébrica da resposta.
                 </div>
             </div>
         </div>
@@ -1014,6 +1055,7 @@ def tela_inicial():
                     Editor visual de diagrama de blocos. Arraste, conecte
                     e calcule a FT equivalente graficamente.
                     Entrada manual e espaço de estados integrados.
+                    <br><b>Competência:</b> síntese e simplificação de malhas.
                 </div>
             </div>
         </div>
@@ -1047,11 +1089,12 @@ def tela_inicial():
                       <text x="158" y="18" fill="#e0e4f0" font-size="11" font-family="monospace" text-anchor="middle">C</text>
                     </svg>
                 </div>
-                <div class="mode-title">Modo Simulação com Elementos</div>
+                <div class="mode-title">Modo Simulação com Elementos (Beta)</div>
                 <div class="mode-desc">
                     Manipule elementos gráficos elétricos e mecânicos.
                     Simule modelos RC, RLC e
                     massa-mola-amortecedor.
+                    <br><b>Competência:</b> modelagem física de sistemas análogos.
                 </div>
             </div>
         </div>
@@ -1223,36 +1266,34 @@ def _render_ss_widget(uid, key_prefix):
 # MODO CLÁSSICO
 # ══════════════════════════════════════════════════
 
-def modo_classico():
-    st.title("Modo Clássico — Função de Transferência")
+def _form_configurar_sistema(tem_planta, avancado):
+    """Formulário de blocos (antes na sidebar; agora em painel retrátil)."""
+    if tem_planta and not avancado:
+        st.info("No modo Básico o sistema tem apenas a planta G(s). Ative "
+                "**⚙ Modo Avançado** na barra lateral para adicionar "
+                "controlador, sensor e conexões.")
+        return
 
-    with st.sidebar:
-        st.header("Navegação")
-        if st.button("← Voltar à Tela Inicial", use_container_width=True):
-            st.session_state.modo_selecionado = None
-            st.rerun()
+    if not tem_planta:
+        st.subheader("Planta G(s)")
+        st.caption("Insira a função de transferência principal "
+                   "(já preenchida com um sistema de 2ª ordem).")
+        tipo_bloco_escolhido = 'Planta'
+    else:
+        st.subheader("Adicionar Função de Transferência")
+        tipo_bloco_escolhido = st.selectbox(
+            "Tipo do bloco", list(BLOCK_TYPES), key="cl_tipo_bloco",
+            help="Planta G(s): processo a controlar. Controlador C(s): "
+                 "calcula a ação de controle. Sensor H(s): mede a saída na "
+                 "realimentação.")
 
-        st.markdown("---")
+    nome = st.text_input(
+        "Nome",
+        value=f"G{len(st.session_state.blocos)+1}",
+        key=f"cl_nome_{len(st.session_state.blocos)}")
 
-        tem_planta = not st.session_state.blocos.empty
-
-        if not tem_planta:
-            st.header("Planta G(s)")
-            st.caption("Insira a função de transferência principal.")
-            tipo_bloco_escolhido = 'Planta'
-        else:
-            st.header("Adicionar Função de Transferência")
-            tipo_bloco_escolhido = st.selectbox(
-                "Tipo do bloco",
-                ['Planta', 'Controlador', 'Sensor', 'Atuador', 'Pre-filtro', 'Perturbação'],
-                key="cl_tipo_bloco"
-            )
-
-        nome = st.text_input(
-            "Nome",
-            value=f"G{len(st.session_state.blocos)+1}",
-            key="cl_nome")
-
+    representacao = 'Função de Transferência'
+    if avancado:
         representacao = st.radio(
             "Representação",
             ['Função de Transferência', 'Espaço de Estados'],
@@ -1260,97 +1301,161 @@ def modo_classico():
             key="representacao_classico"
         )
 
-        if representacao == 'Função de Transferência':
-            numerador = st.text_input("Numerador", placeholder="ex: 4", key="cl_num")
-            denominador = st.text_input("Denominador", placeholder="ex: s^2+2s+3", key="cl_den")
-            A_str = B_str = C_str = D_str = ''
-        else:
-            A_str, B_str, C_str, D_str = _render_ss_widget("sidebar", "cl_sidebar")
-            numerador = denominador = ''
+    if representacao == 'Função de Transferência':
+        c_num, c_den = st.columns(2)
+        numerador = c_num.text_input(
+            "Numerador (polinômio em s)", value="4", key="cl_num",
+            help="Ex.: 4 ou 2s+1. As raízes do numerador são os zeros.")
+        denominador = c_den.text_input(
+            "Denominador (polinômio em s)", value="s^2+2s+4", key="cl_den",
+            help="Ex.: s^2+2s+4. As raízes do denominador são os polos: "
+                 "definem a estabilidade e a velocidade da resposta.")
+        A_str = B_str = C_str = D_str = ''
+    else:
+        A_str, B_str, C_str, D_str = _render_ss_widget("sidebar", "cl_sidebar")
+        numerador = denominador = ''
 
-        operacao_nova = None
-        if tem_planta:
-            operacao_nova = st.selectbox(
-                "Operação com o sistema atual",
-                CONNECTION_TYPES,
-                key="cl_op_tipo")
-            if operacao_nova in ['Realimentação Negativa', 'Realimentação Positiva']:
-                st.caption("A nova TF será usada como H(s) na realimentação.")
+    operacao_nova = None
+    if tem_planta:
+        operacao_nova = st.selectbox(
+            "Operação com o sistema atual",
+            CONNECTION_TYPES,
+            key="cl_op_tipo")
+        if operacao_nova in ['Realimentação Negativa', 'Realimentação Positiva']:
+            st.caption("A nova TF será usada como H(s) na realimentação.")
 
-        if st.button(
-                "Definir Planta" if not tem_planta else "Adicionar e Aplicar",
-                type="primary", use_container_width=True):
-            ok, msg = adicionar_bloco(nome, tipo_bloco_escolhido, representacao,
-                                      numerador, denominador,
-                                      A_str, B_str, C_str, D_str)
-            if ok:
-                if tem_planta and operacao_nova is not None:
-                    nomes_existentes = list(st.session_state.blocos['nome'])
-                    bloco_novo = nomes_existentes[-1]
-                    blocos_anteriores = nomes_existentes[:-1]
-                    if len(blocos_anteriores) >= 1:
-                        bloco_base = blocos_anteriores[-1]
-                        st.session_state.conexoes.append({
-                            'tipo': operacao_nova,
-                            'blocos': [bloco_base, bloco_novo],
-                        })
-                st.success(msg)
-                st.rerun()
-            else:
-                st.error(msg)
-
-        if not st.session_state.blocos.empty:
-            st.markdown("---")
-            st.subheader("Sistema Atual")
-
-            for idx, row in st.session_state.blocos.iterrows():
-                tf_obj = row['tf']
-                num_s = _tf_to_str(tf_obj.num[0][0])
-                den_s = _tf_to_str(tf_obj.den[0][0])
-                op_label = ""
-                if idx > 0:
-                    for con in st.session_state.conexoes:
-                        if row['nome'] in con['blocos'] and con['blocos'][-1] == row['nome']:
-                            op_label = f" [{con['tipo']}]"
-                            break
-                st.text(f"{row['nome']} ({row['tipo']}): ({num_s}) / ({den_s}){op_label}")
-                if st.button(f"Remover {row['nome']}", key=f"rm_cl_{idx}",
-                             use_container_width=True):
-                    remover_bloco(row['nome'])
-                    st.rerun()
-
-        st.markdown("---")
-        st.header("Configurações")
-        lbl_erro = ("Desabilitar Cálculo de Erro"
-                    if st.session_state.calculo_erro_habilitado
-                    else "Habilitar Cálculo de Erro")
-        if st.button(lbl_erro, use_container_width=True):
-            st.session_state.calculo_erro_habilitado = (
-                not st.session_state.calculo_erro_habilitado)
+    if st.button(
+            "Definir Planta" if not tem_planta else "Adicionar e Aplicar",
+            type="primary", use_container_width=True):
+        ok, msg = adicionar_bloco(nome, tipo_bloco_escolhido, representacao,
+                                  numerador, denominador,
+                                  A_str, B_str, C_str, D_str)
+        if ok:
+            if tem_planta and operacao_nova is not None:
+                nomes_existentes = list(st.session_state.blocos['nome'])
+                st.session_state.conexoes.append({
+                    'tipo': operacao_nova,
+                    'blocos': nomes_existentes[-2:],
+                })
             st.rerun()
+        else:
+            cartao_erro(
+                "O bloco não foi adicionado.", msg,
+                "Use polinômios em s, ex.: numerador 4 e denominador "
+                "s^2+2s+4, e um nome ainda não utilizado.")
+
+
+def _lista_sistema_atual():
+    st.subheader("Sistema Atual")
+    for idx, row in st.session_state.blocos.iterrows():
+        tf_obj = row['tf']
+        num_s = _tf_to_str(tf_obj.num[0][0])
+        den_s = _tf_to_str(tf_obj.den[0][0])
+        op_label = ""
+        if idx > 0:
+            for con in st.session_state.conexoes:
+                if con['blocos'][-1] == row['nome']:
+                    op_label = f" [{con['tipo']}]"
+                    break
+        c_txt, c_btn = st.columns([4, 1])
+        c_txt.text(f"{row['nome']} ({row['tipo']}): ({num_s}) / ({den_s}){op_label}")
+        if c_btn.button(f"Remover {row['nome']}", key=f"rm_cl_{idx}",
+                        use_container_width=True):
+            remover_bloco(row['nome'])
+            st.rerun()
+    if st.button("↺ Resetar Função de Transferência", use_container_width=True):
+        resetar_sistema()
+        st.rerun()
+
+
+def _montar_sistema_classico(tipo_malha, K):
+    """Retorna (sistema, malha_aberta L(s) ou None, rótulo extra)."""
+    ganho_tf = TransferFunction([K], [1])
+
+    if st.session_state.conexoes:
+        sistema = simplificar_diagrama(
+            st.session_state.blocos, st.session_state.conexoes)
+        sistema = ctrl.minreal(ganho_tf * sistema, verbose=False)
+        tem_realimentacao = any(
+            c['tipo'].startswith('Realimentação')
+            for c in st.session_state.conexoes)
+        return sistema, (None if tem_realimentacao else sistema), " (com conexões)"
+
+    planta = obter_bloco_por_tipo('Planta')
+    if planta is None:
+        raise ValueError("O sistema não tem um bloco do tipo Planta.")
+    controlador = obter_bloco_por_tipo('Controlador')
+    sensor = obter_bloco_por_tipo('Sensor')
+
+    malha_aberta = ganho_tf * planta
+    if controlador is not None:
+        malha_aberta = controlador * malha_aberta
+    if tipo_malha == "Malha Aberta":
+        sistema = malha_aberta = ctrl.minreal(malha_aberta, verbose=False)
+    else:
+        sistema = ctrl.minreal(calcular_malha_fechada(
+            ganho_tf * planta, controlador, sensor, positiva=False),
+            verbose=False)
+        if sensor is not None:
+            malha_aberta = malha_aberta * sensor
+        malha_aberta = ctrl.minreal(malha_aberta, verbose=False)
+    return sistema, malha_aberta, ""
+
+
+def modo_classico():
+    avancado = st.session_state.get('avancado', False)
+
+    st.title("Modo Clássico — Função de Transferência")
+    st.caption(
+        "Competência desenvolvida: **análise algébrica da resposta** de "
+        "sistemas LTI no tempo e na frequência, a partir da função de "
+        "transferência.")
+    onboarding(
+        "carregue um cenário pronto em **📚 Cenários** (barra lateral) ou "
+        "defina a planta G(s) em **Configurar sistema**.",
+        "as análises recalculam sozinhas a cada alteração; escolha o tipo de "
+        "malha, o ganho K e os gráficos em **Configuração**.",
+        "leia primeiro o cartão de **🩺 Diagnóstico** (estabilidade e margens) "
+        "e depois confirme nos gráficos.")
+
+    with st.sidebar:
+        with st.expander("📚 Cenários"):
+            cenario = st.selectbox(
+                "Funções de transferência clássicas", list(CENARIOS),
+                key="cl_cenario")
+            if st.button("Carregar cenário", use_container_width=True):
+                resetar_sistema()
+                adicionar_bloco("G1", "Planta", "Função de Transferência",
+                                *CENARIOS[cenario])
+                st.rerun()
 
     render_guia_janela("Guia")
 
-    if st.session_state.calculo_erro_habilitado:
-        st.subheader("Cálculo de Erro Estacionário")
-        c1, c2 = st.columns(2)
-        with c1:
-            num_erro = st.text_input("Numerador G(s)", value="", key="num_erro")
-        with c2:
-            den_erro = st.text_input("Denominador G(s)", value="", key="den_erro")
+    tem_planta = not st.session_state.blocos.empty
+    with st.expander("⚙ Configurar sistema", expanded=not tem_planta):
+        _form_configurar_sistema(tem_planta, avancado)
+        if tem_planta:
+            st.markdown("---")
+            _lista_sistema_atual()
 
-        if st.button("Calcular Erro Estacionário"):
-            try:
-                G, _ = converter_para_tf(num_erro, den_erro)
-                tipo_s, Kp, Kv, Ka = constantes_de_erro(G)
-                c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Tipo", tipo_s)
-                c2.metric("Kp", formatar_numero(Kp))
-                c3.metric("Kv", formatar_numero(Kv))
-                c4.metric("Ka", formatar_numero(Ka))
-            except Exception as e:
-                st.error(f"Erro: {e}")
-        st.markdown("---")
+    if avancado:
+        with st.expander("Erro estacionário"):
+            c1, c2 = st.columns(2)
+            num_erro = c1.text_input("Numerador G(s)", value="", key="num_erro")
+            den_erro = c2.text_input("Denominador G(s)", value="", key="den_erro")
+            if num_erro and den_erro:
+                try:
+                    G, _ = converter_para_tf(num_erro, den_erro)
+                    tipo_s, Kp, Kv, Ka = constantes_de_erro(G)
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("Tipo", tipo_s)
+                    c2.metric("Kp", formatar_numero(Kp))
+                    c3.metric("Kv", formatar_numero(Kv))
+                    c4.metric("Ka", formatar_numero(Ka))
+                except Exception as e:
+                    cartao_erro(
+                        "As constantes de erro não foram calculadas.", str(e),
+                        "Informe G(s) como polinômios em s, ex.: 4 e s^2+2s.")
 
     col1, col2 = st.columns([2, 1])
 
@@ -1358,68 +1463,60 @@ def modo_classico():
         st.subheader("Configuração")
         tipo_malha = st.selectbox("Tipo de Sistema", ["Malha Aberta", "Malha Fechada"])
         usar_ganho = st.checkbox("Adicionar ganho K ajustável", value=False)
-        K = st.slider("Ganho K", 0.1, 100.0, 1.0, 0.1) if usar_ganho else 1.0
+        K = (st.slider("Ganho K (adimensional)", 0.1, 100.0, 1.0, 0.1)
+             if usar_ganho else 1.0)
 
         st.subheader("Análises")
         chave = "malha_fechada" if tipo_malha == "Malha Fechada" else "malha_aberta"
-        analise_opcoes = ANALYSIS_OPTIONS[chave]
-        analises = st.multiselect("Escolha:", analise_opcoes, default=[analise_opcoes[0]])
+        if avancado:
+            analise_opcoes = ANALYSIS_OPTIONS[chave]
+            padrao = [analise_opcoes[0]]
+        else:
+            analise_opcoes = padrao = ANALISES_BASICO
+        analises = st.multiselect("Escolha:", analise_opcoes, default=padrao)
         entrada = st.selectbox("Sinal de Entrada", INPUT_SIGNALS)
 
     with col1:
         st.subheader("Resultados")
 
-        if st.button("Executar Simulação", use_container_width=True, type="primary"):
+        if not tem_planta:
+            st.info("Defina a planta G(s) em **Configurar sistema** ou carregue "
+                    "um cenário em **📚 Cenários** na barra lateral.")
+            return
+
+        try:
+            sistema, malha_aberta, label_extra = _montar_sistema_classico(
+                tipo_malha, K)
+            st.info(f"{tipo_malha} | K = {K:.2f}{label_extra}")
+
+            num_str = _tf_to_str(sistema.num[0][0])
+            den_str = _tf_to_str(sistema.den[0][0])
+            st.latex(f"T(s) = \\frac{{{num_str}}}{{{den_str}}}")
+
+            cartao_diagnostico(sistema, malha_aberta)
+            if malha_aberta is sistema:
+                st.caption("MG/MF: margens de ganho e de fase desta função em "
+                           "malha aberta — indicam o comportamento ao fechar "
+                           "a malha com realimentação unitária.")
+            st.caption(
+                "🤖 A biblioteca `control` calcula polos, zeros e respostas "
+                "no tempo e na frequência. 🧠 A escolha da topologia, do "
+                "compensador e do ganho K é sua.")
+
             try:
-                df = st.session_state.blocos
-                if df.empty:
-                    st.warning("Adicione a planta primeiro.")
-                    st.stop()
+                ganho_dc = ctrl.dcgain(sistema)
+                st.metric("Ganho DC (adimensional)", f"{ganho_dc:.6f}")
+            except Exception:
+                pass
 
-                ganho_tf = TransferFunction([K], [1])
+            executar_analises(sistema, analises, entrada, tipo_malha)
 
-                if st.session_state.conexoes:
-                    sistema = simplificar_diagrama(
-                        st.session_state.blocos, st.session_state.conexoes)
-                    if usar_ganho and K != 1.0:
-                        sistema = ctrl.minreal(ganho_tf * sistema, verbose=False)
-                    label_extra = " (com conexões)"
-                else:
-                    planta = obter_bloco_por_tipo('Planta')
-                    controlador = obter_bloco_por_tipo('Controlador')
-                    sensor = obter_bloco_por_tipo('Sensor')
-
-                    if planta is None:
-                        st.error("Adicione pelo menos uma Planta.")
-                        st.stop()
-
-                    if tipo_malha == "Malha Aberta":
-                        sistema = ganho_tf * planta
-                        if controlador is not None:
-                            sistema = controlador * sistema
-                    else:
-                        planta_com_ganho = ganho_tf * planta
-                        sistema = calcular_malha_fechada(
-                            planta_com_ganho, controlador, sensor, positiva=False)
-                    label_extra = ""
-
-                sistema = ctrl.minreal(sistema, verbose=False)
-                st.info(f"{tipo_malha} | K = {K:.2f}{label_extra}")
-
-                num_str = _tf_to_str(sistema.num[0][0])
-                den_str = _tf_to_str(sistema.den[0][0])
-                st.latex(f"T(s) = \\frac{{{num_str}}}{{{den_str}}}")
-
-                try:
-                    ganho_dc = ctrl.dcgain(sistema)
-                    st.metric("Ganho DC", f"{ganho_dc:.6f}")
-                except Exception:
-                    pass
-
-                executar_analises(sistema, analises, entrada, tipo_malha)
-
-            except Exception as e:
-                st.error(f"Erro durante a simulação: {e}")
+        except Exception as e:
+            cartao_erro(
+                "Não foi possível simular o sistema.", str(e),
+                "Revise numerador e denominador (use s como variável, ex.: "
+                "s^2+2s+4) e as conexões entre os blocos, ou use "
+                "↺ Resetar Função de Transferência.")
 
 
 # ══════════════════════════════════════════════════
@@ -1489,14 +1586,17 @@ def main():
     )
     inicializar_estado()
 
-    if st.session_state.modo_selecionado is None:
-        tela_inicial()
-    elif st.session_state.modo_selecionado == 'classico':
-        modo_classico()
-    elif st.session_state.modo_selecionado == 'canvas':
-        modo_canvas()
-    elif st.session_state.modo_selecionado == 'circuitos':
-        modo_circuitos()
+    modo = st.session_state.modo_selecionado
+    sidebar_navegacao(modo)
+    breadcrumbs(modo)
+    {
+        None: tela_inicial,
+        'classico': modo_classico,
+        'canvas': modo_canvas,
+        'circuitos': modo_circuitos,
+        'teoria': modo_guia_estudos,
+    }[modo]()
+    rodape()
 
 
 if __name__ == "__main__":
