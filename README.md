@@ -54,7 +54,7 @@ As notas originais usadas como base tambem ficam em `notas_controle/originais/`.
 
 ## Changelog
 
-- **v1.2 (15/11/2026)** — o app passa a ter apenas o Modo Diagrama de Blocos e a
+- **v1.2 (15/11/2026)** — o app passa a ter apenas a tela inicial, o Modo Diagrama de Blocos e a
   Teoria (Modo Classico e Modo Simulacao com Elementos removidos). O alternador
   Basico/Avancado agora atua no editor de blocos, e o diagrama e mantido ao
   alternar o nivel ou trocar de tela.
