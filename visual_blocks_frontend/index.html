@@ -211,6 +211,7 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 .block.chg{outline:3px solid #ca8a04;outline-offset:3px}
 .block.solto{outline:3px dashed #dc2626;outline-offset:3px}
 .conn-item:focus,.block-option:focus{outline:3px solid var(--acc)}
+html.basico .adv{display:none!important}
 #pend{display:none;margin-left:12px;padding:6px 12px;border-radius:8px;border:1px solid #ca8a04;color:#ca8a04;font-size:13px;font-weight:700}
 </style></head><body><div class="app">
 
@@ -568,6 +569,7 @@ function showRes(tf){
   var chks;
   if(curMalha==='aberta'){chks=[['tempo','Resposta no tempo'],['desemp','Desempenho'],['pz','Polos e Zeros'],['bm','Bode Magnitude'],['bp','Bode Fase'],['nyqst','Nyquist']];}
   else{chks=[['tempo','Resposta no tempo'],['desemp','Desempenho'],['pz','Polos e Zeros'],['bm','Bode Magnitude'],['bp','Bode Fase'],['lgr','LGR']];}
+  if(!AVANCADO)chks=chks.slice(0,3);
   h+='<div style="display:flex;flex-wrap:wrap;gap:8px 16px">';
   chks.forEach(function(c){h+='<label style="font-size:12px;cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" '+(selAn[c[0]]?'checked':'')+' onchange="selAn.'+c[0]+'=this.checked;reRender()"> '+c[1]+'</label>'});
   h+='</div></div>';
@@ -739,11 +741,15 @@ var ERR_DID={
   "Sistema singular - verifique as conexões.":["As conexões formam uma malha sem solução (laço algébrico ou ganho de malha igual a 1).","Revise os sinais do somador e as ligações de realimentação."]};
 function errCard(msg,causa,acao){var d=ERR_DID[msg]||[causa||"Parâmetro ou conexão inválida.",acao||"Revise os valores informados (use s como variável, ex.: s^2+2s+4) e as conexões."];return'<div class="ebox" role="alert"><b>Situação:</b> '+esc(msg)+'<br><b>Causa provável:</b> '+esc(d[0])+'<br><b>Ação recomendada:</b> '+esc(d[1])+'</div>'}
 function blocosSoltos(){if(!model.edges.length)return[];return model.nodes.filter(function(n){return(n.type!=="input"&&!model.edges.some(function(e){return e.dst===n.id}))||(n.type!=="output"&&!model.edges.some(function(e){return e.src===n.id}))})}
+var AVANCADO=__AVANCADO__;
+if(!AVANCADO){document.documentElement.classList.add("basico");selAn.bm=selAn.bp=selAn.nyqst=selAn.lgr=false}
+document.querySelectorAll("[onclick]").forEach(function(el){if(/pickBlock\('(pid|pd|ss|int|der|actuator)'\)|setSubMode\('ss'\)/.test(el.getAttribute("onclick")))el.classList.add("adv")});
 var _calcSig=null,_lastChg=null;
 function mSig(){return JSON.stringify([model.nodes.map(function(n){return[n.id,n.type,n.params]}),model.edges.map(function(e){return[e.src,e.srcPort,e.dst,e.dstPort]})])}
 function updPend(){document.getElementById("pend").style.display=(_calcSig!==null&&curMode==="diag"&&_calcSig!==mSig())?"inline-block":"none";document.querySelectorAll(".block").forEach(function(el){el.classList.toggle("chg",el.dataset.id===_lastChg)})}
 function a11y(){document.querySelectorAll(".block").forEach(function(el){var n=model.nodes.find(function(x){return x.id===el.dataset.id});if(!n)return;el.tabIndex=0;el.setAttribute("role","button");el.setAttribute("aria-label",(BL[n.type]||n.type)+" "+n.id);el.addEventListener("focus",function(){if(selId!==n.id)setSel(n.id)})})}
-var _render0=render;render=function(){_render0();a11y();updPend()};
+try{var _salvo=JSON.parse(sessionStorage.getItem("sintonia_model"));if(_salvo&&_salvo.nodes&&_salvo.edges)model=_salvo}catch(e){}
+var _render0=render;render=function(){_render0();a11y();updPend();try{sessionStorage.setItem("sintonia_model",JSON.stringify(model))}catch(e){}};
 var _setMode0=setMode;setMode=function(m){_setMode0(m);updPend()};
 document.getElementById("pA").addEventListener("input",function(){_lastChg=selId;updPend()});
 document.addEventListener("keydown",function(e){
@@ -757,6 +763,4 @@ document.querySelectorAll(".block-option").forEach(function(el){el.tabIndex=0;el
 (function(){var r={tf:"Adicionar bloco G(s)",gain:"Adicionar ganho K",sum:"Adicionar somador",sensor:"Adicionar sensor H(s)"};document.querySelectorAll(".tb[data-add]").forEach(function(b){b.setAttribute("aria-label",r[b.dataset.add]||"Adicionar bloco")});
   [["btnDel","Remover bloco selecionado"],["btnClear","Limpar diagrama"],["btnAuto","Organizar blocos automaticamente"],["btnFbNeg","Realimentação negativa"],["btnFbPos","Realimentação positiva"]].forEach(function(p){var b=document.getElementById(p[0]);if(b){b.setAttribute("aria-label",p[1]);b.title=p[1]}})})();
 applyTheme(curTheme);new ResizeObserver(function(){rW()}).observe(cw);
-var _initData=__INITIAL_BLOCKS__;
-if(_initData){if(_initData.nodes&&_initData.edges){_initData.nodes.forEach(function(n){n.params=Object.assign(dPar(n.type),n.params||{});model.nodes.push(n)});_initData.edges.forEach(function(e){model.edges.push(e)});render();}else if(_initData.length>0){_initData.forEach(function(b){addBP(b.type,b.params)});setTimeout(autoLay,200);}}
 </script></body></html>

@@ -16,26 +16,24 @@ Aqui, queremos criar uma cultura sólida e um ecossistema totalmente colaborativ
   **avaliar** a estabilidade (polos, margens de ganho e de fase, lugar geométrico
   das raízes), justificando escolhas de topologia, compensador e ganho.
 
-| Modo | Competência desenvolvida |
+| Tela | Competência desenvolvida |
 |------|--------------------------|
-| Modo Clássico | Análise algébrica da resposta a partir da função de transferência |
-| Modo Diagrama de Blocos | Síntese e simplificação topológica de malhas de controle |
-| Modo Simulação com Elementos (Beta) | Modelagem física de sistemas elétricos e mecânicos análogos |
+| Modo Diagrama de Blocos | Síntese e simplificação topológica de malhas de controle; análise da resposta no tempo e na frequência |
 | Teoria | Fundamentação: estabilidade, Bode, Nyquist, LGR, PID e compensadores |
 
-A biblioteca `control` automatiza o cálculo de polos, zeros e respostas; a
-decisão sobre topologia, compensador e ganho permanece com o estudante. A
-abstração `TransferFunction` é a fonte única de verdade dos modos em Python:
-novas análises e gráficos devem derivar sempre dela.
+O editor calcula polos, zeros e respostas automaticamente; a decisão sobre
+topologia, compensador e ganho permanece com o estudante.
 
 ## Interface (diretrizes RED-Eng)
 
-- **Barra lateral:** apenas navegação global, alternador **Básico / Avançado**,
-  **Cenários** e selo de status de estabilidade. Os parâmetros ficam na área principal.
-- **Breadcrumbs** (`Início → Sistemas de Controle (CTRL) → Modo`) no topo de cada tela.
-- **Como utilizar:** todo modo traz o roteiro Configurar → Executar → Interpretar.
-- **Cenários:** funções de transferência clássicas prontas (1ª ordem, 2ª ordem
-  sub/criticamente/superamortecida, atraso, instável).
+- **Barra lateral:** apenas navegação global e alternador **Básico / Avançado**.
+- **Básico / Avançado:** o Básico mostra os blocos essenciais (entrada, saída,
+  planta, ganho, sensor, somador, ramificação) e as análises de resposta no
+  tempo, desempenho e polos/zeros. O Avançado libera PID, PD, integrador,
+  derivador, atuador, espaço de estados, Bode, Nyquist e LGR. O diagrama é
+  mantido ao alternar o nível ou trocar de tela.
+- **Breadcrumbs** (`Início → Sistemas de Controle (CTRL) → Tela`) no topo de cada tela.
+- **Como utilizar:** roteiro Configurar → Executar → Interpretar.
 - **Diagnóstico interpretativo:** cartão Estável / Marginal / Instável com margens
   e orientação pedagógica; erros no formato Situação → Causa provável → Ação recomendada.
 
@@ -54,16 +52,12 @@ em tela cheia na aba **Teoria** da navegacao.
 
 As notas originais usadas como base tambem ficam em `notas_controle/originais/`.
 
-## Modo Simulação com Elementos (Beta)
-
-O projeto inclui um terceiro modo, `Modo Simulação com Elementos`, com editor visual
-embutido e orquestracao em `modo_circuitos.py` (um `circuitos_frontend/index.html`,
-se existir, substitui o editor embutido). Esse modo permite manipular elementos
-graficos eletricos e mecanicos e detecta modelos RC, RLC e massa-mola-amortecedor.
-Esta em **Versao Beta**: a interface sinaliza esse estado ao estudante.
-
 ## Changelog
 
+- **v1.2 (15/11/2026)** — o app passa a ter apenas o Modo Diagrama de Blocos e a
+  Teoria (Modo Classico e Modo Simulacao com Elementos removidos). O alternador
+  Basico/Avancado agora atua no editor de blocos, e o diagrama e mantido ao
+  alternar o nivel ou trocar de tela.
 - **v1.1 (15/11/2026)** — adequacao a analise RED-Eng: sidebar so de navegacao,
   breadcrumbs, modo Basico/Avancado, cenarios guiados, recalculo automatico no
   Modo Classico, diagnostico interpretativo de estabilidade, cartoes de erro

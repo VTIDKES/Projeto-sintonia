@@ -1,7 +1,1 @@
 streamlit
-numpy
-pandas
-sympy
-control
-scipy
-plotly
