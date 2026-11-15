@@ -12,6 +12,7 @@ APP_VERSAO = "v1.2 — última atualização: 15/11/2026"
 
 # (chave em st.session_state.modo_selecionado, rótulo)
 ROTAS = [
+    (None, "🏠 Início"),
     ("canvas", "Modo Diagrama de Blocos"),
     ("teoria", "📖 Teoria"),
 ]
@@ -36,8 +37,11 @@ def sidebar_navegacao(modo):
 
 
 def breadcrumbs(modo):
-    rotulo = dict(ROTAS)[modo].replace("📖 ", "")
-    st.caption(f"Início → Sistemas de Controle (CTRL) → **{rotulo}**")
+    caminho = ["Início", "Sistemas de Controle (CTRL)"]
+    if modo is not None:
+        caminho.append(dict(ROTAS)[modo].replace("📖 ", ""))
+    caminho[-1] = f"**{caminho[-1]}**"
+    st.caption(" → ".join(caminho))
 
 
 def rodape():
