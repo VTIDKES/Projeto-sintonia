@@ -8,7 +8,7 @@ Seguem as diretrizes de identidade unificada do ecossistema SINTONIA
 
 import streamlit as st
 
-APP_VERSAO = "v1.2 — última atualização: 15/11/2026"
+APP_VERSAO = "v1.3 — última atualização: 16/11/2026"
 
 # (chave em st.session_state.modo_selecionado, rótulo)
 ROTAS = [

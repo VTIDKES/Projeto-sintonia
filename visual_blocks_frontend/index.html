@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <style>
 :root{--bg:#0e1117;--sf:#1a1d2e;--sf2:#252840;--bd:#333654;--tx:#e0e4f0;--txm:#8890b0;
@@ -82,7 +82,8 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 .block-branch .block-header,.block-branch .block-body{display:none}
 .port{position:absolute;width:14px;height:14px;border-radius:50%;cursor:crosshair;z-index:20;transition:transform .12s}
 .port::after{content:"";position:absolute;inset:3px;border-radius:50%;background:currentColor}
-.port-in{border:2px solid var(--grn);color:var(--grn);background:var(--bg)}
+.port-in{border:2px solid var(--grn);color:var(--grn);background:var(--bg);border-radius:3px}
+.port-in::after{border-radius:1px}
 .port-out{border:2px solid var(--blu);color:var(--blu);background:var(--bg)}
 .port:hover,.port:active{transform:scale(1.5)!important;box-shadow:0 0 10px currentColor}
 .port.active{border-color:var(--yel);color:var(--yel);transform:scale(1.4)!important}
@@ -112,12 +113,18 @@ border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:now
 .man-row .pg label{font-size:11px;margin-bottom:4px}
 .man-hint{font-size:11px;color:var(--txm);margin-top:6px;line-height:1.6}
 .man-hint code{background:var(--sf2);padding:1px 5px;border-radius:3px;color:var(--blu);font-size:11px}
-.calc-bar{background:var(--sf);border-top:1px solid var(--bd);border-bottom:2px solid #22c55e;padding:12px 20px;text-align:center}
-.calc-bar button{background:#16a34a;border:2px solid #22c55e;color:#fff;font-weight:700;font-size:16px;padding:14px 40px;border-radius:10px;cursor:pointer;letter-spacing:1px;box-shadow:0 0 20px rgba(34,197,94,.3);touch-action:manipulation}
-.calc-bar button:hover{background:#22c55e;transform:scale(1.03)}
+.calc-bar{background:var(--sf);border-top:1px solid var(--bd);border-bottom:2px solid #1f77b4;padding:12px 20px;text-align:center}
+.calc-bar button{background:#1f77b4;border:2px solid #1a6aa0;color:#fff;font-weight:700;font-size:16px;padding:14px 40px;border-radius:10px;cursor:pointer;letter-spacing:1px;box-shadow:0 0 20px rgba(31,119,180,.35);touch-action:manipulation}
+.calc-bar button:hover{background:#1a6aa0;transform:scale(1.03)}
 .results{background:var(--sf);padding:0;display:none}
 .results.vis{display:block}
-.results-hdr{padding:16px 20px 10px;display:flex;align-items:center;justify-content:space-between}
+.results-hdr{padding:12px 20px 10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;position:sticky;top:var(--tb-h,0px);z-index:60;background:var(--sf);border-bottom:1px solid var(--bd)}
+#seloHdr.velho{opacity:.6}
+#seloHdr.velho::after{content:" · desatualizado";font-weight:400}
+#seloHdr{display:none;padding:4px 10px;border:2px solid var(--bd);border-radius:8px;font-size:13px;font-weight:700;color:var(--tx);background:var(--sf2)}
+#calcProg{padding:0 20px;font-size:13px;color:var(--txm)}
+#calcProg:not(:empty){padding:10px 20px}
+.tb:disabled{opacity:.45;cursor:not-allowed}
 .results-hdr h3{font-size:16px;color:var(--grn)}
 .rbody{padding:0 20px 20px}
 .rcard{background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:16px;margin-bottom:16px}
@@ -264,6 +271,14 @@ html.basico .adv{display:none!important}
 </div>
 </div></div></div>
 
+<div class="modal-overlay" id="cenModal" role="dialog" aria-modal="true" aria-labelledby="cenModalTitle">
+<div class="modal">
+<div class="modal-hdr"><h3 id="cenModalTitle">Cenários guiados</h3><button class="modal-close" aria-label="Fechar" onclick="closeCenModal()">&times;</button></div>
+<div class="modal-body">
+<p style="font-size:12px;color:var(--txm);margin-bottom:12px">Escolha um cenário para carregar. O diagrama atual é substituído, mas você pode desfazer. Use as setas e Enter para navegar.</p>
+<div id="cenList" style="max-height:340px;overflow-y:auto;padding:4px"></div>
+</div></div></div>
+
 <div class="toolbar" id="diag-toolbar" role="toolbar" aria-label="Ferramentas do diagrama de blocos">
 <button class="tb tb-add" onclick="openModal()">+ Adicionar Bloco</button>
 <div class="sep"></div>
@@ -282,15 +297,18 @@ html.basico .adv{display:none!important}
 <div class="sep"></div>
 <button class="tb" style="background:#3a1520;border-color:#8a3050;color:#ff8fa3" id="btnDel">Del</button>
 <button class="tb" style="background:#3a1520;border-color:#8a3050;color:#ff8fa3" id="btnClear">&#8634; Limpar Diagrama</button>
+<button class="tb" id="btnUndo" aria-label="Desfazer" title="Desfazer (Ctrl+Z)" disabled>&#8630; Desfazer</button>
+<button class="tb" id="btnRedo" aria-label="Refazer" title="Refazer (Ctrl+Y)" disabled>&#8631; Refazer</button>
 <button class="tb" id="btnAuto">Auto</button>
+<button class="tb" id="btnCen" aria-label="Abrir biblioteca de cenários guiados" onclick="openCenModal()">Cenários</button>
 <div class="sep"></div>
 <span class="lbl">Tema:</span>
 <select class="tb" id="themeSelect" aria-label="Tema do editor" onchange="applyTheme(this.value)">
 <option value="dark">Preto</option>
 <option value="light">Branco alto contraste</option>
 </select>
-<span class="lbl" id="themeFixBadge" style="font-size:10px;font-weight:800">fix 20260531</span>
 </div>
+<div class="rcard" id="cenInfo" role="status" aria-live="polite" style="display:none;margin:8px 10px"></div>
 <div class="workspace" id="diag-workspace">
 <div class="canvas-wrap" id="cw" role="application" aria-label="Área do diagrama. Tab percorre os blocos, setas movem o bloco selecionado, Delete remove, Esc cancela a conexão."><div class="canvas" id="cv"></div>
 <svg class="wires" id="wires"><defs>
@@ -305,8 +323,8 @@ html.basico .adv{display:none!important}
 </div></div>
 <div class="panel-section"><h4>Parâmetros</h4><div id="pA"><span class="hint">Selecione um bloco.</span></div></div>
 <div class="panel-section"><h4>Dicas</h4><div class="hint">
-<b>Conectar:</b> porta <span style="color:var(--blu)">azul</span> &rarr; porta <span style="color:var(--grn)">verde</span><br>
-<b>Calcular:</b> botão verde abaixo<br><b>Mobile:</b> toque e arraste!
+<b>Conectar:</b> porta de saída <span style="color:var(--blu)">azul e redonda</span> &rarr; porta de entrada <span style="color:var(--grn)">verde e quadrada</span><br>
+<b>Calcular:</b> botão azul abaixo<br><b>Mobile:</b> toque e arraste!
 </div></div></div></div>
 
 <div class="mode-bar">
@@ -320,6 +338,7 @@ html.basico .adv{display:none!important}
 <button class="man-tab" id="subClosed" onclick="setSubMode('closed')">Malha Fechada</button>
 <button class="man-tab" id="subOpen" onclick="setSubMode('open')">Malha Aberta G*H</button>
 <button class="man-tab" id="subSS" onclick="setSubMode('ss')">Espaço de Estados</button>
+<button class="man-tab" id="btnManReset" aria-label="Resetar entrada manual" onclick="resetMan()">&#8634; Resetar</button>
 </div>
 <div id="manDirect">
 <h4>Função de Transferência T(s) = Num / Den</h4>
@@ -374,9 +393,9 @@ html.basico .adv{display:none!important}
 
 <div class="calc-bar"><button id="btnCalcMain" onclick="onCalc()">&#9654; CALCULAR DIAGRAMA</button><span id="pend" role="status">&#9888; Parâmetros alterados — recálculo pendente</span></div>
 
-<div class="results" id="res" role="region" aria-label="Resultados da análise"><div class="results-hdr"><h3>Resultados</h3>
+<div class="results" id="res" role="region" aria-label="Resultados da análise"><div class="results-hdr"><h3>Resultados</h3><span id="seloHdr" role="status" aria-live="polite"></span>
 <button onclick="document.getElementById('res').classList.remove('vis')" style="background:none;border:1px solid var(--bd);color:var(--txm);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px">Fechar</button>
-</div><div class="rbody" id="rb"></div></div></div>
+</div><div id="calcProg" role="status" aria-live="polite"></div><div class="rbody" id="rb"></div></div></div>
 
 <script>
 var pendingType=null;
@@ -439,17 +458,21 @@ function polyRem(a,b){a=a.slice();b=pTrim(b);if(b.length>a.length)return pTrim(a
 function polyGCD(a,b){a=pTrim(a);b=pTrim(b);if(a.length<b.length){var t=a;a=b;b=t}for(var it=0;it<50;it++){b=pTrim(b);if(b.length<=1){var mx2=0;for(var i=0;i<a.length;i++)mx2=Math.max(mx2,Math.abs(a[i]));if(Math.abs(b[0])<1e-8*Math.max(1,mx2))break;return[1]}var r=polyRem(a,b);var mr=0;for(var i=0;i<r.length;i++)mr=Math.max(mr,Math.abs(r[i]));var mb=0;for(var i=0;i<b.length;i++)mb=Math.max(mb,Math.abs(b[i]));if(mr<1e-8*Math.max(1,mb)){a=b;break}a=b;b=r}a=pTrim(a);var lc=a[a.length-1];if(Math.abs(lc)>1e-14)a=a.map(function(c){return c/lc});return pTrim(a)}
 function polyDivQ(a,b){a=a.slice();b=pTrim(b);if(b.length===1)return pTrim(a.map(function(c){return c/b[0]}));if(b.length>a.length)return[0];var q=new Array(a.length-b.length+1);for(var i=a.length-1;i>=b.length-1;i--){var c=a[i]/b[b.length-1];q[i-b.length+1]=c;for(var j=0;j<b.length;j++)a[j+i-b.length+1]-=c*b[j]}return pTrim(q)}
 function pfReduce(pf){var n=pTrim(pf.n),d=pTrim(pf.d);var g=polyGCD(n,d);if(g.length<=1)return{n:n,d:d};return{n:pTrim(polyDivQ(n,g)),d:pTrim(polyDivQ(d,g))}}
+function pTermos(s){var n="";for(var i=0;i<s.length;i++){if(s[i]==="-"&&i>0&&s[i-1]!=="^"&&s[i-1]!=="+"&&s[i-1]!=="-"&&s[i-1]!=="*")n+="+";n+=s[i]}return n.split("+").filter(function(t){return t})}
 function parseP(s){
   s=(s||"").replace(/\s+/g,"");if(!s)return[0];
   if(!/s/i.test(s)){var v=parseFloat(s);return[isNaN(v)?0:v]}
-  var n="";for(var i=0;i<s.length;i++){if(s[i]==="-"&&i>0&&s[i-1]!=="^"&&s[i-1]!=="+"&&s[i-1]!=="-"&&s[i-1]!=="*")n+="+";n+=s[i]}
-  var ts=n.split("+").filter(function(t){return t}),co={};
+  var ts=pTermos(s),co={};
   ts.forEach(function(t){t=t.replace(/\*/g,"");var m;
     if(m=t.match(/^([+-]?\d*\.?\d*)s\^(\d+)$/)){var c=m[1]===""||m[1]==="+"?1:m[1]==="-"?-1:parseFloat(m[1]);co[parseInt(m[2])]=(co[parseInt(m[2])]||0)+c}
     else if(m=t.match(/^([+-]?\d*\.?\d*)s$/)){var c=m[1]===""||m[1]==="+"?1:m[1]==="-"?-1:parseFloat(m[1]);co[1]=(co[1]||0)+c}
     else{var c=parseFloat(t);if(!isNaN(c))co[0]=(co[0]||0)+c}});
   var ks=Object.keys(co).map(Number);if(!ks.length)return[0];var mx=Math.max.apply(null,ks),r=[];
   for(var i=0;i<=mx;i++)r.push(co[i]||0);return pTrim(r)}
+function polyInvalido(s){s=(s||"").replace(/\s+/g,"");if(!s)return true;if(!/s/i.test(s))return!isFinite(Number(s));if(/[+*^-]$/.test(s))return true;return pTermos(s).some(function(t){t=t.replace(/\*/g,"");return t==="+"||t==="-"||!/^[+-]?(\d+\.?\d*|\.\d+)?(s(\^\d+)?)?$/.test(t)})}
+function pZero(p){p=pTrim(p);return p.length===1&&Math.abs(p[0])<1e-14}
+function matNum(s){s=(s||"").trim();if(!s)return null;var m=s.split(";").map(function(r){r=r.trim();return r?r.split(/[\s,]+/).map(Number):[NaN]});var w=m[0].length;return m.every(function(r){return r.length===w&&r.every(function(v){return isFinite(v)})})?m:null}
+function ssInvalido(a,b,c,d){var A=matNum(a),B=matNum(b),C=matNum(c),D=matNum(d);if(!A||!B||!C||!D)return true;var n=A.length;return A[0].length!==n||B.length!==n||B[0].length!==1||C.length!==1||C[0].length!==n||D.length!==1||D[0].length!==1}
 function parseMat(s){s=(s||"").trim();var rows=s.split(";");return rows.map(function(r){return r.trim().split(/[\s,]+/).map(Number)})}
 function ssToTF(As,Bs,Cs,Ds){
   var A=parseMat(As),B=parseMat(Bs),C=parseMat(Cs),D=parseMat(Ds);
@@ -457,26 +480,40 @@ function ssToTF(As,Bs,Cs,Ds){
   if(n===0)return{n:[D[0]?D[0][0]:0],d:[1]};
   if(n===1){var a00=A[0][0],b0=B[0][0],c0=C[0][0],d0=D[0]?D[0][0]:0;return{n:pAdd([d0*(-a00)+c0*b0],[d0]),d:[-a00,1]}}
   if(n===2){var tr=A[0][0]+A[1][1],dt=A[0][0]*A[1][1]-A[0][1]*A[1][0];var den=[dt,-tr,1];var adj00=[-A[1][1],1],adj01=[A[0][1]],adj10=[A[1][0]],adj11=[-A[0][0],1];var v0=pAdd(pScl(adj00,B[0][0]),pScl(adj01,B[1][0]));var v1=pAdd(pScl(adj10,B[0][0]),pScl(adj11,B[1][0]));var num=pAdd(pScl(v0,C[0][0]),pScl(v1,C[0].length>1?C[0][1]:0));var d0v=D[0]?D[0][0]:0;if(Math.abs(d0v)>1e-14)num=pAdd(num,pMul([d0v],den));return pfReduce({n:num,d:den})}
-  var cp=[1];var Mk=[];for(var i=0;i<n;i++){Mk.push([]);for(var j=0;j<n;j++)Mk[i].push(0)}
-  for(var k=1;k<=n;k++){var prev=Mk;var AM=[];for(var i=0;i<n;i++){AM.push([]);for(var j=0;j<n;j++){var s2=0;for(var l=0;l<n;l++)s2+=A[i][l]*prev[l][j];AM[i].push(s2)}}if(k===1)for(var i=0;i<n;i++)for(var j=0;j<n;j++)AM[i][j]+=(i===j?1:0);var tk=0;for(var i=0;i<n;i++)tk+=AM[i][i];var ck=-tk/k;cp.unshift(ck);Mk=[];for(var i=0;i<n;i++){Mk.push([]);for(var j=0;j<n;j++)Mk[i].push(AM[i][j]+(i===j?ck:0))}}
-  var den=cp;var pts=[];for(var k=0;k<=n;k++){var sv=k*10+1;var sIA=[];for(var i=0;i<n;i++){sIA.push([]);for(var j=0;j<n;j++)sIA[i].push((i===j?sv:0)-A[i][j])}var aug=[];for(var i=0;i<n;i++){aug.push([]);for(var j=0;j<2*n;j++)aug[i].push(j<n?sIA[i][j]:(i===j-n?1:0))}for(var c2=0;c2<n;c2++){var mx2=c2;for(var r=c2+1;r<n;r++)if(Math.abs(aug[r][c2])>Math.abs(aug[mx2][c2]))mx2=r;var tmp=aug[c2];aug[c2]=aug[mx2];aug[mx2]=tmp;var piv=aug[c2][c2];if(Math.abs(piv)<1e-30)continue;for(var j=0;j<2*n;j++)aug[c2][j]/=piv;for(var r=0;r<n;r++){if(r===c2)continue;var f=aug[r][c2];for(var j=0;j<2*n;j++)aug[r][j]-=f*aug[c2][j]}}var inv=[];for(var i=0;i<n;i++){inv.push([]);for(var j=0;j<n;j++)inv[i].push(aug[i][j+n])}var CiB=0;for(var i=0;i<(C[0]||[]).length;i++)for(var j=0;j<(B[0]||[]).length;j++){var v3=0;for(var l=0;l<n;l++)v3+=inv[i][l]*B[l][j];CiB+=C[0][i]*v3}var d0v=D[0]?D[0][0]:0;pts.push({s:sv,v:CiB+d0v*pEv(den,sv)})}
+  var cp=[1];var Mk=[];for(var i=0;i<n;i++){Mk.push([]);for(var j=0;j<n;j++)Mk[i].push(i===j?1:0)}
+  for(var k=1;k<=n;k++){var AM=[];for(var i=0;i<n;i++){AM.push([]);for(var j=0;j<n;j++){var s2=0;for(var l=0;l<n;l++)s2+=A[i][l]*Mk[l][j];AM[i].push(s2)}}var tk=0;for(var i=0;i<n;i++)tk+=AM[i][i];var ck=-tk/k;cp.unshift(ck);Mk=AM.map(function(row,i){return row.map(function(v,j){return v+(i===j?ck:0)})})}
+  var den=cp;var pts=[];for(var k=0;k<=n;k++){var sv=k*10+1;var sIA=[];for(var i=0;i<n;i++){sIA.push([]);for(var j=0;j<n;j++)sIA[i].push((i===j?sv:0)-A[i][j])}var aug=[];for(var i=0;i<n;i++){aug.push([]);for(var j=0;j<2*n;j++)aug[i].push(j<n?sIA[i][j]:(i===j-n?1:0))}for(var c2=0;c2<n;c2++){var mx2=c2;for(var r=c2+1;r<n;r++)if(Math.abs(aug[r][c2])>Math.abs(aug[mx2][c2]))mx2=r;var tmp=aug[c2];aug[c2]=aug[mx2];aug[mx2]=tmp;var piv=aug[c2][c2];if(Math.abs(piv)<1e-30)continue;for(var j=0;j<2*n;j++)aug[c2][j]/=piv;for(var r=0;r<n;r++){if(r===c2)continue;var f=aug[r][c2];for(var j=0;j<2*n;j++)aug[r][j]-=f*aug[c2][j]}}var inv=[];for(var i=0;i<n;i++){inv.push([]);for(var j=0;j<n;j++)inv[i].push(aug[i][j+n])}var CiB=0;for(var i=0;i<(C[0]||[]).length;i++)for(var j=0;j<(B[0]||[]).length;j++){var v3=0;for(var l=0;l<n;l++)v3+=inv[i][l]*B[l][j];CiB+=C[0][i]*v3}var d0v=D[0]?D[0][0]:0;pts.push({s:sv,v:(CiB+d0v)*pEv(den,sv)})}
   var V=[];for(var i=0;i<=n;i++){V.push([]);for(var j=0;j<=n;j++)V[i].push(Math.pow(pts[i].s,j))}var rhs=pts.map(function(p){return p.v});
   for(var c2=0;c2<=n;c2++){var mx2=c2;for(var r=c2+1;r<=n;r++)if(Math.abs(V[r][c2])>Math.abs(V[mx2][c2]))mx2=r;var tmp=V[c2];V[c2]=V[mx2];V[mx2]=tmp;var tmp2=rhs[c2];rhs[c2]=rhs[mx2];rhs[mx2]=tmp2;var piv=V[c2][c2];if(Math.abs(piv)<1e-30)continue;for(var j=c2;j<=n;j++)V[c2][j]/=piv;rhs[c2]/=piv;for(var r=0;r<=n;r++){if(r===c2)continue;var f=V[r][c2];for(var j=c2;j<=n;j++)V[r][j]-=f*V[c2][j];rhs[r]-=f*rhs[c2]}}
   var num=rhs.map(function(v){return Math.abs(v)<1e-10?0:v});return pfReduce({n:pTrim(num),d:pTrim(den)})}
 function fN(n){if(Math.abs(n-Math.round(n))<1e-8)return Math.round(n).toString();return n.toFixed(4).replace(/0+$/,"").replace(/\.$/,"")}
 function fP(c){c=pTrim(c);var ts=[];for(var i=c.length-1;i>=0;i--){var v=c[i];if(Math.abs(v)<1e-10)continue;var t;if(i===0)t=fN(v);else if(i===1){t=Math.abs(v-1)<1e-10?"s":Math.abs(v+1)<1e-10?"-s":fN(v)+"s"}else{t=Math.abs(v-1)<1e-10?"s^"+i:Math.abs(v+1)<1e-10?"-s^"+i:fN(v)+"s^"+i}ts.push(t)}if(!ts.length)return"0";var s=ts[0];for(var i=1;i<ts.length;i++)s+=ts[i][0]==="-"?" - "+ts[i].slice(1):" + "+ts[i];return s}
+function nv(v,d){var x=parseFloat(v);return isNaN(x)?d:x}
+function numInvalido(v){return v!==undefined&&(String(v).trim()===""||!isFinite(Number(v)))}
+/* Valida os parametros de um bloco; devolve {n,msg} ou null. Vale para o diagrama (calcEtapa1 e solve). */
+function blocoInvalido(nd){var p=nd.params||{},t=nd.type,m=null;
+  if(t==="tf"||t==="sensor"||t==="actuator"){var num=p.num===undefined?"1":p.num,den=p.den===undefined?"1":p.den;
+    if(polyInvalido(num))m="numerador vazio ou fora do formato de polinômio";
+    else if(!String(den).replace(/\s+/g,"")||(!polyInvalido(den)&&pZero(parseP(den))))m="denominador vazio ou nulo";
+    else if(polyInvalido(den))m="denominador fora do formato de polinômio"}
+  else if(t==="gain"){if(numInvalido(p.k))m="o ganho K deve ser um número"}
+  else if(t==="pid"){if(numInvalido(p.kp)||numInvalido(p.ki)||numInvalido(p.kd))m="Kp, Ki e Kd devem ser números"}
+  else if(t==="pd"){if(numInvalido(p.kp)||numInvalido(p.kd))m="Kp e Kd devem ser números"}
+  else if(t==="ss"){if(ssInvalido(p.ssA||"0",p.ssB||"0",p.ssC||"1",p.ssD||"0"))m="matrizes A, B, C e D vazias, não numéricas ou com dimensões incompatíveis"}
+  return m?{n:nd,msg:"Parâmetro inválido no bloco "+(BL[t]||t)+" "+nd.id+": "+m+"."}:null}
 function bTF(nd){var p=nd.params||{},t=nd.type;
   if(t==="tf"||t==="sensor"||t==="actuator")return{n:parseP(p.num||"1"),d:parseP(p.den||"1")};
   if(t==="ss")return ssToTF(p.ssA||"0",p.ssB||"0",p.ssC||"1",p.ssD||"0");
-  if(t==="gain")return pfC(parseFloat(p.k)||1);
+  if(t==="gain")return pfC(nv(p.k,1));
   if(t==="int")return{n:[1],d:[0,1]};if(t==="der")return{n:[0,1],d:[1]};
-  if(t==="pid"){var kp=parseFloat(p.kp)||0,ki=parseFloat(p.ki)||0,kd=parseFloat(p.kd)||0;if(Math.abs(ki)<1e-14&&Math.abs(kd)<1e-14)return pfC(kp||1);if(Math.abs(ki)<1e-14)return{n:[kp,kd],d:[1]};if(Math.abs(kd)<1e-14)return{n:[ki,kp],d:[0,1]};return{n:[ki,kp,kd],d:[0,1]}}
-  if(t==="pd"){var kp2=parseFloat(p.kp)||0,kd2=parseFloat(p.kd)||0;if(Math.abs(kd2)<1e-14)return pfC(kp2||1);return{n:[kp2,kd2],d:[1]}}
+  if(t==="pid"){var kp=nv(p.kp,1),ki=nv(p.ki,0),kd=nv(p.kd,0);if(Math.abs(ki)<1e-14&&Math.abs(kd)<1e-14)return pfC(kp);if(Math.abs(ki)<1e-14)return{n:[kp,kd],d:[1]};if(Math.abs(kd)<1e-14)return{n:[ki,kp],d:[0,1]};return{n:[ki,kp,kd],d:[0,1]}}
+  if(t==="pd"){var kp2=nv(p.kp,1),kd2=nv(p.kd,0);if(Math.abs(kd2)<1e-14)return pfC(kp2);return{n:[kp2,kd2],d:[1]}}
   return pfC(1)}
 function solve(nodes,edges){
   if(!nodes.length)return{e:"Adicione blocos."};
   var inp=null,out=null;nodes.forEach(function(n){if(n.type==="input")inp=n;if(n.type==="output")out=n});
   if(!inp)return{e:"Adicione Entrada R(s)."};if(!out)return{e:"Adicione Saída Y(s)."};if(!edges.length)return{e:"Conecte os blocos."};
+  for(var q=0;q<nodes.length;q++){var bi=blocoInvalido(nodes[q]);if(bi)return{e:bi.msg}}
   var N=nodes.length,ix={};nodes.forEach(function(n,i){ix[n.id]=i});
   var A=[],b=[];for(var i=0;i<N;i++){A.push([]);for(var j=0;j<N;j++)A[i].push(pfC(0));b.push(pfC(0))}
   for(var i=0;i<N;i++){var nd=nodes[i];A[i][i]=pfC(1);if(nd.type==="input"){b[i]=pfC(1);continue}var inc=edges.filter(function(e){return e.dst===nd.id});
@@ -499,14 +536,14 @@ function syncPlotTheme(){_PT={paper_bgcolor:cssVar('--plot-bg'),plot_bgcolor:css
 function _pAx(title,extra){var o={title:title,gridcolor:cssVar('--grid'),zerolinecolor:cssVar('--zero'),linecolor:cssVar('--axis'),color:cssVar('--txm')};if(extra)for(var k in extra)o[k]=extra[k];return o}
 function baseLegend(){return{x:0.01,y:0.99,bgcolor:cssVar('--legend-bg'),font:{color:cssVar('--tx')}}}
 function axisCrossShapes(){return[{type:'line',x0:0,x1:0,y0:-1e6,y1:1e6,line:{color:cssVar('--zero'),width:1,dash:'dash'}},{type:'line',x0:-1e6,x1:1e6,y0:0,y1:0,line:{color:cssVar('--zero'),width:1,dash:'dash'}}]}
-function chartLGR(id,branches,tf){var el=document.getElementById(id);if(!el)return;var traces=[],cols=['#5b6be0','#60a5fa','#a78bfa','#f472b6','#fbbf24'];branches.forEach(function(br,bi){traces.push({x:br.re,y:br.im,mode:'lines',line:{color:cols[bi%cols.length],width:1.5},name:'Ramo '+(bi+1),showlegend:false,hovertemplate:'Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'})});var ps2=roots(tf.d);if(ps2.length)traces.push({x:ps2.map(function(p){return p.r}),y:ps2.map(function(p){return p.i}),mode:'markers',marker:{color:'#ff4444',size:12,symbol:'x'},name:'Polos',hovertemplate:'Polo<br>Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'});var zs2=roots(tf.n);if(zs2.length)traces.push({x:zs2.map(function(z){return z.r}),y:zs2.map(function(z){return z.i}),mode:'markers',marker:{color:'#44ff44',size:10,symbol:'circle-open',line:{width:2,color:'#44ff44'}},name:'Zeros',hovertemplate:'Zero<br>Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'});var lay=Object.assign({},_PT,{xaxis:_pAx('Parte Real'),yaxis:_pAx('Parte Imaginaria'),height:380,showlegend:true,legend:baseLegend(),hovermode:'closest',shapes:axisCrossShapes()});Plotly.newPlot(el,traces,lay,{responsive:true})}
-function chartPZ(id,ps,zs){var el=document.getElementById(id);if(!el)return;var traces=[];if(zs.length)traces.push({x:zs.map(function(z){return z.r}),y:zs.map(function(z){return z.i}),mode:'markers',marker:{color:'#60a5fa',size:12,symbol:'circle-open',line:{width:2,color:'#60a5fa'}},name:'Zeros',hovertemplate:'Zero<br>Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'});if(ps.length)traces.push({x:ps.map(function(p){return p.r}),y:ps.map(function(p){return p.i}),mode:'markers',marker:{color:'#ff4444',size:12,symbol:'x'},name:'Polos',hovertemplate:'Polo<br>Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'});var lay=Object.assign({},_PT,{xaxis:_pAx('Parte Real'),yaxis:_pAx('Parte Imaginaria'),height:350,showlegend:true,legend:baseLegend(),hovermode:'closest',shapes:axisCrossShapes()});Plotly.newPlot(el,traces,lay,{responsive:true})}
+function chartLGR(id,branches,tf){var el=document.getElementById(id);if(!el)return;var traces=[],cols=['#5b6be0','#60a5fa','#a78bfa','#f472b6','#fbbf24'];branches.forEach(function(br,bi){traces.push({x:br.re,y:br.im,mode:'lines',line:{color:cols[bi%cols.length],width:1.5},name:'Ramo '+(bi+1),showlegend:false,hovertemplate:'Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'})});var ps2=roots(tf.d);if(ps2.length)traces.push({x:ps2.map(function(p){return p.r}),y:ps2.map(function(p){return p.i}),mode:'markers',marker:{color:'#ff4444',size:12,symbol:'x'},name:'Polos',hovertemplate:'Polo<br>Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'});var zs2=roots(tf.n);if(zs2.length)traces.push({x:zs2.map(function(z){return z.r}),y:zs2.map(function(z){return z.i}),mode:'markers',marker:{color:'#44ff44',size:10,symbol:'circle-open',line:{width:2,color:'#44ff44'}},name:'Zeros',hovertemplate:'Zero<br>Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'});var lay=Object.assign({},_PT,{xaxis:_pAx('Parte Real (1/s)'),yaxis:_pAx('Parte Imaginária (rad/s)'),height:380,showlegend:true,legend:baseLegend(),hovermode:'closest',shapes:axisCrossShapes()});Plotly.newPlot(el,traces,lay,{responsive:true})}
+function chartPZ(id,ps,zs){var el=document.getElementById(id);if(!el)return;var traces=[];if(zs.length)traces.push({x:zs.map(function(z){return z.r}),y:zs.map(function(z){return z.i}),mode:'markers',marker:{color:'#60a5fa',size:12,symbol:'circle-open',line:{width:2,color:'#60a5fa'}},name:'Zeros',hovertemplate:'Zero<br>Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'});if(ps.length)traces.push({x:ps.map(function(p){return p.r}),y:ps.map(function(p){return p.i}),mode:'markers',marker:{color:'#ff4444',size:12,symbol:'x'},name:'Polos',hovertemplate:'Polo<br>Real: %{x:.3f}<br>Imag: %{y:.3f}<extra></extra>'});var lay=Object.assign({},_PT,{xaxis:_pAx('Parte Real (1/s)'),yaxis:_pAx('Parte Imaginária (rad/s)'),height:350,showlegend:true,legend:baseLegend(),hovermode:'closest',shapes:axisCrossShapes()});Plotly.newPlot(el,traces,lay,{responsive:true})}
 function bode(tf,wMin,wMax,nP){var fs=[],ms=[],ps=[],lm=Math.log10(wMin),lx=Math.log10(wMax);for(var i=0;i<nP;i++){var w=Math.pow(10,lm+i*(lx-lm)/(nP-1));fs.push(w);var jw={r:0,i:w},nc=cEvP(tf.n,jw),dc=cEvP(tf.d,jw),T=cDiv(nc,dc),mg=cAbs(T);ms.push(mg>1e-30?20*Math.log10(mg):-600);ps.push(Math.atan2(T.i,T.r)*180/Math.PI)}for(var i=1;i<ps.length;i++){while(ps[i]-ps[i-1]>180)ps[i]-=360;while(ps[i]-ps[i-1]<-180)ps[i]+=360}return{w:fs,m:ms,p:ps}}
 function autoT(tf){var ps=roots(tf.d);if(!ps.length)return 20;var temInstável=ps.some(function(p){return p.r>1e-4});if(temInstável)return 15;var temZero=ps.some(function(p){return Math.abs(p.r)<1e-6&&Math.abs(p.i)<1e-6});if(temZero)return 50;var maxR=0,minR=Infinity;ps.forEach(function(p){if(Math.abs(p.r)>1e-6){var ar=Math.abs(p.r);minR=Math.min(minR,ar);maxR=Math.max(maxR,ar)}});if(maxR>50)return 0.1;return minR===Infinity?20:Math.min(200,Math.max(0.1,8/minR))}
 function autoW(tf){var ps=roots(tf.d).concat(roots(tf.n));var fs=ps.map(function(p){return Math.sqrt(p.r*p.r+p.i*p.i)}).filter(function(f){return f>1e-6});if(!fs.length)return{a:.01,b:1000};var wMin=Math.max(1e-3,Math.min.apply(null,fs)/100);var wMax=Math.min(1e5,Math.max.apply(null,fs)*100);if(Math.log10(wMax/wMin)<4)wMax=wMin*1e4;return{a:wMin,b:wMax}}
 function perf(t,y){if(!y.length)return{};var l=y.slice(Math.floor(y.length*.9)),yf=l.reduce(function(a,b){return a+b},0)/l.length;var ym=Math.max.apply(null,y),os=Math.abs(yf)>1e-6?Math.max(0,(ym-yf)/Math.abs(yf)*100):0;var t10=null,t90=null;if(yf>0)for(var i=0;i<y.length;i++){if(t10===null&&y[i]>=yf*.1)t10=t[i];if(t90===null&&y[i]>=yf*.9){t90=t[i];break}}var tr=t10!==null&&t90!==null?t90-t10:NaN,ts2=NaN;if(Math.abs(yf)>1e-6)for(var i=y.length-1;i>=0;i--)if(Math.abs(y[i]-yf)>.02*Math.abs(yf)){ts2=i<y.length-1?t[i+1]:t[i];break}return{"Valor Final":fN(yf),"Sobressinal":fN(os)+"%","T. Subida":isNaN(tr)?"N/A":fN(tr)+"s","T. Acomod.":isNaN(ts2)?"N/A":fN(ts2)+"s","Pico":fN(ym)}}
 function fC(c){if(Math.abs(c.i)<1e-8)return fN(c.r);return fN(c.r)+(c.i>=0?" + ":" - ")+fN(Math.abs(c.i))+"j"}
-function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}
 syncPlotTheme();
 var curSig='degrau',curMalha='aberta',curFbSign='neg',curTheme=temaDoApp();
 var selAn={tempo:true,desemp:true,pz:true,bm:true,bp:true,nyqst:true,lgr:true};
@@ -516,8 +553,6 @@ function setImp(el,prop,val){el.style.setProperty(prop,val,"important")}
 function clearImp(el,props){props.forEach(function(prop){el.style.removeProperty(prop)})}
 function forceThemeContrast(){
   var light=document.documentElement.getAttribute("data-theme")==="light";
-  var badge=document.getElementById("themeFixBadge");
-  if(badge){badge.textContent="fix 20260531";badge.style.opacity="1";badge.style.color=light?"#0f172a":"#c9d2e6"}
   document.querySelectorAll("#themeSelect,select,input,.tb:not(button),.pg input,.cfg-row input").forEach(function(el){
     if(light){setImp(el,"color","#0f172a");setImp(el,"background","#f8fafc");setImp(el,"border-color","#64748b");setImp(el,"opacity","1")}
     else clearImp(el,["color","background","border-color","opacity"])
@@ -544,14 +579,19 @@ function forceThemeContrast(){
   });
 }
 function applyTheme(theme){curTheme=theme==='light'?'light':'dark';document.documentElement.setAttribute('data-theme',curTheme);syncPlotTheme();var sel=document.getElementById('themeSelect');if(sel&&sel.value!==curTheme)sel.value=curTheme;if(_lastTF)showRes(_lastTF);else render();forceThemeContrast();setTimeout(forceThemeContrast,50)}
-function diagramHasExplicitSum(){return model.nodes.some(function(n){return n.type==="sum"})}
+function temLaco(){var adj={},cor={};model.edges.forEach(function(e){(adj[e.src]=adj[e.src]||[]).push(e.dst)});function dfs(u){cor[u]=1;var v=adj[u]||[];for(var i=0;i<v.length;i++){if(cor[v[i]]===1)return true;if(!cor[v[i]]&&dfs(v[i]))return true}cor[u]=2;return false}return model.nodes.some(function(n){return!cor[n.id]&&dfs(n.id)})}
 function calcGM(bd){for(var i=1;i<bd.p.length;i++){if(bd.p[i-1]>-180&&bd.p[i]<=-180){var w=(bd.p[i-1]+180)/(bd.p[i-1]-bd.p[i]);var mag=bd.m[i-1]+w*(bd.m[i]-bd.m[i-1]);return -mag}}return Infinity}
 function calcPM(bd){for(var i=1;i<bd.m.length;i++){if(bd.m[i-1]>=0&&bd.m[i]<0){var w=bd.m[i-1]/(bd.m[i-1]-bd.m[i]);var ph=bd.p[i-1]+w*(bd.p[i]-bd.p[i-1]);return ph+180}}return Infinity}
-function showRes(tf){
+/* A FT equivalente {n,d} (tf) é a fonte única de verdade de todos os gráficos e métricas (RED-Eng H3.2); novas análises devem derivar dela. */
+function showRes(tf,assinc){
   _lastTF=tf;var rd=document.getElementById("res"),rb=document.getElementById("rb");rd.classList.add("vis");
+  var g=_gen,passo=function(n,f){prog(n);var run=function(){if(assinc&&g!==_gen)return;try{f()}catch(e){falhaCalc(e)}};if(assinc)cede(run);else run()};
+  passo(2,function(){
   var tfAnálise=tf;var ftmfErro=null;
-  if(curMalha==='fechada'&&!diagramHasExplicitSum()){try{var ftmfNum=pTrim(tf.n.slice());var ftmfDen=curFbSign==='pos'?pTrim(pSub(tf.d,tf.n)):pTrim(pAdd(tf.d,tf.n));var lc2=ftmfDen[ftmfDen.length-1];if(Math.abs(lc2)<1e-10){ftmfErro="Denominador da FTMF degenerado.";tfAnálise=tf;}else{var reduced=pfReduce({n:ftmfNum,d:ftmfDen});if(Math.abs(lc2-1)>1e-10){reduced.n=pScl(reduced.n,1/lc2);reduced.d=pScl(reduced.d,1/lc2)}tfAnálise=reduced;}}catch(err){ftmfErro="Erro ao calcular FTMF: "+String(err);tfAnálise=tf;}}
-  var ns=fP(tfAnálise.n),ds=fP(tfAnálise.d);var ps=roots(tfAnálise.d),zs=roots(tfAnálise.n),stb=ps.every(function(p){return p.r<1e-6});var tM=autoT(tfAnálise);var sr=forceResp(tfAnálise,curSig,tM,1200);var pf=perf(sr.t,sr.y);var wr=autoW(tfAnálise),bd=bode(tfAnálise,wr.a,wr.b,600);var nqd=nyq(tfAnálise,wr.a,wr.b,400);var lgrData=lgr(tf,300);
+  if(curMalha==='fechada'&&!tfJaFechada()){try{var ftmfNum=pTrim(tf.n.slice());var ftmfDen=curFbSign==='pos'?pTrim(pSub(tf.d,tf.n)):pTrim(pAdd(tf.d,tf.n));var lc2=ftmfDen[ftmfDen.length-1];if(Math.abs(lc2)<1e-10){ftmfErro="Denominador da FTMF degenerado.";tfAnálise=tf;}else{var reduced=pfReduce({n:ftmfNum,d:ftmfDen});if(Math.abs(lc2-1)>1e-10){reduced.n=pScl(reduced.n,1/lc2);reduced.d=pScl(reduced.d,1/lc2)}tfAnálise=reduced;}}catch(err){ftmfErro="Erro ao calcular FTMF: "+String(err);tfAnálise=tf;}}
+  var ns=fP(tfAnálise.n),ds=fP(tfAnálise.d);var ps=roots(tfAnálise.d),zs=roots(tfAnálise.n);var selo=seloEst(tf,ps),est=selo;setSelo(selo);
+  passo(3,function(){
+  var tM=autoT(tfAnálise);var sr=forceResp(tfAnálise,curSig,tM,1200);var pf=perf(sr.t,sr.y);var wr=autoW(tfAnálise),bd=bode(tfAnálise,wr.a,wr.b,600);var nqd=nyq(tfAnálise,wr.a,wr.b,400);var lgrData=lgr(tf,300);
   var sigNomes={degrau:'Degrau',rampa:'Rampa',senoidal:'Senoidal',impulso:'Impulso',parabolica:'Parabólica'};
   var h='';var ss='background:var(--sf2);border:1px solid var(--bd);border-radius:6px;color:var(--tx);padding:5px 10px;font-size:12px';
   h+='<div class="rcard"><h4>Configurações de Análise</h4>';
@@ -573,17 +613,17 @@ function showRes(tf){
   h+='<div style="display:flex;flex-wrap:wrap;gap:8px 16px">';
   chks.forEach(function(c){h+='<label style="font-size:12px;cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" '+(selAn[c[0]]?'checked':'')+' onchange="selAn.'+c[0]+'=this.checked;reRender()"> '+c[1]+'</label>'});
   h+='</div></div>';
-  var tLabel=curMalha==='fechada'?'T(s) - Malha Fechada':'G(s) - Malha Aberta';
+  var tLabel=(curMalha==='fechada'||tfJaFechada())?'T(s) - Malha Fechada':'G(s) - Malha Aberta';
   h+='<div class="rcard"><h4>'+tLabel+'</h4>';
   if(ftmfErro)h+='<div style="color:#fbbf24;font-size:11px;margin-bottom:6px">⚠ '+esc(ftmfErro)+'</div>';
-  if(curMalha==='fechada'&&diagramHasExplicitSum())h+='<div style="color:var(--txm);font-size:11px;margin-bottom:8px">A malha fechada foi calculada diretamente do diagrama, preservando o somador e os sinais configurados.</div>';
+  if(tfJaFechada())h+='<div style="color:var(--txm);font-size:11px;margin-bottom:8px">'+(curMode==="diag"?'A malha fechada foi calculada diretamente do diagrama, preservando o laço de realimentação e os sinais configurados.':'A T(s) informada na entrada manual já é de malha fechada.')+'</div>';
   h+='<div class="tf-disp"><div style="display:inline-block;text-align:center"><div style="padding:0 8px">'+esc(ns)+'</div><div style="border-top:2px solid var(--acc);padding:4px 8px 0">'+esc(ds)+'</div></div></div></div>';
-  h+=diagCard(tf,ps);
+  h+=diagCard(tf,ps,selo);
   if(selAn.tempo){h+='<div class="rcard"><h4>Resposta no Tempo - '+sigNomes[curSig]+'</h4><div id="cStep" style="width:100%;height:320px"></div></div>';}
   if(selAn.desemp){h+='<div class="rcard"><h4>Desempenho</h4><div class="mgrid">';Object.keys(pf).forEach(function(k){h+='<div class="mbox"><div class="ml">'+k+'</div><div class="mv">'+pf[k]+'</div></div>'});h+='</div></div>';}
-  if(selAn.pz){h+='<div class="rcard"><h4>Diagrama de Polos e Zeros</h4><div id="cPZ" style="width:100%;height:360px"></div>';h+='<div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:8px"><div><b style="color:var(--red)">Polos:</b><div class="pzl">';ps.forEach(function(p){h+='<div style="color:var(--red)">'+fC(p)+'</div>'});if(!ps.length)h+="<div>-</div>";h+='</div></div><div><b style="color:var(--blu)">Zeros:</b><div class="pzl">';zs.forEach(function(z){h+='<div style="color:var(--blu)">'+fC(z)+'</div>'});if(!zs.length)h+="<div>-</div>";h+='</div></div></div>';h+='<div style="margin-top:8px;padding:6px 10px;border-radius:6px;font-weight:700;font-size:13px;'+(stb?'background:#16382a;color:#34d399">ESTAVEL':'background:#3a1520;color:#f87171">INSTAVEL')+'</div></div>';}
+  if(selAn.pz){h+='<div class="rcard"><h4>Diagrama de Polos e Zeros</h4><div id="cPZ" style="width:100%;height:360px"></div>';h+='<div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:8px"><div><b style="color:var(--red)">Polos:</b><div class="pzl">';ps.forEach(function(p){h+='<div style="color:var(--red)">'+fC(p)+'</div>'});if(!ps.length)h+="<div>-</div>";h+='</div></div><div><b style="color:var(--blu)">Zeros:</b><div class="pzl">';zs.forEach(function(z){h+='<div style="color:var(--blu)">'+fC(z)+'</div>'});if(!zs.length)h+="<div>-</div>";h+='</div></div></div>';h+='<div style="margin-top:8px;padding:6px 10px;border-radius:6px;font-weight:700;font-size:13px;'+('background:'+est.bg+';color:'+est.fg+'">'+est.ic+est.st)+'</div></div>';}
   if(selAn.bm){h+='<div class="rcard"><h4>Bode - Magnitude</h4><div id="cBM" style="width:100%;height:320px"></div></div>';}
-  if(selAn.bp){h+='<div class="rcard"><h4>Bode - Fase</h4>';var bdMA=bode(tf,wr.a,wr.b,600);var gm=calcGM(bdMA),pm=calcPM(bdMA);h+='<div style="display:flex;gap:16px;margin-bottom:6px;flex-wrap:wrap"><span style="font-size:12px;color:var(--txm)">Margem de Ganho: <b style="color:'+(gm>0?'#34d399':'#f87171')+'">'+fN(gm)+' dB</b></span><span style="font-size:12px;color:var(--txm)">Margem de Fase: <b style="color:'+(pm>0?'#34d399':'#f87171')+'">'+fN(pm)+'°</b></span></div><div id="cBP" style="width:100%;height:320px"></div></div>';}
+  if(selAn.bp){h+='<div class="rcard"><h4>Bode - Fase</h4>';var gm=selo.gm,pm=selo.pm;h+=selo.fechada?'<div style="font-size:12px;color:var(--txm);margin-bottom:6px">'+MSG_MGMF+'</div>':'<div style="display:flex;gap:16px;margin-bottom:6px;flex-wrap:wrap"><span style="font-size:12px;color:var(--txm)">Margem de Ganho: <b style="color:'+(gm>0?'#34d399':'#f87171')+'">'+fN(gm)+' dB</b></span><span style="font-size:12px;color:var(--txm)">Margem de Fase: <b style="color:'+(pm>0?'#34d399':'#f87171')+'">'+fN(pm)+'°</b></span></div>';h+='<div id="cBP" style="width:100%;height:320px"></div></div>';}
   if(curMalha==='aberta'&&selAn.nyqst){h+='<div class="rcard"><h4>Nyquist</h4><div id="cNyq" style="width:100%;height:380px"></div>';var nps=roots(tf.d),npsd=0;nps.forEach(function(p){if(p.r>1e-6)npsd++});h+='<div style="margin-top:8px;font-size:12px"><b>Polos SPD (P):</b> '+npsd+' | <b>Z = P + N:</b> '+(npsd===0?'Estável':'Instável')+'</div></div>';}
   if(curMalha==='fechada'&&selAn.lgr){h+='<div class="rcard"><h4>LGR</h4><div id="cLGR" style="width:100%;height:380px"></div></div>';}
   rb.innerHTML=h;
@@ -594,29 +634,54 @@ function showRes(tf){
     function chartXY(id,xD,yD,xL,yL){var el=document.getElementById(id);if(!el)return;Plotly.newPlot(el,[{x:xD,y:yD,mode:'lines',line:{color:'#5b6be0',width:2},name:'Nyquist'},{x:xD,y:yD.map(function(v){return -v}),mode:'lines',line:{color:'#888',width:1,dash:'dash'},name:'Reflexo'},{x:[-1],y:[0],mode:'markers',marker:{color:'#ff4444',size:10,symbol:'circle'},name:'(-1,0)'}],Object.assign({},_PT,{xaxis:_pAx(xL),yaxis:_pAx(yL,{scaleanchor:'x'}),height:380,showlegend:true,hovermode:'closest'}),{responsive:true})}
     try{if(selAn.tempo)chart2("cStep",sr.t,sr.u,sr.y,"Tempo (s)","Amplitude");}catch(e){}
     try{if(selAn.pz)chartPZ("cPZ",ps,zs);}catch(e){}
-    try{if(selAn.bm)chart("cBM",bd.w,bd.m,"w (rad/s)","dB","#60a5fa",true);}catch(e){}
-    try{if(selAn.bp)chart("cBP",bd.w,bd.p,"w (rad/s)","graus","#f472b6",true);}catch(e){}
-    try{if(curMalha==='aberta'&&selAn.nyqst)chartXY("cNyq",nqd.re,nqd.im,"Parte Real","Parte Imaginaria");}catch(e){}
+    try{if(selAn.bm)chart("cBM",bd.w,bd.m,"ω (rad/s)","dB","#60a5fa",true);}catch(e){}
+    try{if(selAn.bp)chart("cBP",bd.w,bd.p,"ω (rad/s)","graus","#f472b6",true);}catch(e){}
+    try{if(curMalha==='aberta'&&selAn.nyqst)chartXY("cNyq",nqd.re,nqd.im,"Parte Real","Parte Imaginária");}catch(e){}
     try{if(curMalha==='fechada'&&selAn.lgr)chartLGR("cLGR",lgrData,tf);}catch(e){}
     forceThemeContrast();
-  },150);forceThemeContrast();rd.scrollIntoView({behavior:"smooth"})}
+  },150);forceThemeContrast();rd.scrollIntoView({behavior:"smooth"});prog(0)})})}
 var curMode="diag",curSubMode="direct";
 function updateFbLabel(){var sel=document.getElementById("manFbType");var lbl=document.getElementById("manClosedLabel");if(sel&&lbl){if(sel.value==="pos"){lbl.innerHTML="Malha Fechada: T(s) = G(s) / (1 - G(s)&middot;H(s))";}else{lbl.innerHTML="Malha Fechada: T(s) = G(s) / (1 + G(s)&middot;H(s))";}} }
 function setMode(m){curMode=m;document.getElementById("modeDiag").classList.toggle("active",m==="diag");document.getElementById("modeMan").classList.toggle("active",m==="manual");document.getElementById("diag-workspace").style.display=m==="diag"?"flex":"none";document.getElementById("diag-toolbar").style.display=m==="diag"?"flex":"none";document.getElementById("manualSec").classList.toggle("vis",m==="manual");document.getElementById("btnCalcMain").innerHTML=m==="diag"?"&#9654; CALCULAR DIAGRAMA":"&#9654; CALCULAR T(s)"}
 function setSubMode(m){curSubMode=m;["Direct","Closed","Open","SS"].forEach(function(n){document.getElementById("sub"+n).classList.toggle("active","sub"+n==="sub"+m.charAt(0).toUpperCase()+m.slice(1))});document.getElementById("manDirect").style.display=m==="direct"?"block":"none";document.getElementById("manClosed").style.display=m==="closed"?"block":"none";document.getElementById("manOpen").style.display=m==="open"?"block":"none";document.getElementById("manSS").style.display=m==="ss"?"block":"none"}
-function onCalc(){
-  if(curMode==="manual"){var tf;
-    if(curSubMode==="direct"){tf={n:parseP(document.getElementById("manNum").value),d:parseP(document.getElementById("manDen").value)};}
-    else if(curSubMode==="closed"){var gn=parseP(document.getElementById("manGN").value),gd=parseP(document.getElementById("manGD").value),hn=parseP(document.getElementById("manHN").value),hd=parseP(document.getElementById("manHD").value);var fbType=(document.getElementById("manFbType")||{}).value||"neg";if(fbType==="pos"){tf={n:pMul(gn,hd),d:pSub(pMul(gd,hd),pMul(gn,hn))};}else{tf={n:pMul(gn,hd),d:pAdd(pMul(gd,hd),pMul(gn,hn))};}}
-    else if(curSubMode==="open"){var gn=parseP(document.getElementById("manOGN").value),gd=parseP(document.getElementById("manOGD").value),hn=parseP(document.getElementById("manOHN").value),hd=parseP(document.getElementById("manOHD").value);tf={n:pMul(gn,hn),d:pMul(gd,hd)};}
-    else if(curSubMode==="ss"){try{tf=ssToTF(document.getElementById("manA").value,document.getElementById("manB").value,document.getElementById("manC").value,document.getElementById("manD").value);}catch(e){var rd=document.getElementById("res"),rb=document.getElementById("rb");rd.classList.add("vis");rb.innerHTML=errCard('Erro ao converter o espaço de estados: '+String(e));rd.scrollIntoView({behavior:"smooth"});return}}
-    var lc=tf.d[tf.d.length-1];if(Math.abs(lc)>1e-14&&Math.abs(lc-1)>1e-10){tf.n=pScl(tf.n,1/lc);tf.d=pScl(tf.d,1/lc)}tf=pfReduce(tf);showRes(tf);return;}
-  var soltos=blocosSoltos();
-  document.querySelectorAll(".block").forEach(function(el){el.classList.toggle("solto",soltos.some(function(n){return n.id===el.dataset.id}))});
+var MSG_MGMF="MG/MF indisponíveis: diagrama já em malha fechada";
+var ERR_DEN="Denominador vazio ou nulo.",ERR_POL="Polinômio inválido.",ERR_MAT="Matriz inválida ou com valores não numéricos (NaN).";
+function prog(n){var el=document.getElementById("calcProg");if(el)el.textContent=n?"Calculando... etapa "+n+" de 3":""}
+function cede(f){var feito=false;function go(){if(!feito){feito=true;f()}}requestAnimationFrame(function(){setTimeout(go,0)});setTimeout(go,100)}
+function setSelo(s){var el=document.getElementById("seloHdr");if(!el)return;if(!s){el.style.display="none";el.textContent="";return}el.style.display="inline-block";el.style.borderColor=s.cor;el.textContent=s.txt}
+function mostraErro(h){var rd=document.getElementById("res");rd.classList.add("vis");document.getElementById("rb").innerHTML=h;setSelo(null);prog(0);rd.scrollIntoView({behavior:"smooth"})}
+function falhaCalc(e){mostraErro(errCard("Falha inesperada no cálculo ("+(e&&e.message?e.message:String(e))+").","Ocorreu um erro interno ao processar os dados ou o diagrama.","Revise os valores e as conexões e calcule de novo. Se persistir, use Resetar ou Limpar Diagrama."))}
+function manualTF(){
+  var g=function(id){return document.getElementById(id).value};var tf;
+  if(curSubMode==="ss"){
+    if(ssInvalido(g("manA"),g("manB"),g("manC"),g("manD"))){mostraErro(errCard(ERR_MAT));return null}
+    tf=ssToTF(g("manA"),g("manB"),g("manC"),g("manD"));
+    if(tf.n.concat(tf.d).some(function(v){return!isFinite(v)})){mostraErro(errCard(ERR_MAT));return null}}
+  else{
+    var ids={direct:["manNum","manDen"],closed:["manGN","manGD","manHN","manHD"],open:["manOGN","manOGD","manOHN","manOHD"]}[curSubMode];
+    for(var i=0;i<ids.length;i++){var v=g(ids[i]),den=i%2===1;
+      if(den&&!v.replace(/\s+/g,"")){mostraErro(errCard(ERR_DEN));return null}
+      if(polyInvalido(v)){mostraErro(errCard(ERR_POL));return null}
+      if(den&&pZero(parseP(v))){mostraErro(errCard(ERR_DEN));return null}}
+    if(curSubMode==="direct"){tf={n:parseP(g("manNum")),d:parseP(g("manDen"))};}
+    else if(curSubMode==="closed"){var gn=parseP(g("manGN")),gd=parseP(g("manGD")),hn=parseP(g("manHN")),hd=parseP(g("manHD"));var fbType=(document.getElementById("manFbType")||{}).value||"neg";if(fbType==="pos"){tf={n:pMul(gn,hd),d:pSub(pMul(gd,hd),pMul(gn,hn))};}else{tf={n:pMul(gn,hd),d:pAdd(pMul(gd,hd),pMul(gn,hn))};}}
+    else{var gn=parseP(g("manOGN")),gd=parseP(g("manOGD")),hn=parseP(g("manOHN")),hd=parseP(g("manOHD"));tf={n:pMul(gn,hn),d:pMul(gd,hd)};}
+    if(pZero(tf.d)){mostraErro(errCard(ERR_DEN));return null}}
+  var lc=tf.d[tf.d.length-1];if(Math.abs(lc)>1e-14&&Math.abs(lc-1)>1e-10){tf.n=pScl(tf.n,1/lc);tf.d=pScl(tf.d,1/lc)}
+  return pfReduce(tf)}
+var _gen=0;
+function onCalc(){var g=++_gen;
+  document.getElementById("res").classList.add("vis");document.getElementById("rb").innerHTML="";setSelo(null);
+  prog(1);cede(function(){if(g!==_gen)return;try{calcEtapa1()}catch(e){falhaCalc(e)}})}
+function calcEtapa1(){
+  if(curMode==="manual"){var tfm=manualTF();if(tfm)showRes(tfm,true);return}
+  var soltos=blocosSoltos(),invs=model.nodes.map(blocoInvalido).filter(Boolean),marca=soltos.concat(invs.map(function(i){return i.n}));
+  document.querySelectorAll(".block").forEach(function(el){el.classList.toggle("solto",marca.some(function(n){return n.id===el.dataset.id}))});
+  if(invs.length){mostraErro(errCard(invs[0].msg+(invs.length>1?" (e mais "+(invs.length-1)+" bloco(s) com parâmetro inválido)":""),"O texto do parâmetro está vazio ou não segue o formato esperado.","Corrija o bloco marcado no painel lateral (polinômios como s^2+2s+1, ganhos como números) e calcule de novo."));return}
   var r=soltos.length?{e:"Conexão incompleta: "+soltos.map(function(n){return(BL[n.type]||n.type)+" "+n.id}).join(", ")+" sem sinal de entrada ou de saída."}:solve(model.nodes,model.edges);
-  if(r.e){var rd=document.getElementById("res"),rb=document.getElementById("rb");rd.classList.add("vis");rb.innerHTML=errCard(r.e,"Há blocos fora do caminho entre R(s) e Y(s).","Complete as ligações (porta azul → porta verde) ou remova os blocos soltos antes de calcular.");rd.scrollIntoView({behavior:"smooth"});return}
+  if(r.e){mostraErro(errCard(r.e,"Há blocos fora do caminho entre R(s) e Y(s), ou uma entrada de somador sem ligação.","Complete as ligações (porta de saída redonda azul → porta de entrada quadrada verde) ou remova os blocos soltos antes de calcular."));return}
   _calcSig=mSig();_lastChg=null;updPend();
-  showRes(r.tf)}
+  showRes(r.tf,true)}
 var model={nodes:[],edges:[]},selId=null,dragSt=null,conSt=null;
 var cw=document.getElementById("cw"),cv=document.getElementById("cv"),wSvg=document.getElementById("wires");
 function nxtId(){var m=0;model.nodes.forEach(function(n){var v=parseInt(n.id.replace("n",""))||0;if(v>m)m=v});return"n"+(m+1)}
@@ -624,30 +689,36 @@ function ptr(e){if(e.touches&&e.touches.length)return{x:e.touches[0].clientX,y:e
 var BL={tf:"Planta",ss:"Espaço de Estados",gain:"Ganho",sum:"Somador",int:"Integrador",der:"Derivador",pid:"PID",pd:"PD",sensor:"Sensor",actuator:"Atuador",input:"Entrada",output:"Saída",branch:"Ramificação"};
 function dPar(t){if(t==="tf")return{num:"1",den:"s+1"};if(t==="ss")return{ssA:"0 1; -2 -3",ssB:"0; 1",ssC:"1 0",ssD:"0"};if(t==="gain")return{k:"1"};if(t==="sum")return{signs:"+ -"};if(t==="pid")return{kp:"1",ki:"0",kd:"0"};if(t==="pd")return{kp:"1",kd:"0"};if(t==="sensor"||t==="actuator")return{num:"1",den:"1"};if(t==="input")return{label:"R(s)"};if(t==="output")return{label:"Y(s)"};return{}}
 function gPC(t,p){if(t==="input")return{i:[],o:[{id:"out0"}]};if(t==="output")return{i:[{id:"in0"}],o:[]};if(t==="branch")return{i:[{id:"in0"}],o:[{id:"out0"},{id:"out1"}]};if(t==="sum"){var sg=(p&&p.signs?p.signs:"+ -").trim().split(/\s+/);return{i:sg.map(function(s,i){return{id:"in"+i,sign:s}}),o:[{id:"out0"}]}}return{i:[{id:"in0"}],o:[{id:"out0"}]}}
-function bTxt(n){var p=n.params||{};if(n.type==="tf"||n.type==="actuator")return'<div class="block-tf-disp"><div class="tf-num">'+(p.num||"1")+'</div><div>'+(p.den||"1")+'</div></div>';if(n.type==="ss"){var tf=ssToTF(p.ssA||"0",p.ssB||"0",p.ssC||"1",p.ssD||"0");return'<div class="block-tf-disp"><div class="tf-num">'+fP(tf.n)+'</div><div>'+fP(tf.d)+'</div></div>'}if(n.type==="gain")return"K="+(p.k||"1");if(n.type==="pid"||n.type==="pd"){var _tf=bTF(n);return'<div class="block-tf-disp"><div class="tf-num">'+fP(_tf.n)+'</div><div>'+fP(_tf.d)+'</div></div>';}if(n.type==="sensor")return'<div class="block-tf-disp"><div class="tf-num">'+(p.num||"1")+'</div><div>'+(p.den||"1")+'</div></div>';if(n.type==="input")return p.label||"R(s)";if(n.type==="output")return p.label||"Y(s)";if(n.type==="sum")return"\u03a3";if(n.type==="int")return"1/s";if(n.type==="der")return"s";return""}
-function addB(t){var r=cw.getBoundingClientRect(),n={id:nxtId(),type:t,x:40+Math.random()*(r.width-200),y:40+Math.random()*(r.height-140),params:dPar(t)};if(t==="input"){n.x=30;n.y=r.height/2-30}if(t==="output"){n.x=r.width-160;n.y=r.height/2-30}model.nodes.push(n);render();setSel(n.id)}
-function addBP(t,p){var r=cw.getBoundingClientRect(),n={id:nxtId(),type:t,x:40+Math.random()*(r.width-200),y:40+Math.random()*(r.height-140),params:Object.assign(dPar(t),p)};if(t==="input"){n.x=30;n.y=r.height/2-30}if(t==="output"){n.x=r.width-160;n.y=r.height/2-30}model.nodes.push(n);render();setSel(n.id)}
+function bTxt(n){var p=n.params||{};var disp=function(a,b){return'<div class="block-tf-disp"><div class="tf-num">'+a+'</div><div>'+b+'</div></div>'};
+  if(n.type==="tf"||n.type==="actuator"||n.type==="sensor")return disp(esc(p.num||"1"),esc(p.den||"1"));
+  if(n.type==="ss"){try{var tf=ssToTF(p.ssA||"0",p.ssB||"0",p.ssC||"1",p.ssD||"0");return disp(fP(tf.n),fP(tf.d))}catch(e){return"SS"}}
+  if(n.type==="gain")return"K="+esc(p.k||"1");
+  if(n.type==="pid"||n.type==="pd"){var _tf=bTF(n);return disp(fP(_tf.n),fP(_tf.d))}
+  if(n.type==="input")return esc(p.label||"R(s)");if(n.type==="output")return esc(p.label||"Y(s)");
+  if(n.type==="sum")return"\u03a3";if(n.type==="int")return"1/s";if(n.type==="der")return"s";return""}
+function addB(t){var r=cw.getBoundingClientRect(),n={id:nxtId(),type:t,x:40+Math.random()*(r.width-200),y:40+Math.random()*(r.height-140),params:dPar(t)};if(t==="input"){n.x=30;n.y=r.height/2-30}if(t==="output"){n.x=r.width-160;n.y=r.height/2-30}model.nodes.push(n);_lastChg=n.id;render();setSel(n.id)}
+function addBP(t,p){var r=cw.getBoundingClientRect(),n={id:nxtId(),type:t,x:40+Math.random()*(r.width-200),y:40+Math.random()*(r.height-140),params:Object.assign(dPar(t),p)};if(t==="input"){n.x=30;n.y=r.height/2-30}if(t==="output"){n.x=r.width-160;n.y=r.height/2-30}model.nodes.push(n);_lastChg=n.id;render();setSel(n.id)}
 function delSel(){if(!selId)return;model.edges=model.edges.filter(function(e){return e.src!==selId&&e.dst!==selId});model.nodes=model.nodes.filter(function(n){return n.id!==selId});selId=null;conSt=null;render()}
-function clrAll(){_calcSig=null;_lastChg=null;model={nodes:[],edges:[]};selId=null;conSt=null;render();document.getElementById("res").classList.remove("vis")}
+function clrAll(){_calcSig=null;_lastChg=null;_lastTF=null;model={nodes:[],edges:[]};selId=null;conSt=null;render();document.getElementById("res").classList.remove("vis");document.getElementById("rb").innerHTML="";setSelo(null)}
 function autoLay(){if(!model.nodes.length)return;var lv={},aj={};model.edges.forEach(function(e){if(!aj[e.src])aj[e.src]=[];aj[e.src].push(e.dst)});var ins=model.nodes.filter(function(n){return n.type==="input"}).map(function(n){return n.id});if(!ins.length)ins=[model.nodes[0].id];var q=ins.map(function(id){return{id:id,l:0}}),vis={};ins.forEach(function(id){vis[id]=true});while(q.length){var c=q.shift();lv[c.id]=c.l;(aj[c.id]||[]).forEach(function(n){if(!vis[n]){vis[n]=true;q.push({id:n,l:c.l+1})}})}model.nodes.forEach(function(n){if(!(n.id in lv))lv[n.id]=3});var bl={};Object.keys(lv).forEach(function(id){var l=lv[id];if(!bl[l])bl[l]=[];bl[l].push(id)});Object.keys(bl).forEach(function(l){bl[l].forEach(function(id,i){var n=model.nodes.find(function(nd){return nd.id===id});if(n){n.x=50+parseInt(l)*170;n.y=50+i*100}})});render()}
 function setSel(id){selId=id;document.querySelectorAll(".block").forEach(function(el){el.classList.toggle("sel",el.dataset.id===id)});updP();forceThemeContrast()}
 function pSty(t,k,i){if(t==="sum"){if(k==="in"&&i===0)return"left:-7px;top:50%;transform:translateY(-50%)";if(k==="in"&&i===1)return"left:50%;bottom:-7px;transform:translateX(-50%)";if(k==="in"&&i>=2)return"left:-7px;top:"+(8+i*14)+"px";return"right:-7px;top:50%;transform:translateY(-50%)"}if(t==="branch"){if(k==="in")return"left:-7px;top:50%;transform:translateY(-50%)";if(k==="out"&&i===0)return"right:-7px;top:50%;transform:translateY(-50%)";return"left:50%;bottom:-7px;transform:translateX(-50%)"}if(t==="input"&&k==="out")return"right:-7px;top:50%;transform:translateY(-50%)";if(t==="output"&&k==="in")return"left:-7px;top:50%;transform:translateY(-50%)";return k==="in"?"left:-7px;top:50%;transform:translateY(-50%)":"right:-7px;top:50%;transform:translateY(-50%)"}
-function render(){cv.querySelectorAll(".block").forEach(function(el){el.remove()});model.nodes.forEach(function(n){var el=document.createElement("div");el.className="block block-"+n.type;el.dataset.id=n.id;el.style.left=n.x+"px";el.style.top=n.y+"px";var pc=gPC(n.type,n.params),h="";if(n.type==="sum")h='<div class="block-body">\u03a3</div>';else if(n.type==="branch")h="";else h='<div class="block-header">'+BL[n.type]+'</div><div class="block-body">'+bTxt(n)+'</div>';pc.i.forEach(function(p,i){h+='<div class="port port-in" data-port="'+p.id+'" data-nid="'+n.id+'" data-kind="in" style="'+pSty(n.type,"in",i)+'"></div>';if(n.type==="sum"&&p.sign)h+='<span class="sign-label" style="'+(i===0?"left:-20px;top:50%;transform:translateY(-50%)":i===1?"left:50%;bottom:-18px;transform:translateX(-50%)":"left:-20px;top:"+(8+i*14)+"px")+'">'+p.sign+'</span>'});pc.o.forEach(function(p,i){h+='<div class="port port-out" data-port="'+p.id+'" data-nid="'+n.id+'" data-kind="out" style="'+pSty(n.type,"out",i)+'"></div>'});el.innerHTML=h;cv.appendChild(el);el.addEventListener("mousedown",function(ev){onBD(ev,n.id)});el.addEventListener("touchstart",function(ev){onBD(ev,n.id)},{passive:false});el.querySelectorAll(".port").forEach(function(pl){pl.addEventListener("mousedown",function(ev){ev.stopPropagation();onPC(ev,pl)});pl.addEventListener("touchstart",function(ev){ev.stopPropagation();ev.preventDefault();onPC(ev,pl)},{passive:false})})});document.querySelectorAll(".block").forEach(function(el){el.classList.toggle("sel",el.dataset.id===selId)});rW();updP();forceThemeContrast()}
+function render(){cv.querySelectorAll(".block").forEach(function(el){el.remove()});model.nodes.forEach(function(n){var el=document.createElement("div");el.className="block block-"+n.type;el.dataset.id=n.id;el.style.left=n.x+"px";el.style.top=n.y+"px";var pc=gPC(n.type,n.params),h="";if(n.type==="sum")h='<div class="block-body">\u03a3</div>';else if(n.type==="branch")h="";else h='<div class="block-header">'+BL[n.type]+'</div><div class="block-body">'+bTxt(n)+'</div>';pc.i.forEach(function(p,i){h+='<div class="port port-in" data-port="'+esc(p.id)+'" data-nid="'+esc(n.id)+'" data-kind="in" style="'+pSty(n.type,"in",i)+'"></div>';if(n.type==="sum"&&p.sign)h+='<span class="sign-label" style="'+(i===0?"left:-20px;top:50%;transform:translateY(-50%)":i===1?"left:50%;bottom:-18px;transform:translateX(-50%)":"left:-20px;top:"+(8+i*14)+"px")+'">'+esc(p.sign)+'</span>'});pc.o.forEach(function(p,i){h+='<div class="port port-out" data-port="'+esc(p.id)+'" data-nid="'+esc(n.id)+'" data-kind="out" style="'+pSty(n.type,"out",i)+'"></div>'});el.innerHTML=h;cv.appendChild(el);el.addEventListener("mousedown",function(ev){onBD(ev,n.id)});el.addEventListener("touchstart",function(ev){onBD(ev,n.id)},{passive:false});el.querySelectorAll(".port").forEach(function(pl){pl.addEventListener("mousedown",function(ev){ev.stopPropagation();onPC(ev,pl)});pl.addEventListener("touchstart",function(ev){ev.stopPropagation();ev.preventDefault();onPC(ev,pl)},{passive:false})})});document.querySelectorAll(".block").forEach(function(el){el.classList.toggle("sel",el.dataset.id===selId)});rW();updP();forceThemeContrast()}
 function rW(){wSvg.querySelectorAll("path").forEach(function(p){p.remove()});var wr=cw.getBoundingClientRect();wSvg.setAttribute("width",wr.width);wSvg.setAttribute("height",wr.height);model.edges.forEach(function(e,idx){var a=gPP(e.src,e.srcPort||"out0"),b=gPP(e.dst,e.dstPort||"in0");if(!a||!b)return;var p=document.createElementNS("http://www.w3.org/2000/svg","path"),dx=Math.max(50,Math.abs(b.x-a.x)*.4);if(b.x<a.x-20){var mY=Math.max(a.y,b.y)+60;p.setAttribute("d","M "+a.x+" "+a.y+" C "+(a.x+40)+" "+a.y+","+(a.x+40)+" "+mY+","+((a.x+b.x)/2)+" "+mY+" S "+(b.x-40)+" "+b.y+","+b.x+" "+b.y);p.setAttribute("stroke","#e8a035");p.setAttribute("stroke-dasharray","8 4");p.setAttribute("marker-end","url(#ar2)")}else{p.setAttribute("d","M "+a.x+" "+a.y+" C "+(a.x+dx)+" "+a.y+","+(b.x-dx)+" "+b.y+","+b.x+" "+b.y);p.setAttribute("stroke","#5b6be0");p.setAttribute("marker-end","url(#ar)")}p.setAttribute("fill","none");p.setAttribute("stroke-width","2.5");p.style.pointerEvents="visibleStroke";p.style.cursor="pointer";p.addEventListener("click",function(){model.edges.splice(idx,1);render()});p.addEventListener("touchend",function(ev){ev.preventDefault();model.edges.splice(idx,1);render()});wSvg.appendChild(p)})}
 function gPP(nid,pid){var bl=document.querySelector('.block[data-id="'+nid+'"]');if(!bl)return null;var pl=bl.querySelector('.port[data-port="'+pid+'"]');if(!pl){pl=bl.querySelector(".port.port-"+(pid.indexOf("out")===0?"out":"in"))}if(!pl)return null;var cr=cw.getBoundingClientRect(),pr=pl.getBoundingClientRect();return{x:pr.left+pr.width/2-cr.left,y:pr.top+pr.height/2-cr.top}}
 function onBD(e,id){if(e.target.classList.contains("port"))return;if(e.button===2)return;e.preventDefault();setSel(id);var p=ptr(e),el=document.querySelector('.block[data-id="'+id+'"]');if(!el)return;var r=el.getBoundingClientRect();dragSt={id:id,ox:p.x-r.left,oy:p.y-r.top}}
 function onPM(e){if(!dragSt)return;e.preventDefault();var p=ptr(e),wr=cw.getBoundingClientRect(),el=document.querySelector('.block[data-id="'+dragSt.id+'"]');if(!el)return;var nx=Math.max(0,Math.min(wr.width-el.offsetWidth,p.x-wr.left-dragSt.ox)),ny=Math.max(0,Math.min(wr.height-el.offsetHeight,p.y-wr.top-dragSt.oy));el.style.left=nx+"px";el.style.top=ny+"px";var nd=model.nodes.find(function(n){return n.id===dragSt.id});if(nd){nd.x=nx;nd.y=ny}rW()}
-document.addEventListener("mousemove",onPM);document.addEventListener("mouseup",function(){dragSt=null});document.addEventListener("touchmove",onPM,{passive:false});document.addEventListener("touchend",function(){dragSt=null});
+document.addEventListener("mousemove",onPM);document.addEventListener("mouseup",function(){if(dragSt){dragSt=null;histReg()}});document.addEventListener("touchmove",onPM,{passive:false});document.addEventListener("touchend",function(){if(dragSt){dragSt=null;histReg()}});
 cv.addEventListener("mousedown",function(e){if(e.target===cv){conSt=null;document.querySelectorAll(".port.active").forEach(function(p){p.classList.remove("active")});setSel(null)}});
 cv.addEventListener("touchstart",function(e){if(e.target===cv){conSt=null;document.querySelectorAll(".port.active").forEach(function(p){p.classList.remove("active")});setSel(null)}},{passive:false});
-function onPC(e,pl){e.preventDefault();var nid=pl.dataset.nid,pid=pl.dataset.port,kind=pl.dataset.kind;setSel(nid);if(conSt){if(conSt.nid===nid){conSt=null;document.querySelectorAll(".port.active").forEach(function(p){p.classList.remove("active")});return}var sI,sP,dI,dP;if(conSt.kind==="out"&&kind==="in"){sI=conSt.nid;sP=conSt.pid;dI=nid;dP=pid}else if(conSt.kind==="in"&&kind==="out"){sI=nid;sP=pid;dI=conSt.nid;dP=conSt.pid}else{conSt=null;document.querySelectorAll(".port.active").forEach(function(p){p.classList.remove("active")});return}if(!model.edges.some(function(ed){return ed.src===sI&&ed.srcPort===sP&&ed.dst===dI&&ed.dstPort===dP}))model.edges.push({id:"e"+Math.random().toString(36).slice(2),src:sI,srcPort:sP,dst:dI,dstPort:dP});conSt=null;document.querySelectorAll(".port.active").forEach(function(p){p.classList.remove("active")});render()}else{conSt={nid:nid,pid:pid,kind:kind};pl.classList.add("active")}}
-function updP(){document.getElementById("pB").textContent=model.nodes.length;document.getElementById("pE").textContent=model.edges.length;var pa=document.getElementById("pA");if(!selId){pa.innerHTML='<span class="hint">Selecione um bloco.</span>';forceThemeContrast();return}var nd=model.nodes.find(function(n){return n.id===selId});if(!nd){pa.innerHTML="";forceThemeContrast();return}var p=nd.params||{};var h='<div style="font-size:11px;color:var(--txm);margin-bottom:6px">'+BL[nd.type]+' <b style="color:var(--tx)">'+nd.id+'</b></div>';if(nd.type==="tf"||nd.type==="sensor"||nd.type==="actuator"){h+=pI("Num","num",p.num||"1");h+=pI("Den","den",p.den||"1")}else if(nd.type==="ss"){h+=pI("Matriz A","ssA",p.ssA||"0 1; -2 -3");h+=pI("Matriz B","ssB",p.ssB||"0; 1");h+=pI("Matriz C","ssC",p.ssC||"1 0");h+=pI("Matriz D","ssD",p.ssD||"0")}else if(nd.type==="gain")h+=pI("K","k",p.k||"1");else if(nd.type==="sum")h+=pI("Sinais","signs",p.signs||"+ -");else if(nd.type==="pid"){h+=pI("Kp","kp",p.kp||"1");h+=pI("Ki","ki",p.ki||"0");h+=pI("Kd","kd",p.kd||"0")}else if(nd.type==="pd"){h+=pI("Kp","kp",p.kp||"1");h+=pI("Kd","kd",p.kd||"0")}else if(nd.type==="input"||nd.type==="output")h+=pI("Label","label",p.label||"");pa.innerHTML=h;pa.querySelectorAll("input[data-key]").forEach(function(inp){inp.addEventListener("input",function(){nd.params[inp.dataset.key]=inp.value;if(inp.dataset.key==="signs")render();else{var bl=document.querySelector('.block[data-id="'+nd.id+'"] .block-body');if(bl)bl.innerHTML=bTxt(nd);forceThemeContrast()}})});forceThemeContrast()}
+function onPC(e,pl){e.preventDefault();var nid=pl.dataset.nid,pid=pl.dataset.port,kind=pl.dataset.kind;setSel(nid);if(conSt){if(conSt.nid===nid){conSt=null;document.querySelectorAll(".port.active").forEach(function(p){p.classList.remove("active")});return}var sI,sP,dI,dP;if(conSt.kind==="out"&&kind==="in"){sI=conSt.nid;sP=conSt.pid;dI=nid;dP=pid}else if(conSt.kind==="in"&&kind==="out"){sI=nid;sP=pid;dI=conSt.nid;dP=conSt.pid}else{conSt=null;document.querySelectorAll(".port.active").forEach(function(p){p.classList.remove("active")});return}if(!model.edges.some(function(ed){return ed.src===sI&&ed.srcPort===sP&&ed.dst===dI&&ed.dstPort===dP}))model.edges.push({id:"e"+Math.random().toString(36).slice(2),src:sI,srcPort:sP,dst:dI,dstPort:dP});_lastChg=dI;conSt=null;document.querySelectorAll(".port.active").forEach(function(p){p.classList.remove("active")});render()}else{conSt={nid:nid,pid:pid,kind:kind};pl.classList.add("active")}}
+function updP(){document.getElementById("pB").textContent=model.nodes.length;document.getElementById("pE").textContent=model.edges.length;var pa=document.getElementById("pA");if(!selId){pa.innerHTML='<span class="hint">Selecione um bloco.</span>';forceThemeContrast();return}var nd=model.nodes.find(function(n){return n.id===selId});if(!nd){pa.innerHTML="";forceThemeContrast();return}var p=nd.params||{};var h='<div style="font-size:11px;color:var(--txm);margin-bottom:6px">'+BL[nd.type]+' <b style="color:var(--tx)">'+esc(nd.id)+'</b></div>';if(nd.type==="tf"||nd.type==="sensor"||nd.type==="actuator"){h+=pI("Num","num",p.num||"1");h+=pI("Den","den",p.den||"1")}else if(nd.type==="ss"){h+=pI("Matriz A","ssA",p.ssA||"0 1; -2 -3");h+=pI("Matriz B","ssB",p.ssB||"0; 1");h+=pI("Matriz C","ssC",p.ssC||"1 0");h+=pI("Matriz D","ssD",p.ssD||"0")}else if(nd.type==="gain")h+=pI("K","k",p.k||"1");else if(nd.type==="sum")h+=pI("Sinais","signs",p.signs||"+ -");else if(nd.type==="pid"){h+=pI("Kp","kp",p.kp||"1");h+=pI("Ki","ki",p.ki||"0");h+=pI("Kd","kd",p.kd||"0")}else if(nd.type==="pd"){h+=pI("Kp","kp",p.kp||"1");h+=pI("Kd","kd",p.kd||"0")}else if(nd.type==="input"||nd.type==="output")h+=pI("Label","label",p.label||"");pa.innerHTML=h;pa.querySelectorAll("input[data-key]").forEach(function(inp){inp.addEventListener("input",function(){nd.params[inp.dataset.key]=inp.value;if(inp.dataset.key!=="signs"){var bl=document.querySelector('.block[data-id="'+nd.id+'"] .block-body');if(bl)bl.innerHTML=bTxt(nd);forceThemeContrast()}})});forceThemeContrast()}
 function pI(l,k,v){return'<div class="pg"><label>'+l+'</label><input data-key="'+k+'" value="'+esc(String(v))+'"></div>'}
 var connType=null,connSel=[];
-function openConnModal(tipo){connType=tipo;connSel=[];var titles={serie:'Série',paralelo:'Paralelo',fb_neg:'Realimentação Negativa',fb_pos:'Realimentação Positiva'};var hints={serie:'Selecione 2+ blocos na ordem da cadeia.',paralelo:'Selecione 2+ blocos para somar.',fb_neg:'Selecione 2 blocos: G(s) e H(s).',fb_pos:'Selecione 2 blocos: G(s) e H(s).'};document.getElementById('connModalTitle').textContent=titles[tipo]||'Conexão';document.getElementById('connModalHint').textContent=hints[tipo]||'';var avail=model.nodes.filter(function(n){return['tf','ss','gain','pid','pd','sensor','actuator','int','der'].indexOf(n.type)>=0});var cl=document.getElementById('connBlockList');var h='';if(!avail.length){h='<p style="color:#ef4444;font-size:13px;padding:12px">Nenhum bloco disponivel.</p>'}else{avail.forEach(function(n){var lbl=BL[n.type]+' ('+n.id+')';var det='';if(n.params){if(n.params.num)det=n.params.num+'/'+n.params.den;else if(n.params.k)det='K='+n.params.k;else if(n.params.ssA)det='SS'}h+='<div class="conn-item" tabindex="0" role="button" data-connid="'+n.id+'" onclick="toggleConnSel(this,\''+n.id+'\')">';h+='<span class="conn-chk">&#9744;</span> ';h+='<span style="font-weight:600;color:var(--tx)">'+esc(lbl)+'</span>';if(det)h+='<span style="color:var(--txm);font-size:10px;margin-left:auto">'+esc(det)+'</span>';h+='</div>'})}cl.innerHTML=h;document.getElementById('connModal').classList.add('vis')}
+function openConnModal(tipo){connType=tipo;connSel=[];var titles={serie:'Série',paralelo:'Paralelo',fb_neg:'Realimentação Negativa',fb_pos:'Realimentação Positiva'};var hints={serie:'Selecione 2+ blocos na ordem da cadeia.',paralelo:'Selecione 2+ blocos para somar.',fb_neg:'Selecione 2 blocos: G(s) e H(s).',fb_pos:'Selecione 2 blocos: G(s) e H(s).'};document.getElementById('connModalTitle').textContent=titles[tipo]||'Conexão';document.getElementById('connModalHint').textContent=hints[tipo]||'';var avail=model.nodes.filter(function(n){return['tf','ss','gain','pid','pd','sensor','actuator','int','der'].indexOf(n.type)>=0});var cl=document.getElementById('connBlockList');var h='';if(!avail.length){h='<p style="color:#ef4444;font-size:13px;padding:12px">Nenhum bloco disponivel.</p>'}else{avail.forEach(function(n){var lbl=BL[n.type]+' ('+n.id+')';var det='';if(n.params){if(n.params.num)det=n.params.num+'/'+n.params.den;else if(n.params.k)det='K='+n.params.k;else if(n.params.ssA)det='SS'}h+='<div class="conn-item" tabindex="0" role="button" data-connid="'+esc(n.id)+'" onclick="toggleConnSel(this,this.dataset.connid)">';h+='<span class="conn-chk">&#9744;</span> ';h+='<span style="font-weight:600;color:var(--tx)">'+esc(lbl)+'</span>';if(det)h+='<span style="color:var(--txm);font-size:10px;margin-left:auto">'+esc(det)+'</span>';h+='</div>'})}cl.innerHTML=h;document.getElementById('connModal').classList.add('vis')}
 function closeConnModal(){document.getElementById('connModal').classList.remove('vis');connType=null;connSel=[]}
 function toggleConnSel(el,nid){var idx=connSel.indexOf(nid);var chk=el.querySelector('.conn-chk');if(idx>=0){connSel.splice(idx,1);el.classList.remove('conn-sel');if(chk)chk.innerHTML='&#9744;'}else{if((connType==='fb_neg'||connType==='fb_pos')&&connSel.length>=2){alert('Feedback: maximo 2 blocos.');return}connSel.push(nid);el.classList.add('conn-sel');if(chk)chk.innerHTML='&#9745;'}var cnt=document.getElementById('connSelCount');if(cnt)cnt.textContent=connSel.length+' bloco'+(connSel.length!==1?'s':'')+' selecionado'+(connSel.length!==1?'s':'')}
-function applyConn(){if(connSel.length<2){alert('Selecione pelo menos 2 blocos.');return}if(connType==='serie')buildSérie(connSel.slice());else if(connType==='paralelo')buildParalelo(connSel.slice());else if(connType==='fb_neg')buildFeedback(connSel.slice(),false);else if(connType==='fb_pos')buildFeedback(connSel.slice(),true);closeConnModal();render()}
+function applyConn(){if(connSel.length<2){alert('Selecione pelo menos 2 blocos.');return}_lastChg=connSel[connSel.length-1];if(connType==='serie')buildSérie(connSel.slice());else if(connType==='paralelo')buildParalelo(connSel.slice());else if(connType==='fb_neg')buildFeedback(connSel.slice(),false);else if(connType==='fb_pos')buildFeedback(connSel.slice(),true);closeConnModal();render()}
 function mkEid(){return 'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
 function buildSérie(ids){for(var i=0;i<ids.length-1;i++){var a=ids[i],b=ids[i+1];var already=model.edges.some(function(e){return e.src===a&&e.dst===b});if(!already)model.edges.push({id:mkEid(),src:a,srcPort:'out0',dst:b,dstPort:'in0'})}var baseX=80,baseY=180;ids.forEach(function(id,i){var nd=model.nodes.find(function(n){return n.id===id});if(nd){nd.x=baseX+i*200;nd.y=baseY}})}
 function buildParalelo(ids){var nb=ids.length;var baseX=60,baseY=80;var brIds=[];for(var i=0;i<nb-1;i++){var br={id:nxtId(),type:'branch',x:baseX,y:baseY+50+i*50,params:{}};model.nodes.push(br);brIds.push(br.id);if(i>0)model.edges.push({id:mkEid(),src:brIds[i-1],srcPort:'out0',dst:br.id,dstPort:'in0'})}var signs='';for(var i=0;i<nb;i++)signs+=(i>0?' ':'')+'+';var smX=baseX+420,smY=baseY+(nb-1)*55;var sm={id:nxtId(),type:'sum',x:smX,y:smY,params:{signs:signs}};model.nodes.push(sm);ids.forEach(function(id,i){var nd=model.nodes.find(function(n){return n.id===id});if(nd){nd.x=baseX+200;nd.y=baseY+i*120}if(i===0){model.edges.push({id:mkEid(),src:brIds[0],srcPort:'out1',dst:id,dstPort:'in0'})}else if(i<nb-1){model.edges.push({id:mkEid(),src:brIds[i],srcPort:'out1',dst:id,dstPort:'in0'})}else{model.edges.push({id:mkEid(),src:brIds[nb-2],srcPort:'out0',dst:id,dstPort:'in0'})}model.edges.push({id:mkEid(),src:id,srcPort:'out0',dst:sm.id,dstPort:'in'+i})})}
@@ -711,22 +782,33 @@ function buildFeedback(ids,positive){
 }
 document.querySelectorAll(".tb[data-add]").forEach(function(b){b.addEventListener("click",function(){addB(b.dataset.add)})});
 document.getElementById("btnDel").addEventListener("click",delSel);document.getElementById("btnClear").addEventListener("click",clrAll);document.getElementById("btnAuto").addEventListener("click",autoLay);
-document.addEventListener("keydown",function(e){if(e.target.tagName==="INPUT")return;if(e.key==="Delete"||e.key==="Backspace")delSel();if(e.key==="Escape"){conSt=null;closeModal();closeConnModal();document.querySelectorAll(".port.active").forEach(function(p){p.classList.remove("active")})}});
+document.addEventListener("keydown",function(e){if(/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName))return;if((e.key==="Delete"||e.key==="Backspace")&&curMode==="diag"&&!modalAberto())delSel();if(e.key==="Escape"){conSt=null;closeModal();closeConnModal();closeCenModal();document.querySelectorAll(".port.active").forEach(function(p){p.classList.remove("active")})}});
 
 /* ===== RED-Eng: diagnóstico interpretativo, erros didáticos, recálculo pendente, teclado/ARIA ===== */
 function temaDoApp(){try{var d=window.parent.document,c=getComputedStyle(d.querySelector(".stApp")||d.body).backgroundColor.match(/[\d.]+/g);if(c&&c[3]!=="0"&&(+c[0]+ +c[1]+ +c[2])/3<128)return"dark"}catch(e){}return"light"}
-function diagCard(tf,ps){
-  var inst=ps.filter(function(p){return p.r>1e-6}),eixo=ps.filter(function(p){return Math.abs(p.r)<=1e-6});
-  var st=inst.length?"Instável":eixo.length?"Marginal":"Estável";
-  var ic={"Estável":"● ","Marginal":"▲ ","Instável":"■ "}[st],cor={"Estável":"#16a34a","Marginal":"#ca8a04","Instável":"#dc2626"}[st];
-  var lista=function(a){return a.length?a.map(fC).join(", "):"nenhum"},m=[],selo=ic+st;
-  if(st==="Instável")m.push("Sistema instável: polo(s) no semiplano direito (s = "+lista(inst)+"). Reduza o ganho K ou adicione um compensador em avanço de fase.");
+var COR_EST={claro:{"Estável":"#15803d","Marginal":"#8a5a00","Instável":"#b91c1c"},escuro:{"Estável":"#34d399","Marginal":"#fbbf24","Instável":"#f87171"}},IC_EST={"Estável":"● ","Marginal":"▲ ","Instável":"■ "},BG_EST={"Estável":"#16382a","Marginal":"#3a2d10","Instável":"#3a1520"},FG_EST={"Estável":"#34d399","Marginal":"#fbbf24","Instável":"#f87171"};
+/* Eixo imaginário: |Re|<=1e-4 (roots erra ~1e-8 em raízes múltiplas). Polo repetido sobre o eixo (1/s², (s²+1)²) é Instável. */
+function classEst(ps){var TOL=1e-4,inst=ps.filter(function(p){return p.r>TOL}),eixo=ps.filter(function(p){return Math.abs(p.r)<=TOL});
+  var rep=eixo.some(function(a,i){return eixo.some(function(b,j){return i!==j&&Math.hypot(a.r-b.r,a.i-b.i)<TOL})});
+  var st=(inst.length||rep)?"Instável":eixo.length?"Marginal":"Estável";
+  return{st:st,inst:inst,eixo:eixo,rep:rep,cor:COR_EST[curTheme==="light"?"claro":"escuro"][st],ic:IC_EST[st],bg:BG_EST[st],fg:FG_EST[st]}}
+function tfJaFechada(){return(curMode==="diag"&&temLaco())||(curMode==="manual"&&curSubMode==="closed")}
+/* Selo único (Estável / Marginal / Instável + MG/MF) usado no diagnóstico, no cabeçalho e no cartão de polos e zeros.
+   MG/MF só valem sobre a malha aberta; com laço no diagrama (ou Entrada Manual em Malha Fechada) a T(s) já é de malha fechada e não se calcula (ponytail: sem extrair L(s) do laço). */
+function seloEst(tf,ps){var s=classEst(ps);s.fechada=tfJaFechada();s.gm=Infinity;s.pm=Infinity;s.txt=s.ic+s.st;
+  if(s.fechada)s.txt+=" · "+MSG_MGMF;
+  else{var w=autoW(tf),b=bode(tf,w.a,w.b,600);s.gm=calcGM(b);s.pm=calcPM(b);s.txt+=" · MG "+(isFinite(s.gm)?fN(s.gm)+" dB":"∞")+" · MF "+(isFinite(s.pm)?fN(s.pm)+"°":"∞")}
+  return s}
+function diagCard(tf,ps,sl){
+  var st=sl.st,cor=sl.cor,inst=sl.inst,eixo=sl.eixo;
+  var lista=function(a){return a.length?a.map(fC).join(", "):"nenhum"},m=[],selo=sl.txt;
+  if(st==="Instável"&&!inst.length)m.push("Sistema instável: polo repetido sobre o eixo imaginário (s = "+lista(eixo)+"). A resposta cresce sem limite. Revise a topologia ou adicione compensação.");
+  else if(st==="Instável")m.push("Sistema instável: polo(s) no semiplano direito (s = "+lista(inst)+"). Reduza o ganho K ou adicione um compensador em avanço de fase.");
   else if(st==="Marginal")m.push("Marginalmente estável: polo(s) sobre o eixo imaginário (s = "+lista(eixo)+"). A resposta não converge. Use realimentação ou compensação para levar os polos ao semiplano esquerdo.");
   else m.push("Sistema estável: todos os polos estão no semiplano esquerdo.");
-  if(diagramHasExplicitSum())m.push("Leitura da malha fechada: a T(s) acima já inclui o somador e a realimentação do diagrama; os polos avaliados são os de malha fechada.");
+  if(sl.fechada)m.push("Leitura da malha fechada: a T(s) acima já é de malha fechada (inclui a realimentação); os polos avaliados são os de malha fechada.");
   else{
-    var w=autoW(tf),b=bode(tf,w.a,w.b,600),gm=calcGM(b),pm=calcPM(b);
-    selo+=" · MG "+(isFinite(gm)?fN(gm)+" dB":"∞")+" · MF "+(isFinite(pm)?fN(pm)+"°":"∞");
+    var gm=sl.gm,pm=sl.pm;
     if(pm<=0||gm<0)m.push("Margem negativa: ao fechar a malha com esse ganho, o sistema tende à instabilidade. Reduza o ganho ou adicione compensação.");
     else if(pm<30)m.push("Estabilidade relativa baixa: margem de fase abaixo de 30° indica resposta oscilatória. Considere reduzir o ganho ou adicionar compensação.");
     if(curMalha==="fechada")m.push("Efeito da realimentação: polos de malha aberta ("+lista(roots(tf.d))+") → malha fechada ("+lista(ps)+").");
@@ -739,28 +821,67 @@ var ERR_DID={
   "Adicione blocos.":["O diagrama está vazio.","Clique em + Adicionar Bloco ou use os botões rápidos G(s), K e Σ."],
   "Conecte os blocos.":["Os blocos não estão ligados entre si.","Conecte porta azul (saída) → porta verde (entrada), da Entrada até a Saída."],
   "Sistema singular - verifique as conexões.":["As conexões formam uma malha sem solução (laço algébrico ou ganho de malha igual a 1).","Revise os sinais do somador e as ligações de realimentação."]};
+ERR_DID[ERR_DEN]=["O denominador está vazio ou é igual a zero, então a função de transferência não existe.","Informe um polinômio não nulo em s no denominador, por exemplo s^2+2s+1."];
+ERR_DID[ERR_POL]=["O texto digitado não segue o formato de polinômio em s (há termo desconhecido ou campo vazio).","Use o formato s^2+3s+1 ou 2s^3+s+5, com ^ para potências e s minúsculo."];
+ERR_DID[ERR_MAT]=["Alguma matriz A, B, C ou D está vazia, tem valor que não é número ou tem dimensões incompatíveis.","Separe linhas com ; e colunas com espaço (ex.: 0 1; -2 -3), com A nxn, B nx1, C 1xn e D 1x1."];
 function errCard(msg,causa,acao){var d=ERR_DID[msg]||[causa||"Parâmetro ou conexão inválida.",acao||"Revise os valores informados (use s como variável, ex.: s^2+2s+4) e as conexões."];return'<div class="ebox" role="alert"><b>Situação:</b> '+esc(msg)+'<br><b>Causa provável:</b> '+esc(d[0])+'<br><b>Ação recomendada:</b> '+esc(d[1])+'</div>'}
-function blocosSoltos(){if(!model.edges.length)return[];return model.nodes.filter(function(n){return(n.type!=="input"&&!model.edges.some(function(e){return e.dst===n.id}))||(n.type!=="output"&&!model.edges.some(function(e){return e.src===n.id}))})}
+function blocosSoltos(){if(!model.edges.length)return[];return model.nodes.filter(function(n){var semEnt=gPC(n.type,n.params).i.some(function(p){return!model.edges.some(function(e){return e.dst===n.id&&(e.dstPort||"in0")===p.id})});return semEnt||(n.type!=="output"&&!model.edges.some(function(e){return e.src===n.id}))})}
 var AVANCADO=__AVANCADO__;
+var CENARIOS=__CENARIOS__;
 if(!AVANCADO){document.documentElement.classList.add("basico");selAn.bm=selAn.bp=selAn.nyqst=selAn.lgr=false}
 document.querySelectorAll("[onclick]").forEach(function(el){if(/pickBlock\('(pid|pd|ss|int|der|actuator)'\)|setSubMode\('ss'\)/.test(el.getAttribute("onclick")))el.classList.add("adv")});
 var _calcSig=null,_lastChg=null;
 function mSig(){return JSON.stringify([model.nodes.map(function(n){return[n.id,n.type,n.params]}),model.edges.map(function(e){return[e.src,e.srcPort,e.dst,e.dstPort]})])}
-function updPend(){document.getElementById("pend").style.display=(_calcSig!==null&&curMode==="diag"&&_calcSig!==mSig())?"inline-block":"none";document.querySelectorAll(".block").forEach(function(el){el.classList.toggle("chg",el.dataset.id===_lastChg)})}
+function updPend(){var velho=_calcSig!==null&&curMode==="diag"&&_calcSig!==mSig();document.getElementById("pend").style.display=velho?"inline-block":"none";document.getElementById("seloHdr").classList.toggle("velho",velho);document.querySelectorAll(".block").forEach(function(el){el.classList.toggle("chg",el.dataset.id===_lastChg)})}
+var _moveu=false;
+function modalAberto(){return["addModal","connModal","cenModal"].some(function(id){return document.getElementById(id).classList.contains("vis")})}
 function a11y(){document.querySelectorAll(".block").forEach(function(el){var n=model.nodes.find(function(x){return x.id===el.dataset.id});if(!n)return;el.tabIndex=0;el.setAttribute("role","button");el.setAttribute("aria-label",(BL[n.type]||n.type)+" "+n.id);el.addEventListener("focus",function(){if(selId!==n.id)setSel(n.id)})})}
-try{var _salvo=JSON.parse(sessionStorage.getItem("sintonia_model"));if(_salvo&&_salvo.nodes&&_salvo.edges)model=_salvo}catch(e){}
-var _render0=render;render=function(){_render0();a11y();updPend();try{sessionStorage.setItem("sintonia_model",JSON.stringify(model))}catch(e){}};
-var _setMode0=setMode;setMode=function(m){_setMode0(m);updPend()};
+/* Descarta nós com id fora de ^[A-Za-z0-9_-]+$ ou tipo desconhecido, e arestas soltas ou com porta fora do padrão. */
+function saneia(m){var tipos=Object.keys(BL),ok=function(n){return n&&typeof n.id==="string"&&n.id!=="__proto__"&&/^[A-Za-z0-9_-]+$/.test(n.id)&&tipos.indexOf(n.type)>=0};
+  var nodes=(Array.isArray(m&&m.nodes)?m.nodes:[]).filter(ok).map(function(n){return{id:n.id,type:n.type,x:isFinite(n.x)?+n.x:0,y:isFinite(n.y)?+n.y:0,params:(n.params&&typeof n.params==="object")?n.params:{}}});
+  var ids=Object.create(null);nodes.forEach(function(n){ids[n.id]=1});var porta=function(p,d){return/^(in|out)\d+$/.test(p===undefined?d:String(p))};
+  var edges=(Array.isArray(m&&m.edges)?m.edges:[]).filter(function(e){return e&&ids[e.src]&&ids[e.dst]&&porta(e.srcPort,"out0")&&porta(e.dstPort,"in0")});
+  return{nodes:nodes,edges:edges}}
+function salvaSessao(){try{sessionStorage.setItem("sintonia_model",JSON.stringify(model))}catch(e){}}
+try{var _salvo=JSON.parse(sessionStorage.getItem("sintonia_model"));if(_salvo&&_salvo.nodes&&_salvo.edges)model=saneia(_salvo)}catch(e){}
+var _render0=render;render=function(){_render0();a11y();updPend();salvaSessao();var ae=document.activeElement;if(!(ae&&ae.closest&&ae.closest("#pA")))histReg()};
+var _setMode0=setMode;setMode=function(m){_setMode0(m);updPend();ajustaTop()};
 document.getElementById("pA").addEventListener("input",function(){_lastChg=selId;updPend()});
 document.addEventListener("keydown",function(e){
   var t=e.target;
   if((e.key==="Enter"||e.key===" ")&&t.classList&&(t.classList.contains("conn-item")||t.classList.contains("block-option"))){e.preventDefault();t.click();return}
-  if(/^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName))return;
+  if(/^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName)||(t.classList&&t.classList.contains("conn-item"))||curMode!=="diag"||modalAberto())return;
   var d={ArrowLeft:[-10,0],ArrowRight:[10,0],ArrowUp:[0,-10],ArrowDown:[0,10]}[e.key];if(!d||!selId)return;
   var nd=model.nodes.find(function(n){return n.id===selId}),el=document.querySelector('.block[data-id="'+selId+'"]');if(!nd||!el)return;
-  e.preventDefault();nd.x=Math.max(0,nd.x+d[0]);nd.y=Math.max(0,nd.y+d[1]);el.style.left=nd.x+"px";el.style.top=nd.y+"px";rW()});
+  e.preventDefault();nd.x=Math.max(0,nd.x+d[0]);nd.y=Math.max(0,nd.y+d[1]);el.style.left=nd.x+"px";el.style.top=nd.y+"px";_moveu=true;rW()});
+document.addEventListener("keyup",function(e){if(_moveu&&/^Arrow/.test(e.key)){_moveu=false;histReg()}});
 document.querySelectorAll(".block-option").forEach(function(el){el.tabIndex=0;el.setAttribute("role","button")});
 (function(){var r={tf:"Adicionar bloco G(s)",gain:"Adicionar ganho K",sum:"Adicionar somador",sensor:"Adicionar sensor H(s)"};document.querySelectorAll(".tb[data-add]").forEach(function(b){b.setAttribute("aria-label",r[b.dataset.add]||"Adicionar bloco")});
   [["btnDel","Remover bloco selecionado"],["btnClear","Limpar diagrama"],["btnAuto","Organizar blocos automaticamente"],["btnFbNeg","Realimentação negativa"],["btnFbPos","Realimentação positiva"]].forEach(function(p){var b=document.getElementById(p[0]);if(b){b.setAttribute("aria-label",p[1]);b.title=p[1]}})})();
-applyTheme(curTheme);new ResizeObserver(function(){rW()}).observe(cw);
+/* ===== Desfazer/Refazer (pilhas de JSON do modelo, limite 50) ===== */
+var _undo=[],_redo=[],_atual=null,_emHist=false,HIST_MAX=50;
+function histBtn(){var u=document.getElementById("btnUndo"),r=document.getElementById("btnRedo");if(u)u.disabled=!_undo.length;if(r)r.disabled=!_redo.length}
+function histReg(){var s=JSON.stringify(model);if(s===_atual)return;if(_atual!==null&&!_emHist){_undo.push(_atual);if(_undo.length>HIST_MAX)_undo.shift();_redo=[]}_atual=s;salvaSessao();histBtn()}
+function histIr(de,para){if(!de.length)return;var s=de.pop();para.push(_atual);if(para.length>HIST_MAX)para.shift();_emHist=true;try{model=saneia(JSON.parse(s));selId=null;conSt=null;render();histReg()}finally{_emHist=false}histBtn()}
+document.getElementById("btnUndo").addEventListener("click",function(){histIr(_undo,_redo)});
+document.getElementById("btnRedo").addEventListener("click",function(){histIr(_redo,_undo)});
+document.getElementById("pA").addEventListener("change",function(e){if(e.target&&e.target.dataset&&e.target.dataset.key==="signs")render();histReg()});
+document.addEventListener("keydown",function(e){if(!(e.ctrlKey||e.metaKey)||curMode!=="diag"||/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName))return;var k=e.key.toLowerCase();if(k==="z"&&!e.shiftKey){e.preventDefault();histIr(_undo,_redo)}else if(k==="y"||(k==="z"&&e.shiftKey)){e.preventDefault();histIr(_redo,_undo)}});
+/* ===== Resetar entrada manual ===== */
+var _manIni={};document.querySelectorAll("#manualSec input,#manualSec select").forEach(function(el){_manIni[el.id]=el.value});
+function resetMan(){Object.keys(_manIni).forEach(function(id){var el=document.getElementById(id);if(el)el.value=_manIni[id]});updateFbLabel();document.getElementById("res").classList.remove("vis");document.getElementById("rb").innerHTML="";setSelo(null);prog(0);_lastTF=null}
+/* ===== Cenários guiados ===== */
+function cenDisp(){return CENARIOS.filter(function(c){return AVANCADO||!c.avancado})}
+function openCenModal(){var l=cenDisp(),h="";l.forEach(function(c,i){h+='<div class="conn-item" tabindex="0" role="button" data-cen="'+i+'"><span style="font-weight:600;color:var(--tx)">'+esc(c.titulo)+'</span>'+(c.avancado?'<span style="color:var(--txm);font-size:10px;margin-left:auto">Avançado</span>':'')+'</div>'});
+  var cl=document.getElementById("cenList");cl.innerHTML=h||'<p style="font-size:13px;padding:12px">Nenhum cenário disponível.</p>';
+  cl.querySelectorAll(".conn-item").forEach(function(el){el.addEventListener("click",function(){carregaCenario(l[+el.dataset.cen])})});
+  document.getElementById("cenModal").classList.add("vis");var p=cl.querySelector(".conn-item");if(p)p.focus()}
+function closeCenModal(){var m=document.getElementById("cenModal"),abria=m.classList.contains("vis");m.classList.remove("vis");if(abria)document.getElementById("btnCen").focus()}
+function carregaCenario(c){closeCenModal();model=JSON.parse(JSON.stringify(c.modelo));selId=null;conSt=null;_calcSig=null;_lastChg=null;_lastTF=null;render();document.getElementById("res").classList.remove("vis");document.getElementById("rb").innerHTML="";setSelo(null);
+  var el=document.getElementById("cenInfo");el.style.display="block";el.innerHTML='<button class="tb" style="float:right" aria-label="Fechar descrição do cenário" onclick="document.getElementById(\'cenInfo\').style.display=\'none\'">Fechar</button><b>'+esc(c.titulo)+'</b><div style="font-size:13px;line-height:1.6;margin-top:4px">'+esc(c.descricao)+'</div><div style="font-size:13px;line-height:1.6;margin-top:4px"><b>O que observar:</b> '+esc(c.o_que_observar)+'</div>'}
+document.addEventListener("keydown",function(e){var t=e.target;if(!t.classList||!t.classList.contains("conn-item"))return;var d=e.key==="ArrowDown"?"nextElementSibling":e.key==="ArrowUp"?"previousElementSibling":null;if(!d)return;var x=t[d];if(x){e.preventDefault();x.focus()}});
+document.addEventListener("keydown",function(e){if(e.key!=="Tab")return;var m=document.getElementById("cenModal");if(!m.classList.contains("vis"))return;var f=Array.prototype.slice.call(m.querySelectorAll(".modal-close,.conn-item")),i=f.indexOf(document.activeElement);if(!f.length)return;e.preventDefault();f[e.shiftKey?(i<=0?f.length-1:i-1):(i<0||i===f.length-1?0:i+1)].focus()});
+/* K: o cabeçalho de resultados fica logo abaixo da toolbar fixa (altura medida) */
+function ajustaTop(){var tb=document.getElementById("diag-toolbar");document.documentElement.style.setProperty("--tb-h",((tb&&tb.offsetHeight)||0)+"px")}
+applyTheme(curTheme);new ResizeObserver(function(){rW()}).observe(cw);new ResizeObserver(ajustaTop).observe(document.getElementById("diag-toolbar"));ajustaTop();
 </script></body></html>
