@@ -11,6 +11,3 @@ toolbarMode = "minimal"
 
 [logger]
 level = "info"
-
-[client.toolbarMode]
-defaultValue = "minimal"

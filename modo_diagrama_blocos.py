@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 """Modo Diagrama de Blocos do app Sintonia."""
 
+import json
 from pathlib import Path
 
 import streamlit as st
 import streamlit.components.v1 as components
+from cenarios import CENARIOS
 from modo_guia_estudos import render_guia_janela
 from ui_comum import onboarding
 
@@ -22,9 +24,14 @@ def modo_canvas():
         "Competência desenvolvida: **síntese e simplificação topológica** de "
         "malhas de controle — você decide a topologia; o editor calcula a "
         "função de transferência equivalente.")
+    st.caption(
+        "O editor calcula automaticamente a FT equivalente, os polos, os zeros "
+        "e as respostas no tempo e na frequência; a topologia, o compensador e "
+        "o ganho são decisão do estudante.")
     onboarding(
-        "adicione blocos, arraste para posicionar e conecte porta azul "
-        "(saída) → porta verde (entrada).",
+        "adicione blocos (ou abra **Cenários** para um exemplo pronto), "
+        "arraste para posicionar e conecte porta azul redonda (saída) → "
+        "porta verde quadrada (entrada).",
         "clique em **CALCULAR**; se você alterar o diagrama depois, o aviso "
         "“recálculo pendente” aparece ao lado do botão.",
         "leia o cartão de **Diagnóstico** (estabilidade, margens e efeito da "
@@ -43,7 +50,7 @@ def modo_canvas():
             **Diagrama de Blocos:**
             1. Clique **+ Adicionar Bloco** ou use os botões rápidos
             2. Arraste para posicionar
-            3. Conecte: porta azul (saída) → porta verde (entrada)
+            3. Conecte: porta azul redonda (saída) → porta verde quadrada (entrada)
             4. Edite parâmetros no painel lateral
             5. Clique **CALCULAR** para ver resultados
 
@@ -60,6 +67,9 @@ def modo_canvas():
 
     render_guia_janela("Guia")
 
+    # Escapa "</" para que o JSON não feche a tag script do editor.
+    cenarios_json = json.dumps(CENARIOS, ensure_ascii=False).replace("</", "<\\/")
     html_content = _load_visual_editor_html().replace(
-        '__AVANCADO__', 'true' if avancado else 'false')
+        '__AVANCADO__', 'true' if avancado else 'false').replace(
+        '__CENARIOS__', cenarios_json)
     components.html(html_content, height=2800, scrolling=True)

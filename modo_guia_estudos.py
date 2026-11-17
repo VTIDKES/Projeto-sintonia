@@ -252,19 +252,20 @@ def _render_topic_cards():
         """
         <style>
         .guide-hero {
-            background: linear-gradient(135deg, #12172a, #1b243a);
-            border: 1px solid #303858;
+            background: rgba(128,128,128,.10);
+            border: 1px solid rgba(128,128,128,.35);
             border-radius: 14px;
             padding: 22px 26px;
             margin-bottom: 18px;
         }
         .guide-hero h1 {
-            color: #e0e4f0;
+            color: inherit;
             font-size: 30px;
             margin: 0 0 8px;
         }
         .guide-hero p {
-            color: #a8b0d0;
+            color: inherit;
+            opacity: .8;
             margin: 0;
             line-height: 1.6;
         }
@@ -280,12 +281,17 @@ def _render_topic_cards():
     )
 
 
+def _json_para_script(valor):
+    return json.dumps(valor, ensure_ascii=False).replace("</", "<\\/")
+
+
 def render_guia_janela(label="Guia"):
     """Renderiza uma janela flutuante e arrastavel no documento principal."""
     sections = _load_note_sections()
-    payload = json.dumps(sections, ensure_ascii=False)
-    topics_payload = json.dumps(list(sections.keys()), ensure_ascii=False)
-    label_payload = json.dumps(label, ensure_ascii=False)
+    # Escapa "</" para que o JSON não feche a tag script da janela.
+    payload = _json_para_script(sections)
+    topics_payload = _json_para_script(list(sections.keys()))
+    label_payload = _json_para_script(label)
 
     components.html(
         f"""
@@ -307,21 +313,43 @@ def render_guia_janela(label="Guia"):
           root.innerHTML = `
             <style>
             #sintonia-guide-root * {{ box-sizing: border-box; }}
+            #sintonia-guide-root {{
+              --sg-bg: #ffffff; --sg-bg2: #f0f2f6; --sg-bg3: #f6f8fb;
+              --sg-borda: #c3cbdb; --sg-borda2: #b0bad0;
+              --sg-texto: #262730; --sg-forte: #0f172a;
+              --sg-acento: #92400e; --sg-h2: #047857; --sg-h3: #1d4ed8; --sg-h4: #6d28d9;
+              --sg-em: #5b21b6; --sg-code: #1d4ed8; --sg-pre: #1e293b; --sg-math: #1e3a8a;
+              --sg-td: rgba(240,242,246,.7);
+              --sg-adm-bg: rgba(217,119,6,.10); --sg-adm-txt: #78350f; --sg-adm-borda: #d97706;
+              --sg-close-bg: #fee2e2; --sg-close-borda: #fca5a5; --sg-close-txt: #b91c1c;
+              --sg-sombra: rgba(15,23,42,.25);
+            }}
+            #sintonia-guide-root[data-tema="escuro"] {{
+              --sg-bg: #111422; --sg-bg2: #252840; --sg-bg3: #0e1117;
+              --sg-borda: #333654; --sg-borda2: #3d4267;
+              --sg-texto: #d8deef; --sg-forte: #ffffff;
+              --sg-acento: #fbbf24; --sg-h2: #34d399; --sg-h3: #60a5fa; --sg-h4: #a78bfa;
+              --sg-em: #c4b5fd; --sg-code: #93c5fd; --sg-pre: #dbeafe; --sg-math: #bfdbfe;
+              --sg-td: rgba(37,40,64,.42);
+              --sg-adm-bg: rgba(251,191,36,.08); --sg-adm-txt: #fde68a; --sg-adm-borda: #fbbf24;
+              --sg-close-bg: #3a1520; --sg-close-borda: #8a3050; --sg-close-txt: #ff8fa3;
+              --sg-sombra: rgba(0,0,0,.38);
+            }}
             #sintonia-guide-tab {{
               position: fixed;
               right: 0;
               top: 50%;
               transform: translateY(-50%);
               z-index: 2147483000;
-              border: 1px solid #333654;
+              border: 1px solid var(--sg-borda);
               border-right: 0;
-              background: #171a2b;
-              color: #fbbf24;
+              background: var(--sg-bg2);
+              color: var(--sg-acento);
               border-radius: 12px 0 0 12px;
               padding: 14px 10px;
               font: 800 15px system-ui, sans-serif;
               cursor: pointer;
-              box-shadow: 0 12px 28px rgba(0,0,0,.28);
+              box-shadow: 0 12px 28px var(--sg-sombra);
               writing-mode: vertical-rl;
               letter-spacing: .5px;
             }}
@@ -335,11 +363,11 @@ def render_guia_janela(label="Guia"):
               flex-direction: column;
               overflow: hidden;
               z-index: 2147483001;
-              border: 1px solid #333654;
+              border: 1px solid var(--sg-borda);
               border-radius: 14px;
-              background: #111422;
-              box-shadow: 0 24px 70px rgba(0,0,0,.38);
-              color: #e0e4f0;
+              background: var(--sg-bg);
+              box-shadow: 0 24px 70px var(--sg-sombra);
+              color: var(--sg-texto);
               font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             }}
             #sintonia-guide-window.open {{ display: flex; }}
@@ -348,13 +376,13 @@ def render_guia_janela(label="Guia"):
               align-items: center;
               gap: 10px;
               padding: 10px 12px;
-              background: linear-gradient(135deg, #1a1d2e, #252840);
-              border-bottom: 1px solid #333654;
+              background: var(--sg-bg2);
+              border-bottom: 1px solid var(--sg-borda);
               cursor: move;
               user-select: none;
             }}
             .sg-title {{
-              color: #fbbf24;
+              color: var(--sg-acento);
               font-weight: 850;
               white-space: nowrap;
               font-size: 16px;
@@ -362,9 +390,9 @@ def render_guia_janela(label="Guia"):
             .sg-titlebar select {{
               flex: 1;
               min-width: 180px;
-              background: #252840;
-              color: #e0e4f0;
-              border: 1px solid #3d4267;
+              background: var(--sg-bg);
+              color: var(--sg-texto);
+              border: 1px solid var(--sg-borda2);
               border-radius: 8px;
               padding: 9px 10px;
               font-size: 14px;
@@ -375,9 +403,9 @@ def render_guia_janela(label="Guia"):
               width: 36px;
               height: 36px;
               border-radius: 9px;
-              border: 1px solid #8a3050;
-              background: #3a1520;
-              color: #ff8fa3;
+              border: 1px solid var(--sg-close-borda);
+              background: var(--sg-close-bg);
+              color: var(--sg-close-txt);
               font-size: 20px;
               cursor: pointer;
               line-height: 1;
@@ -390,48 +418,48 @@ def render_guia_janela(label="Guia"):
             }}
             .sg-body h1 {{
               margin: 0 0 16px;
-              color: #f8fafc;
+              color: var(--sg-forte);
               font-size: 25px;
               line-height: 1.22;
             }}
             .sg-body h2 {{
               margin: 24px 0 10px;
-              color: #34d399;
+              color: var(--sg-h2);
               font-size: 20px;
               line-height: 1.3;
             }}
             .sg-body h3 {{
               margin: 18px 0 8px;
-              color: #60a5fa;
+              color: var(--sg-h3);
               font-size: 16px;
             }}
             .sg-body h4 {{
               margin: 16px 0 8px;
-              color: #a78bfa;
+              color: var(--sg-h4);
               font-size: 15px;
             }}
             .sg-body p {{
-              color: #d8deef;
+              color: var(--sg-texto);
               margin: 0 0 12px;
             }}
-            .sg-body strong {{ color: #ffffff; font-weight: 800; }}
-            .sg-body em {{ color: #c4b5fd; }}
+            .sg-body strong {{ color: var(--sg-forte); font-weight: 800; }}
+            .sg-body em {{ color: var(--sg-em); }}
             .sg-body code {{
-              background: #252840;
-              border: 1px solid #333654;
+              background: var(--sg-bg2);
+              border: 1px solid var(--sg-borda);
               border-radius: 5px;
-              color: #93c5fd;
+              color: var(--sg-code);
               padding: 1px 5px;
               font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
               font-size: .92em;
             }}
             .sg-body pre {{
-              background: #0e1117;
-              border: 1px solid #333654;
+              background: var(--sg-bg3);
+              border: 1px solid var(--sg-borda);
               border-radius: 10px;
               padding: 12px 14px;
               overflow: auto;
-              color: #dbeafe;
+              color: var(--sg-pre);
             }}
             .sg-body pre code {{
               background: transparent;
@@ -448,7 +476,7 @@ def render_guia_janela(label="Guia"):
             .sg-body ul, .sg-body ol {{
               margin: 0 0 14px 22px;
               padding: 0;
-              color: #d8deef;
+              color: var(--sg-texto);
             }}
             .sg-body li {{ margin: 5px 0; }}
             .sg-body table {{
@@ -460,26 +488,26 @@ def render_guia_janela(label="Guia"):
               border-radius: 9px;
             }}
             .sg-body th, .sg-body td {{
-              border: 1px solid #333654;
+              border: 1px solid var(--sg-borda);
               padding: 8px 10px;
               text-align: left;
               vertical-align: top;
             }}
             .sg-body th {{
-              background: #252840;
-              color: #fbbf24;
+              background: var(--sg-bg2);
+              color: var(--sg-acento);
             }}
             .sg-body td {{
-              background: rgba(37,40,64,.42);
-              color: #d8deef;
+              background: var(--sg-td);
+              color: var(--sg-texto);
             }}
             .math-block {{
               margin: 12px 0 18px;
               padding: 12px 14px;
-              border: 1px solid #333654;
+              border: 1px solid var(--sg-borda);
               border-radius: 10px;
-              background: #0e1117;
-              color: #bfdbfe;
+              background: var(--sg-bg3);
+              color: var(--sg-math);
               font-family: Cambria Math, STIX Two Math, ui-monospace, monospace;
               overflow-x: auto;
               white-space: pre-wrap;
@@ -487,15 +515,15 @@ def render_guia_janela(label="Guia"):
             .admonition {{
               margin: 12px 0 16px;
               padding: 12px 14px;
-              border-left: 4px solid #fbbf24;
+              border-left: 4px solid var(--sg-adm-borda);
               border-radius: 8px;
-              background: rgba(251,191,36,.08);
-              color: #fde68a;
+              background: var(--sg-adm-bg);
+              color: var(--sg-adm-txt);
             }}
             .admonition-title {{
               font-weight: 800;
               margin-bottom: 4px;
-              color: #fbbf24;
+              color: var(--sg-acento);
             }}
             @media (max-width: 760px) {{
               #sintonia-guide-window {{
@@ -522,6 +550,36 @@ def render_guia_janela(label="Guia"):
           `;
           doc.body.appendChild(root);
 
+          // Escolhe o conjunto de cores pela luminância do fundo do app pai.
+          function temaDoFundo() {{
+            const view = doc.defaultView || window;
+            let cor = view.getComputedStyle(doc.body).backgroundColor;
+            let m = cor.match(/[0-9.]+/g) || [];
+            if (m.length > 3 && Number(m[3]) === 0) {{
+              const app = doc.querySelector(".stApp");
+              if (app) {{
+                cor = view.getComputedStyle(app).backgroundColor;
+                m = cor.match(/[0-9.]+/g) || [];
+              }}
+            }}
+            if (m.length < 3 || (m.length > 3 && Number(m[3]) === 0)) return "claro";
+            const lum = (0.2126 * m[0] + 0.7152 * m[1] + 0.0722 * m[2]) / 255;
+            return lum < 0.5 ? "escuro" : "claro";
+          }}
+          root.dataset.tema = temaDoFundo();
+
+          // Reaplica o tema quando o Streamlit troca de tema sem recarregar.
+          const view = doc.defaultView || window;
+          if (view.__sintoniaGuiaObs) view.__sintoniaGuiaObs.disconnect();
+          const obs = new view.MutationObserver(() => {{
+            if (root.isConnected) root.dataset.tema = temaDoFundo();
+          }});
+          const alvos = [doc.documentElement, doc.body, doc.querySelector(".stApp")];
+          alvos.forEach((el) => {{
+            if (el) obs.observe(el, {{ attributes: true, attributeFilter: ["class", "style", "data-theme"] }});
+          }});
+          view.__sintoniaGuiaObs = obs;
+
           if (!doc.getElementById("sintonia-mathjax-script")) {{
             const cfg = doc.createElement("script");
             cfg.textContent = "window.MathJax = {{tex: {{inlineMath: [['$', '$'], ['\\\\\\\\(', '\\\\\\\\)']]}}, svg: {{fontCache: 'global'}}}};";
@@ -529,7 +587,7 @@ def render_guia_janela(label="Guia"):
             const mj = doc.createElement("script");
             mj.id = "sintonia-mathjax-script";
             mj.async = true;
-            mj.src = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js";
+            mj.src = "https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js";
             doc.head.appendChild(mj);
           }}
 

@@ -16,8 +16,9 @@ def tela_inicial():
     st.markdown("""
     <style>
     .mode-card {
-        background: linear-gradient(135deg, #1a1d2e, #252840);
-        border: 2px solid #333654;
+        background: rgba(128,128,128,.10);
+        color: inherit;
+        border: 2px solid rgba(128,128,128,.35);
         border-radius: 16px;
         overflow: hidden;
         text-align: center;
@@ -35,12 +36,12 @@ def tela_inicial():
         align-items: center;
         flex: 1;
     }
-    .mode-card-diagram  { border-top: 4px solid #34d399; }
+    .mode-card-diagram  { border-top: 4px solid #1f77b4; }
     .mode-card-diagram:hover {
-        border-color: #34d399;
+        border-color: #1f77b4;
         transform: translateY(-3px);
-        box-shadow: 0 14px 40px rgba(52,211,153,0.2);
-        background: linear-gradient(135deg, #1a2230, #1e2e2a);
+        box-shadow: 0 14px 40px rgba(31,119,180,0.25);
+        background: rgba(31,119,180,.10);
     }
     .mode-icon {
         width: 100%;
@@ -50,8 +51,8 @@ def tela_inicial():
         align-items: center;
         justify-content: center;
     }
-    .mode-title { font-size: 20px; font-weight: 700; margin-bottom: 10px; color: #e0e4f0; }
-    .mode-desc  { font-size: 14px; color: #8890b0; line-height: 1.7; flex: 1; }
+    .mode-title { font-size: 20px; font-weight: 700; margin-bottom: 10px; color: inherit; }
+    .mode-desc  { font-size: 14px; color: inherit; opacity: .75; line-height: 1.7; flex: 1; }
     .welcome-title {
         text-align: center; font-size: 32px; font-weight: 700;
         margin-bottom: 8px;
@@ -79,17 +80,17 @@ def tela_inicial():
                     <svg viewBox="0 0 240 80" xmlns="http://www.w3.org/2000/svg" width="100%">
                       <defs>
                         <marker id="arw-diag" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-                          <polygon points="0 0, 8 3, 0 6" fill="#34d399"/>
+                          <polygon points="0 0, 8 3, 0 6" fill="#1f77b4"/>
                         </marker>
                       </defs>
-                      <text x="3" y="45" fill="#8890b0" font-size="12" font-family="monospace" font-weight="bold">R(s)</text>
-                      <line x1="35" y1="40" x2="58" y2="40" stroke="#34d399" stroke-width="2" marker-end="url(#arw-diag)"/>
-                      <rect x="60" y="18" width="120" height="44" fill="#1a1d2e" stroke="#34d399" stroke-width="1.5" rx="5"/>
-                      <text x="120" y="35" fill="#e0e4f0" font-size="13" font-family="monospace" text-anchor="middle">4</text>
-                      <line x1="73" y1="40" x2="167" y2="40" stroke="#e0e4f0" stroke-width="1" opacity="0.35"/>
-                      <text x="120" y="55" fill="#e0e4f0" font-size="13" font-family="monospace" text-anchor="middle">s + 4</text>
-                      <line x1="180" y1="40" x2="203" y2="40" stroke="#34d399" stroke-width="2" marker-end="url(#arw-diag)"/>
-                      <text x="206" y="45" fill="#8890b0" font-size="12" font-family="monospace" font-weight="bold">Y(s)</text>
+                      <text x="3" y="45" fill="currentColor" font-size="12" font-family="monospace" font-weight="bold">R(s)</text>
+                      <line x1="35" y1="40" x2="58" y2="40" stroke="#1f77b4" stroke-width="2" marker-end="url(#arw-diag)"/>
+                      <rect x="60" y="18" width="120" height="44" fill="none" stroke="#1f77b4" stroke-width="1.5" rx="5"/>
+                      <text x="120" y="35" fill="currentColor" font-size="13" font-family="monospace" text-anchor="middle">4</text>
+                      <line x1="73" y1="40" x2="167" y2="40" stroke="currentColor" stroke-width="1" opacity="0.35"/>
+                      <text x="120" y="55" fill="currentColor" font-size="13" font-family="monospace" text-anchor="middle">s + 4</text>
+                      <line x1="180" y1="40" x2="203" y2="40" stroke="#1f77b4" stroke-width="2" marker-end="url(#arw-diag)"/>
+                      <text x="206" y="45" fill="currentColor" font-size="12" font-family="monospace" font-weight="bold">Y(s)</text>
                     </svg>
                 </div>
                 <div class="mode-title">Modo Diagrama de Blocos</div>
@@ -116,7 +117,7 @@ TELAS = {
 
 def main():
     st.set_page_config(
-        page_title="Modelagem de Sistemas de Controle",
+        page_title="Sintonia · Sistemas de Controle (CTRL)",
         page_icon="⚙️",
         layout="wide",
     )

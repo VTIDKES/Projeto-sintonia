@@ -34,6 +34,18 @@ topologia, compensador e ganho permanece com o estudante.
   mantido ao alternar o nível ou trocar de tela.
 - **Breadcrumbs** (`Início → Sistemas de Controle (CTRL) → Tela`) no topo de cada tela.
 - **Como utilizar:** roteiro Configurar → Executar → Interpretar.
+- **Cenários:** o botão **Cenários** da barra do editor abre uma biblioteca de
+  casos prontos (1ª ordem, 2ª ordem subamortecida, criticamente amortecida e
+  superamortecida, atraso com aproximação de Padé, malha fechada com ganho K,
+  malha fechada com PID e um caso instável). O PID só aparece no Modo
+  Avançado. Carregar um cenário substitui o diagrama (dá para desfazer) e
+  mostra a descrição e o que observar. Os cenários ficam em `cenarios.py`.
+- **Desfazer / Refazer / Resetar:** botões e atalhos Ctrl+Z, Ctrl+Y e
+  Ctrl+Shift+Z no editor; **Resetar** na Entrada Manual restaura os campos iniciais.
+- **Função de transferência como fonte única:** o par `{n, d}` da FT equivalente
+  é a única fonte de verdade de todos os gráficos e métricas (resposta no tempo,
+  desempenho, polos e zeros, Bode, Nyquist, LGR e diagnóstico). Novas análises
+  devem derivar dele.
 - **Diagnóstico interpretativo:** cartão Estável / Marginal / Instável com margens
   e orientação pedagógica; erros no formato Situação → Causa provável → Ação recomendada.
 
@@ -54,16 +66,35 @@ As notas originais usadas como base tambem ficam em `notas_controle/originais/`.
 
 ## Changelog
 
+- **v1.3 (16/11/2026)** — lacunas restantes da análise RED-Eng: `config.toml`
+  movido para `.streamlit/config.toml` e corrigido (TOML válido); título da
+  página; paleta da tela inicial e da janela Guia acompanhando o tema claro ou
+  escuro; ação primária única em azul (`#1f77b4`); cálculo robusto com erros
+  didáticos: na Entrada Manual (denominador vazio ou nulo, polinômio inválido,
+  NaN em matrizes) e também nos blocos do diagrama (numerador e denominador de
+  Planta, Sensor e Atuador, ganhos e matrizes; o bloco com problema é marcado) e
+  entrada de somador sem ligação; correção do cálculo de espaço de estados com
+  n >= 3; selo Estável / Marginal / Instável único e sempre visível no
+  cabeçalho de resultados (polo repetido sobre o eixo imaginário conta como
+  Instável); MG/MF só são suprimidas quando há laço de realimentação no
+  diagrama (detecção por ciclo no grafo) ou na Entrada Manual em Malha Fechada,
+  e um diagrama em paralelo continua sendo malha aberta; unidades nos eixos;
+  Desfazer e Refazer; Resetar na Entrada Manual; biblioteca de Cenários
+  guiados; indicador "Calculando... etapa X de 3"; viewport sem bloqueio de
+  zoom, portas de entrada quadradas e de saída redondas; realce do último bloco
+  alterado também ao adicionar bloco e criar conexão; removido o selo de depuração.
 - **v1.2 (15/11/2026)** — o app passa a ter apenas a tela inicial, o Modo Diagrama de Blocos e a
   Teoria (Modo Classico e Modo Simulacao com Elementos removidos). O alternador
   Basico/Avancado agora atua no editor de blocos, e o diagrama e mantido ao
   alternar o nivel ou trocar de tela.
 - **v1.1 (15/11/2026)** — adequacao a analise RED-Eng: sidebar so de navegacao,
-  breadcrumbs, modo Basico/Avancado, cenarios guiados, recalculo automatico no
-  Modo Classico, diagnostico interpretativo de estabilidade, cartoes de erro
-  didaticos, aba Teoria reativada, editor de blocos acompanhando o tema do app
-  e navegavel por teclado, rotulo Beta no Modo Simulacao com Elementos, limpeza
-  de arquivo legado, dependencia morta e documentacao duplicada.
+  breadcrumbs, modo Basico/Avancado, diagnostico interpretativo de
+  estabilidade, cartoes de erro didaticos, aba Teoria reativada, editor de
+  blocos acompanhando o tema do app e navegavel por teclado, limpeza de arquivo
+  legado, dependencia morta e documentacao duplicada. (Os cenarios do Modo
+  Classico, o recalculo automatico e o rotulo Beta foram descartados junto com
+  o Modo Classico e o Modo Simulacao com Elementos, removidos na v1.2; os
+  cenarios voltaram na v1.3 dentro do editor de blocos.)
 
 EN
 
